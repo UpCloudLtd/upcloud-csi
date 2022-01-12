@@ -2,6 +2,7 @@ package driver
 
 import (
 	"context"
+	"github.com/sirupsen/logrus"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/protobuf/ptypes/wrappers"
@@ -18,10 +19,11 @@ func (identity *IdentityService) GetPluginInfo(ctx context.Context, req *csi.Get
 		Name: identity.Driver.name,
 	}
 
-	identity.Driver.log.With(
-		"response", resp,
-		"method", "get_plugin_info",
-	).Info("return plugin info")
+	identity.Driver.log.WithFields(logrus.Fields{
+		"response": resp,
+		"method": "get_plugin_info",
+	}).Info("return plugin info")
+
 	return resp, nil
 }
 
@@ -53,13 +55,17 @@ func (identity *IdentityService) GetPluginCapabilities(ctx context.Context, req 
 		},
 	}
 
-	identity.Driver.log.With("response", resp).With("method", "get_plugin_capabilities").Info("get plugin capabitilies called")
+	identity.Driver.log.WithFields(logrus.Fields{
+		"response": resp,
+		"method": "get_plugin_capabilities",
+	}).Info("get plugin capabitilies called")
+
 	return resp, nil
 }
 
 // Probe returns the health and readiness of the plugin
 func (identity *IdentityService) Probe(ctx context.Context, req *csi.ProbeRequest) (*csi.ProbeResponse, error) {
-	identity.Driver.log.With("method", "probe").Info("check whether the plugin is ready")
+	identity.Driver.log.WithField("method", "probe").Info("check whether the plugin is ready")
 	identity.Driver.readyMu.Lock()
 	defer identity.Driver.readyMu.Unlock()
 

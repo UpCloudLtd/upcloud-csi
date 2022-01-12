@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/gemalto/flume"
-	"k8s.io/utils/exec"
-	"k8s.io/utils/mount"
+	"github.com/sirupsen/logrus"
 	"net"
 	"net/http"
 	"net/url"
@@ -48,7 +46,7 @@ type Driver struct {
 	endpoint     string
 	address      string
 	nodeId       string
-	zone         string
+	zone         string  // TODO check if we should use zone &|| region
 	upcloudTag   string
 	isController bool
 
@@ -58,14 +56,16 @@ type Driver struct {
 
 	srv     *grpc.Server
 	httpSrv http.Server
-	mounter *mount.SafeFormatAndMount
-	log     flume.Logger
+
+	mounter Mounter
+	log     *logrus.Entry
 
 	upcloudclient *upcloudservice.Service
-	upclouddriver upcloudClient
+	upclouddriver upcloudService
 
 	healthChecker *HealthChecker
 
+	storage upcloud.Storage
 	// ready defines whether the driver is ready to function. This value will
 	// be used by the `Identity` service via the `Probe()` method.
 	readyMu sync.Mutex // protects ready
@@ -89,6 +89,7 @@ func NewDriver(ep, username, password, url, nodeId, driverName, address string) 
 	// Create the service object
 	svc := upcloudservice.New(c)
 	acc, err := svc.GetAccount()
+
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -103,7 +104,10 @@ func NewDriver(ep, username, password, url, nodeId, driverName, address string) 
 	nodeServerUUID := serverdetails.Server.UUID
 
 	healthChecker := NewHealthChecker(&upcloudHealthChecker{account: svc.GetAccount})
-	log := flume.New("upcloud-csi").With("region", region).With("node_id", nodeId)
+	log := logrus.New().WithFields(logrus.Fields{
+		"region":  region,
+		"node_id": nodeId,
+	})
 
 	return &Driver{
 		name:       driverName,
@@ -116,15 +120,12 @@ func NewDriver(ep, username, password, url, nodeId, driverName, address string) 
 		// for now we're assuming only the controller has a non-empty token. In
 		// the future we should pass an explicit flag to the driver.
 		isController: password != "",
-		mounter: &mount.SafeFormatAndMount{
-			Interface: mount.New(""),
-			Exec:      exec.New(),
-		},
+		mounter: newMounter(log),
 		log: log,
 
 		healthChecker: healthChecker,
 		upcloudclient: svc,
-		upclouddriver: upcloudClient{svc: svc},
+		upclouddriver: &upcloudClient{svc: svc},
 	}, nil
 }
 
@@ -159,7 +160,7 @@ func (d *Driver) Run() error {
 	// remove the socket if it's already there. This can happen if we
 	// deploy a new version and the socket was created from the old running
 	// plugin.
-	d.log.With("socket", grpcAddr).Info("removing socket")
+	d.log.WithField("socket", grpcAddr).Info("removing socket")
 
 	if err := os.Remove(grpcAddr); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove unix domain socket file %s, error: %s", grpcAddr, err)
@@ -174,7 +175,7 @@ func (d *Driver) Run() error {
 	errHandler := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		resp, err := handler(ctx, req)
 		if err != nil {
-			d.log.With("method", info.FullMethod).Error("method failed", err)
+			d.log.WithField("method", info.FullMethod).Error("method failed", err)
 		}
 		return resp, err
 	}
@@ -211,7 +212,10 @@ func (d *Driver) Run() error {
 	}
 
 	d.ready = true // we're now ready to go!
-	d.log.With("grpc_addr", grpcAddr, "http_addr", d.address).Info("starting server")
+	d.log.WithFields(logrus.Fields{
+		"grpc_addr": grpcAddr,
+		"http_addr": d.address,
+	}).Info("starting server")
 
 	var eg errgroup.Group
 	eg.Go(func() error {

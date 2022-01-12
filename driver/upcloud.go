@@ -9,11 +9,24 @@ import (
 	service "github.com/UpCloudLtd/upcloud-go-api/upcloud/service"
 )
 
+// TODO sort out naming conventions
+
 type upcloudClient struct {
 	svc *service.Service
 }
 
-func (u *upcloudClient) GetStorageByUUID(ctx context.Context, storageUUID string) ([]*upcloud.StorageDetails, error) {
+type upcloudService interface {
+	getStorageByUUID(context.Context, string) ([]*upcloud.StorageDetails, error)
+	getStorageByName(context.Context, string) ([]*upcloud.StorageDetails, error)
+	createStorage(context.Context, *request.CreateStorageRequest) (*upcloud.StorageDetails, error)
+	deleteStorage(context.Context, string) error
+	attachStorage(context.Context, string, string) error
+	detachStorage(context.Context, string, string) error
+	listStorage(context.Context, string) ([]*upcloud.Storage, error)
+	getServer(context.Context, string) (*upcloud.ServerDetails, error)
+}
+
+func (u *upcloudClient) getStorageByUUID(ctx context.Context, storageUUID string) ([]*upcloud.StorageDetails, error) {
 	gsr := &request.GetStoragesRequest{}
 	storages, err := u.svc.GetStorages(gsr)
 	if err != nil {
@@ -30,7 +43,7 @@ func (u *upcloudClient) GetStorageByUUID(ctx context.Context, storageUUID string
 	return volumes, nil
 }
 
-func (u *upcloudClient) GetStorageByName(ctx context.Context, storageName string) ([]*upcloud.StorageDetails, error) {
+func (u *upcloudClient) getStorageByName(ctx context.Context, storageName string) ([]*upcloud.StorageDetails, error) {
 	gsr := &request.GetStoragesRequest{}
 	storages, err := u.svc.GetStorages(gsr)
 	if err != nil {
@@ -47,7 +60,7 @@ func (u *upcloudClient) GetStorageByName(ctx context.Context, storageName string
 	return volumes, nil
 }
 
-func (u *upcloudClient) CreateStorage(ctx context.Context, csr *request.CreateStorageRequest) (*upcloud.StorageDetails, error) {
+func (u *upcloudClient) createStorage(ctx context.Context, csr *request.CreateStorageRequest) (*upcloud.StorageDetails, error) {
 	s, err := u.svc.CreateStorage(csr)
 	if err != nil {
 		fmt.Println(err)
@@ -56,9 +69,9 @@ func (u *upcloudClient) CreateStorage(ctx context.Context, csr *request.CreateSt
 	return s, nil
 }
 
-func (u *upcloudClient) DeleteStorage(ctx context.Context, storageUUID string) error {
+func (u *upcloudClient) deleteStorage(ctx context.Context, storageUUID string) error {
 	var err error
-	volumes, err := u.GetStorageByUUID(ctx, storageUUID)
+	volumes, err := u.getStorageByUUID(ctx, storageUUID)
 	if err != nil {
 		return err
 	}
