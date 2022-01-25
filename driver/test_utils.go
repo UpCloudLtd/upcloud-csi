@@ -2,6 +2,7 @@ package driver
 
 import (
 	"context"
+	"fmt"
 	"github.com/UpCloudLtd/upcloud-go-api/upcloud"
 	"github.com/UpCloudLtd/upcloud-go-api/upcloud/request"
 	"github.com/google/uuid"
@@ -12,13 +13,18 @@ type mockDriver struct {
 	volumeExists bool
 }
 
-func newMockDriver() *Driver {
-	x := mockDriver{}
+func NewMockDriver() *Driver {
+	upcloudDriver := mockDriver{}
+
+	socket := "/tmp/csi.sock"
+	endpoint := "unix://" + socket
 
 	return &Driver{
-		zone: "demoRegion",
-		upclouddriver: &x,
-		log:           logrus.New().WithField("test_enabled", true),
+		zone:          "demoRegion",
+		upclouddriver: &upcloudDriver,
+		endpoint:      endpoint,
+		// endpoint:      "unix:///var/lib/kubelet/plugins/" + DefaultDriverName + "/csi.sock",
+		log: logrus.New().WithField("test_enabled", true),
 	}
 }
 
@@ -29,6 +35,11 @@ func newMockStorage() *upcloud.Storage {
 		Size: defaultVolumeSize,
 		UUID: id.String(),
 	}
+}
+
+func (m *mockDriver) Run() error {
+	fmt.Println("sup")
+	return nil
 }
 
 func (m *mockDriver) getStorageByUUID(ctx context.Context, storageUUID string) ([]*upcloud.StorageDetails, error) {

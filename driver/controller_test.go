@@ -28,7 +28,7 @@ func TestControllerService_ControllerGetCapabilities(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := newMockDriver()
+			d := NewMockDriver()
 			gotResp, err := d.ControllerGetCapabilities(tt.args.ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ControllerGetCapabilities() error = %v, wantErr %v", err, tt.wantErr)
@@ -72,7 +72,7 @@ func TestControllerService_ControllerPublishVolume(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := newMockDriver()
+			d := NewMockDriver()
 			gotResp, err := d.ControllerPublishVolume(tt.args.ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ControllerPublishVolume() error = %v, wantErr %v", err, tt.wantErr)
@@ -130,7 +130,7 @@ func TestControllerService_CreateVolume(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			d := newMockDriver()
+			d := NewMockDriver()
 
 			gotResp, err := d.CreateVolume(tt.args.ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
@@ -171,7 +171,7 @@ func TestControllerService_DeleteVolume(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := newMockDriver()
+			d := NewMockDriver()
 			gotResp, err := d.DeleteVolume(tt.args.ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("DeleteVolume() error = %v, wantErr %v", err, tt.wantErr)
@@ -206,7 +206,7 @@ func TestControllerService_ListVolumes(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := newMockDriver()
+			d := NewMockDriver()
 			gotResp, err := d.ListVolumes(tt.args.ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ListVolumes() error = %v, wantErr %v", err, tt.wantErr)
@@ -244,7 +244,7 @@ func TestControllerService_ControllerUnpublishVolume(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := newMockDriver()
+			d := NewMockDriver()
 			_, err := d.ControllerUnpublishVolume(tt.args.ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ControllerUnpublishVolume() error = %v, wantErr %v", err, tt.wantErr)
@@ -287,7 +287,7 @@ func TestControllerService_ValidateVolumeCapabilities(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := newMockDriver()
+			d := NewMockDriver()
 			got, err := d.ValidateVolumeCapabilities(tt.args.ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateVolumeCapabilities() error = %v, wantErr %v", err, tt.wantErr)
