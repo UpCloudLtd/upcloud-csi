@@ -1,0 +1,19 @@
+# Step 1 build
+FROM golang:alpine AS build
+
+RUN apk add ca-certificates \
+    e2fsprogs \
+    eudev \
+    findmnt \
+    xfsprogs \
+    blkid \
+    e2fsprogs-extra \
+    util-linux
+
+# Step 2 build image
+
+FROM scratch
+
+ADD upcloud-csi-plugin /bin/
+
+ENTRYPOINT ["/bin/upcloud-csi-plugin"]

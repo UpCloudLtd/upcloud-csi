@@ -96,7 +96,6 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 		}, nil
 	}
 
-	// todo double check DO vs open source version
 	volumeReq := &request.CreateStorageRequest{
 		Zone:  d.options.zone,
 		Title: volumeName,
@@ -123,7 +122,6 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 			},
 		},
 	}
-	// TODO set volume snapshot info
 
 	log.WithField("response", resp).Info("volume created")
 
@@ -167,10 +165,6 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 	}
 
 	if req.Readonly {
-		// TODO(arslan): we should return codes.InvalidArgument, but the CSI
-		// test fails, because according to the CSI Spec, this flag cannot be
-		// changed on the same volume. However we don't use this flag at all,
-		// as there are no `readonly` attachable volumes.
 		return nil, status.Error(codes.AlreadyExists, "read only Volumes are not supported")
 	}
 

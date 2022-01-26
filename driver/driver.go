@@ -303,3 +303,28 @@ func WithNodeHost(nodeHost string) func(*DriverOptions) {
 		o.nodeHost = nodeHost
 	}
 }
+// When building any packages that import version, pass the build/install cmd
+// ldflags like so:
+//   go build -ldflags "-X github.com/digitalocean/csi-digitalocean/driver.version=0.0.1"
+
+// TODO look at cleaner way to set these :(
+var (
+	gitTreeState = "not a git tree"
+	commit       string
+	version      string
+)
+
+func GetVersion() string {
+	return version
+}
+
+// GetCommit returns the current commit hash value, as inserted at build time.
+func GetCommit() string {
+	return commit
+}
+
+// GetTreeState returns the current state of git tree, either "clean" or
+// "dirty".
+func GetTreeState() string {
+	return gitTreeState
+}

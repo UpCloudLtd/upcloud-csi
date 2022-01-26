@@ -2,6 +2,7 @@ package driver
 
 import (
 	"context"
+	"fmt"
 	"github.com/UpCloudLtd/upcloud-go-api/upcloud"
 	"github.com/UpCloudLtd/upcloud-go-api/upcloud/request"
 	"github.com/google/uuid"
@@ -12,8 +13,11 @@ type mockDriver struct {
 	volumeExists bool
 }
 
-func newMockDriver() *Driver {
-	x := mockDriver{}
+func NewMockDriver() *Driver {
+	upcloudDriver := mockDriver{}
+
+	socket := "/tmp/csi.sock"
+	endpoint := "unix://" + socket
 
 	return &Driver{
 		options: &DriverOptions{
@@ -31,6 +35,11 @@ func newMockStorage() *upcloud.Storage {
 		Size: defaultVolumeSize,
 		UUID: id.String(),
 	}
+}
+
+func (m *mockDriver) Run() error {
+	fmt.Println("sup")
+	return nil
 }
 
 func (m *mockDriver) getStorageByUUID(ctx context.Context, storageUUID string) ([]*upcloud.StorageDetails, error) {
