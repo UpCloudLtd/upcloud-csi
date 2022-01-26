@@ -49,8 +49,8 @@ func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRe
 	}
 
 	volumeName := ""
-	if volName, ok := req.GetPublishContext()[d.volumeName]; !ok {
-		return nil, status.Error(codes.InvalidArgument, "Could not find the volume by name")
+	if volName, ok := req.GetPublishContext()[d.options.volumeName]; !ok {
+		return nil, status.Error(codes.InvalidArgument, "Could not find the volume by driverName")
 	} else {
 		volumeName = volName
 	}
@@ -324,19 +324,19 @@ func (d *Driver) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabi
 func (d *Driver) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
 	d.log.WithField("method", "node_get_info").Info("node get info called")
 	return &csi.NodeGetInfoResponse{
-		NodeId:            d.nodeId,
+		NodeId:            d.options.nodeHost,
 		MaxVolumesPerNode: maxVolumesPerNode,
 
 		// make sure that the driver works on this particular region only
 		AccessibleTopology: &csi.Topology{
 			Segments: map[string]string{
-				"region": d.zone,
+				"region": d.options.zone,
 			},
 		},
 	}, nil
 }
 
-// NodeGetVolumeStats returns the volume capacity statistics available for the
+// NodeGetVolumeStats returns the volume capacity statistics available for
 // the given volume.
 func (d *Driver) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
 	nodeGetVolumeStatsLog := d.log.WithField("method", "node_get_volume_stats")

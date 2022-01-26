@@ -21,7 +21,7 @@ func (identity *IdentityService) GetPluginInfo(ctx context.Context, req *csi.Get
 
 	identity.Driver.log.WithFields(logrus.Fields{
 		"response": resp,
-		"method": "get_plugin_info",
+		"method":   "get_plugin_info",
 	}).Info("return plugin info")
 
 	return resp, nil
@@ -57,7 +57,7 @@ func (identity *IdentityService) GetPluginCapabilities(ctx context.Context, req 
 
 	identity.Driver.log.WithFields(logrus.Fields{
 		"response": resp,
-		"method": "get_plugin_capabilities",
+		"method":   "get_plugin_capabilities",
 	}).Info("get plugin capabitilies called")
 
 	return resp, nil

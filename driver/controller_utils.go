@@ -60,9 +60,9 @@ func getStorageRange(cr *csi.CapacityRange) (int64, error) {
 
 	sr := &storageRange{
 		requiredBytes: cr.GetRequiredBytes(),
-		requiredSet: 0 < cr.GetRequiredBytes(),
-		limitBytes: cr.GetLimitBytes(),
-		limitSet: 0 < cr.GetLimitBytes(),
+		requiredSet:   0 < cr.GetRequiredBytes(),
+		limitBytes:    cr.GetLimitBytes(),
+		limitSet:      0 < cr.GetLimitBytes(),
 	}
 
 	if !sr.requiredSet && !sr.limitSet {
@@ -152,4 +152,3 @@ func validateCapabilities(capacities []*csi.VolumeCapability) []string {
 
 	return violations.List()
 }
-
