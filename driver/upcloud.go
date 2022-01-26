@@ -6,7 +6,7 @@ import (
 
 	"github.com/UpCloudLtd/upcloud-go-api/upcloud"
 	"github.com/UpCloudLtd/upcloud-go-api/upcloud/request"
-	service "github.com/UpCloudLtd/upcloud-go-api/upcloud/service"
+	"github.com/UpCloudLtd/upcloud-go-api/upcloud/service"
 )
 
 // TODO sort out naming conventions

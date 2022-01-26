@@ -39,14 +39,14 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 
 	violations := validateCapabilities(req.VolumeCapabilities)
 	if violations != nil && len(violations) > 0 {
-        return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("CreateVolume failed with the following violations: %s", strings.Join(violations, ", ")))
-    }
+		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("CreateVolume failed with the following violations: %s", strings.Join(violations, ", ")))
+	}
 
 	// determine the size of the storage
 	storageSize, err := getStorageRange(req.CapacityRange)
 	if err != nil {
-        return nil, status.Error(codes.OutOfRange, fmt.Sprintf("CreateVolume failed to extract storage size: %s", err.Error()))
-    }
+		return nil, status.Error(codes.OutOfRange, fmt.Sprintf("CreateVolume failed to extract storage size: %s", err.Error()))
+	}
 
 	if req.AccessibilityRequirements != nil {
 		for _, t := range req.AccessibilityRequirements.Requisite {
@@ -55,8 +55,8 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 				continue // nothing to do
 			}
 
-			if region != d.zone {
-				return nil, status.Errorf(codes.ResourceExhausted, "volume can be only created in region: %q, got: %q", d.zone, region)
+			if region != d.options.zone {
+				return nil, status.Errorf(codes.ResourceExhausted, "volume can be only created in region: %q, got: %q", d.options.zone, region)
 			}
 		}
 	}
@@ -90,14 +90,14 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 		log.Info("volume already exists")
 		return &csi.CreateVolumeResponse{
 			Volume: &csi.Volume{
-				VolumeId: vol.UUID,
+				VolumeId:      vol.UUID,
 				CapacityBytes: int64(vol.Size),
 			},
 		}, nil
 	}
 
 	volumeReq := &request.CreateStorageRequest{
-		Zone:  d.zone,
+		Zone:  d.options.zone,
 		Title: volumeName,
 		Size:  int(storageSize),
 		Tier:  "maxiops",
@@ -116,7 +116,7 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 			AccessibleTopology: []*csi.Topology{
 				{
 					Segments: map[string]string{
-						"region": d.zone,
+						"region": d.options.zone,
 					},
 				},
 			},
@@ -169,9 +169,9 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 	}
 
 	log := d.log.WithFields(logrus.Fields{
-		"volume_id":  req.VolumeId,
-		"node_id":    req.NodeId,
-		"method":     "controller_publish_volume",
+		"volume_id": req.VolumeId,
+		"node_id":   req.NodeId,
+		"method":    "controller_publish_volume",
 	})
 	log.Info("controller publish volume called")
 
@@ -198,7 +198,7 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 			log.Info("volume is already attached")
 			return &csi.ControllerPublishVolumeResponse{
 				PublishContext: map[string]string{
-					d.volumeName: volume.Title,
+					d.options.volumeName: volume.Title,
 				},
 			}, nil
 		}
@@ -221,7 +221,7 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 	log.Info("volume was attached")
 	return &csi.ControllerPublishVolumeResponse{
 		PublishContext: map[string]string{
-			d.volumeName: volume.Title,
+			d.options.volumeName: volume.Title,
 		},
 	}, nil
 }
@@ -233,9 +233,9 @@ func (d *Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.Control
 	}
 
 	log := d.log.WithFields(logrus.Fields{
-		"volume_id":  req.VolumeId,
-		"node_id":    req.NodeId,
-		"method":     "controller_unpublish_volume",
+		"volume_id": req.VolumeId,
+		"node_id":   req.NodeId,
+		"method":    "controller_unpublish_volume",
 	})
 	log.Info("controller unpublish volume called")
 
@@ -318,10 +318,10 @@ func (d *Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (
 	//	startingToken = int32(parsedToken)
 	//}
 
-	volumes, err := d.upclouddriver.listStorage(ctx, d.zone)
+	volumes, err := d.upclouddriver.listStorage(ctx, d.options.zone)
 	if err != nil {
-        return nil, status.Errorf(codes.Internal, "listvolumes failed with: %s", err.Error())
-    }
+		return nil, status.Errorf(codes.Internal, "listvolumes failed with: %s", err.Error())
+	}
 
 	var entries []*csi.ListVolumesResponse_Entry
 	for _, vol := range volumes {

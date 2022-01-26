@@ -23,8 +23,8 @@ import (
 )
 
 const (
-	// DefaultDriverName defines the name that is used in Kubernetes and the CSI
-	// system for the canonical, official name of this plugin
+	// DefaultDriverName defines the driverName that is used in Kubernetes and the CSI
+	// system for the canonical, official driverName of this plugin
 	DefaultDriverName = "csi.upcloud.com"
 	// DefaultAddress is the default address that the csi plugin will serve its
 	// http handler on.
@@ -39,16 +39,8 @@ const (
 //
 type Driver struct {
 	name string
-	// volumeName is used to pass the volume name from
-	// `ControllerPublishVolume` to `NodeStageVolume or `NodePublishVolume`
-	volumeName string
 
-	endpoint     string
-	address      string
-	nodeId       string
-	zone         string  // TODO check if we should use zone &|| region
-	upcloudTag   string
-	isController bool
+	options *DriverOptions
 
 	identitySvc   *IdentityService
 	nodeSvc       *NodeService
@@ -72,16 +64,51 @@ type Driver struct {
 	ready   bool
 }
 
+type DriverOptions struct {
+	username string
+	password string
+
+	driverName string
+	// volumeName is used to pass the volume from
+	// `ControllerPublishVolume` to `NodeStageVolume or `NodePublishVolume`
+	volumeName string
+
+	endpoint     string
+	address      string
+	nodeHost     string
+	nodeId       string
+	zone         string // TODO check if we should use zone &|| region
+	upcloudTag   string
+	isController bool
+}
+
 // NewDriver returns a CSI plugin that contains the necessary gRPC
 // interfaces to interact with Kubernetes over unix domain sockets for
 // managing Upcloud Block Storage
-func NewDriver(ep, username, password, url, nodeId, driverName, address string) (*Driver, error) {
-	if driverName == "" {
-		driverName = DefaultDriverName
+func NewDriver(options ...func(*DriverOptions)) (*Driver, error) {
+	driverOptions := &DriverOptions{
+		//driverName: driverName,
+		//volumeName: driverName + "/volume-driverName",
+		//
+		//endpoint: ep,
+		//address:  address,
+		//nodeHost:   nodeServerUUID,
+		//zone: "",
+		//// for now we're assuming only the controller has a non-empty token. In
+		//// the future we should pass an explicit flag to the driver.
+		//isController: password != "",
+	}
+
+	for _, option := range options {
+		option(driverOptions)
+	}
+
+	if driverOptions.driverName == "" {
+		driverOptions.driverName = DefaultDriverName
 	}
 
 	// Authenticate by passing your account login credentials to the client
-	c := upcloudclient.New(username, password)
+	c := upcloudclient.New(driverOptions.username, driverOptions.password)
 
 	// It is generally a good idea to override the default timeout of the underlying HTTP client since some requests block for longer periods of time
 	c.SetTimeout(time.Second * 30)
@@ -95,34 +122,24 @@ func NewDriver(ep, username, password, url, nodeId, driverName, address string) 
 	}
 	fmt.Printf("%+v", acc)
 
-	// todo mock determine server
-	serverdetails, err := determineServer(svc, nodeId)
+	serverdetails, err := determineServer(svc, driverOptions.nodeHost)
 	if err != nil {
 		panic(err)
 	}
 
-	region := serverdetails.Server.Zone
-	nodeServerUUID := serverdetails.Server.UUID
+	driverOptions.zone = serverdetails.Server.Zone
+	driverOptions.nodeId = serverdetails.Server.UUID
 
 	healthChecker := NewHealthChecker(&upcloudHealthChecker{account: svc.GetAccount})
 	log := logrus.New().WithFields(logrus.Fields{
-		"region":  region,
-		"node_id": nodeId,
+		"region":  driverOptions.zone,
+		"node_id": driverOptions.nodeHost,
 	})
 
 	return &Driver{
-		name:       driverName,
-		volumeName: driverName + "/volume-name",
-
-		endpoint: ep,
-		address:  address,
-		nodeId:   nodeServerUUID,
-		zone:     region,
-		// for now we're assuming only the controller has a non-empty token. In
-		// the future we should pass an explicit flag to the driver.
-		isController: password != "",
+		options: driverOptions,
 		mounter: newMounter(log),
-		log: log,
+		log:     log,
 
 		healthChecker: healthChecker,
 		upcloudclient: svc,
@@ -130,21 +147,21 @@ func NewDriver(ep, username, password, url, nodeId, driverName, address string) 
 	}, nil
 }
 
-func determineServer(svc *upcloudservice.Service, nodeId string) (*upcloud.ServerDetails, error) {
+func determineServer(svc *upcloudservice.Service, nodeHost string) (*upcloud.ServerDetails, error) {
 	servers, _ := svc.GetServers()
 	for _, s := range servers.Servers {
-		if nodeId == s.Hostname {
+		if nodeHost == s.Hostname {
 			r := request.GetServerDetailsRequest{UUID: s.UUID}
 			serverdetails, _ := svc.GetServerDetails(&r)
 			return serverdetails, nil
 		}
 	}
-	return nil, fmt.Errorf("node %s not found", nodeId)
+	return nil, fmt.Errorf("node %s not found", nodeHost)
 }
 
 // Run starts the CSI plugin by communication over the given endpoint
 func (d *Driver) Run() error {
-	u, err := url.Parse(d.endpoint)
+	u, err := url.Parse(d.options.endpoint)
 	if err != nil {
 		return fmt.Errorf("unable to parse address: %q", err)
 	}
@@ -195,7 +212,7 @@ func (d *Driver) Run() error {
 	csi.RegisterControllerServer(d.srv, d.controllerSvc)
 	csi.RegisterNodeServer(d.srv, d.nodeSvc)
 
-	httpListener, err := net.Listen("tcp", d.address)
+	httpListener, err := net.Listen("tcp", d.options.address)
 	if err != nil {
 		return fmt.Errorf("failed to listen: %v", err)
 	}
@@ -215,7 +232,7 @@ func (d *Driver) Run() error {
 	d.ready = true // we're now ready to go!
 	d.log.WithFields(logrus.Fields{
 		"grpc_addr": grpcAddr,
-		"http_addr": d.address,
+		"http_addr": d.options.address,
 	}).Info("starting server")
 
 	var eg errgroup.Group
@@ -239,6 +256,53 @@ func (d *Driver) Stop() {
 	d.srv.Stop()
 }
 
+func WithEndpoint(endpoint string) func(*DriverOptions) {
+	return func(o *DriverOptions) {
+		o.endpoint = endpoint
+	}
+}
+
+func WithDriverName(driverName string) func(options *DriverOptions) {
+	return func(o *DriverOptions) {
+		o.driverName = driverName
+	}
+}
+
+func WithVolumeName(volumeName string) func(options *DriverOptions) {
+	return func(o *DriverOptions) {
+		o.volumeName = volumeName
+	}
+}
+
+func WithAddress(address string) func(options *DriverOptions) {
+	return func(o *DriverOptions) {
+		o.address = address
+	}
+}
+
+func WithUsername(username string) func(*DriverOptions) {
+	return func(o *DriverOptions) {
+		o.username = username
+	}
+}
+
+func WithPassword(password string) func(*DriverOptions) {
+	return func(o *DriverOptions) {
+		o.password = password
+	}
+}
+
+func WithControllerOn(state bool) func(*DriverOptions) {
+	return func(o *DriverOptions) {
+		o.isController = state
+	}
+}
+
+func WithNodeHost(nodeHost string) func(*DriverOptions) {
+	return func(o *DriverOptions) {
+		o.nodeHost = nodeHost
+	}
+}
 // When building any packages that import version, pass the build/install cmd
 // ldflags like so:
 //   go build -ldflags "-X github.com/digitalocean/csi-digitalocean/driver.version=0.0.1"

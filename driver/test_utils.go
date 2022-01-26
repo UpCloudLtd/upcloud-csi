@@ -20,11 +20,11 @@ func NewMockDriver() *Driver {
 	endpoint := "unix://" + socket
 
 	return &Driver{
-		zone:          "demoRegion",
-		upclouddriver: &upcloudDriver,
-		endpoint:      endpoint,
-		// endpoint:      "unix:///var/lib/kubelet/plugins/" + DefaultDriverName + "/csi.sock",
-		log: logrus.New().WithField("test_enabled", true),
+		options: &DriverOptions{
+			zone: "demoRegion",
+		},
+		upclouddriver: &x,
+		log:           logrus.New().WithField("test_enabled", true),
 	}
 }
 
@@ -47,7 +47,6 @@ func (m *mockDriver) getStorageByUUID(ctx context.Context, storageUUID string) (
 	return m.getStorageByName(ctx, storageUUID)
 }
 
-
 func (m *mockDriver) getStorageByName(ctx context.Context, storageName string) ([]*upcloud.StorageDetails, error) {
 	if m.volumeExists {
 		return nil, nil
@@ -64,7 +63,7 @@ func (m *mockDriver) getStorageByName(ctx context.Context, storageName string) (
 func (m *mockDriver) createStorage(ctx context.Context, csr *request.CreateStorageRequest) (*upcloud.StorageDetails, error) {
 	id, _ := uuid.NewUUID()
 	s := &upcloud.StorageDetails{
-		Storage: *newMockStorage(),
+		Storage:     *newMockStorage(),
 		ServerUUIDs: upcloud.ServerUUIDSlice{id.String()}, // TODO change UUID prefix
 	}
 

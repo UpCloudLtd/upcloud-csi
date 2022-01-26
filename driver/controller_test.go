@@ -14,9 +14,9 @@ func TestControllerService_ControllerGetCapabilities(t *testing.T) {
 		req *csi.ControllerGetCapabilitiesRequest
 	}
 	tests := []struct {
-		name     string
-		args     args
-		wantErr  bool
+		name    string
+		args    args
+		wantErr bool
 	}{
 		{
 			name: "Get Capabilities",
@@ -58,14 +58,14 @@ func TestControllerService_ControllerPublishVolume(t *testing.T) {
 			args: args{
 				ctx: context.Background(),
 				req: &csi.ControllerPublishVolumeRequest{
-                    VolumeId: "test-volume-id",
-                    NodeId:   "test-node-id",
-                    VolumeCapability: &csi.VolumeCapability{
-                        AccessType: &csi.VolumeCapability_Mount{
-                            Mount: &csi.VolumeCapability_MountVolume{},
-                        },
-                    },
-                },
+					VolumeId: "test-volume-id",
+					NodeId:   "test-node-id",
+					VolumeCapability: &csi.VolumeCapability{
+						AccessType: &csi.VolumeCapability_Mount{
+							Mount: &csi.VolumeCapability_MountVolume{},
+						},
+					},
+				},
 			},
 			wantErr: false,
 		},
@@ -78,17 +78,17 @@ func TestControllerService_ControllerPublishVolume(t *testing.T) {
 				t.Errorf("ControllerPublishVolume() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-            if len(gotResp.PublishContext) == 0 {
-                t.Error("empty publish context")
-            }
+			if len(gotResp.PublishContext) == 0 {
+				t.Error("empty publish context")
+			}
 		})
 	}
 }
 
 func TestControllerService_CreateVolume(t *testing.T) {
 	type args struct {
-		ctx          context.Context
-		req          *csi.CreateVolumeRequest
+		ctx context.Context
+		req *csi.CreateVolumeRequest
 	}
 	tests := []struct {
 		name         string
@@ -114,18 +114,17 @@ func TestControllerService_CreateVolume(t *testing.T) {
 						},
 					},
 					VolumeContentSource: &csi.VolumeContentSource{
-							Type: &csi.VolumeContentSource_Snapshot{
-								Snapshot: &csi.VolumeContentSource_SnapshotSource{
-									SnapshotId: "snapshotID",
-								},
+						Type: &csi.VolumeContentSource_Snapshot{
+							Snapshot: &csi.VolumeContentSource_SnapshotSource{
+								SnapshotId: "snapshotID",
 							},
+						},
 					},
 				},
 			},
 			volumeExists: true,
-			wantErr: false,
+			wantErr:      false,
 		},
-
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -137,7 +136,7 @@ func TestControllerService_CreateVolume(t *testing.T) {
 				t.Errorf("CreateVolume() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-	        if gotResp.Volume.VolumeId == "" {
+			if gotResp.Volume.VolumeId == "" {
 				t.Error("volume ID should not be empty")
 				return
 			}
@@ -159,13 +158,13 @@ func TestControllerService_DeleteVolume(t *testing.T) {
 	}{
 		{
 			name: "Test Delete Volume",
-            args: args{
-                context.Background(),
-                &csi.DeleteVolumeRequest{
-                    VolumeId: "testVolume",
-                },
-            },
-            wantErr: false,
+			args: args{
+				context.Background(),
+				&csi.DeleteVolumeRequest{
+					VolumeId: "testVolume",
+				},
+			},
+			wantErr:  false,
 			wantResp: &csi.DeleteVolumeResponse{},
 		},
 	}
@@ -197,11 +196,11 @@ func TestControllerService_ListVolumes(t *testing.T) {
 	}{
 		{
 			name: "Test List Volumes",
-            args: args{
-                context.Background(),
-                &csi.ListVolumesRequest{},
-            },
-            wantErr: false,
+			args: args{
+				context.Background(),
+				&csi.ListVolumesRequest{},
+			},
+			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
@@ -235,9 +234,9 @@ func TestControllerService_ControllerUnpublishVolume(t *testing.T) {
 			name: "Test Unpublish Volume",
 			args: args{
 				context.Background(),
-                &csi.ControllerUnpublishVolumeRequest{
-                    VolumeId: "testVolume",
-                },
+				&csi.ControllerUnpublishVolumeRequest{
+					VolumeId: "testVolume",
+				},
 			},
 			wantErr: false,
 		},
@@ -269,19 +268,19 @@ func TestControllerService_ValidateVolumeCapabilities(t *testing.T) {
 		{
 			name: "Test ValidateVolumeCapabilities",
 			args: args{
-                context.Background(),
-                &csi.ValidateVolumeCapabilitiesRequest{
-                    VolumeId: "testVolume",
-                    VolumeCapabilities: []*csi.VolumeCapability{
-                        {
-                            AccessType: &csi.VolumeCapability_Mount{
-                                Mount: &csi.VolumeCapability_MountVolume{},
-                            },
-                        },
-                    },
-                },
-            },
-			want: supportedAccessMode,
+				context.Background(),
+				&csi.ValidateVolumeCapabilitiesRequest{
+					VolumeId: "testVolume",
+					VolumeCapabilities: []*csi.VolumeCapability{
+						{
+							AccessType: &csi.VolumeCapability_Mount{
+								Mount: &csi.VolumeCapability_MountVolume{},
+							},
+						},
+					},
+				},
+			},
+			want:    supportedAccessMode,
 			wantErr: false,
 		},
 	}
