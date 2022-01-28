@@ -31,6 +31,14 @@ const (
 	DefaultAddress = "127.0.0.1:13071"
 )
 
+const (
+	// StorageSizeThreshold is a size value for checking if user can provision
+	// additional volumes
+	StorageSizeThreshold = 10
+	// ClientTimeout helps to tune for timeout on requests to UpCloud API. Measurement: seconds
+	ClientTimeout = 30
+)
+
 // Driver implements the following CSI interfaces:
 //
 //   csi.IdentityServer
@@ -40,7 +48,7 @@ const (
 type Driver struct {
 	name string
 
-	options *DriverOptions
+	options *driverOptions
 
 	identitySvc   *IdentityService
 	nodeSvc       *NodeService
@@ -64,7 +72,7 @@ type Driver struct {
 	ready   bool
 }
 
-type DriverOptions struct {
+type driverOptions struct {
 	username string
 	password string
 
@@ -85,8 +93,8 @@ type DriverOptions struct {
 // NewDriver returns a CSI plugin that contains the necessary gRPC
 // interfaces to interact with Kubernetes over unix domain sockets for
 // managing Upcloud Block Storage
-func NewDriver(options ...func(*DriverOptions)) (*Driver, error) {
-	driverOptions := &DriverOptions{
+func NewDriver(options ...func(*driverOptions)) (*Driver, error) {
+	driverOptions := &driverOptions{
 		//driverName: driverName,
 		//volumeName: driverName + "/volume-driverName",
 		//
@@ -111,7 +119,7 @@ func NewDriver(options ...func(*DriverOptions)) (*Driver, error) {
 	c := upcloudclient.New(driverOptions.username, driverOptions.password)
 
 	// It is generally a good idea to override the default timeout of the underlying HTTP client since some requests block for longer periods of time
-	c.SetTimeout(time.Second * 30)
+	c.SetTimeout(time.Second * ClientTimeout)
 
 	// Create the service object
 	svc := upcloudservice.New(c)
@@ -122,13 +130,13 @@ func NewDriver(options ...func(*DriverOptions)) (*Driver, error) {
 	}
 	fmt.Printf("%+v", acc)
 
-	serverdetails, err := determineServer(svc, driverOptions.nodeHost)
+	serverDetails, err := determineServer(svc, driverOptions.nodeHost)
 	if err != nil {
 		panic(err)
 	}
 
-	driverOptions.zone = serverdetails.Server.Zone
-	driverOptions.nodeId = serverdetails.Server.UUID
+	driverOptions.zone = serverDetails.Server.Zone
+	driverOptions.nodeId = serverDetails.Server.UUID
 
 	healthChecker := NewHealthChecker(&upcloudHealthChecker{account: svc.GetAccount})
 	log := logrus.New().WithFields(logrus.Fields{
@@ -198,14 +206,14 @@ func (d *Driver) Run() error {
 		return resp, err
 	}
 
-	// warn the user, it'll not propagate to the user but at least we see if
-	// something is wrong in the logs. Only check if the driver is running with
-	// a token (i.e: controller)
-	// if d.isController {
-	// 	if err := d.checkLimit(context.Background()); err != nil {
-	// 		d.log.WithError(err).Warn("CSI plugin will not function correctly, please resolve volume limit")
-	// 	}
-	// }
+	if d.options.isController {
+		quotaDetails, err := d.checkStorageQuota()
+		if err != nil && quotaDetails != nil {
+			d.log.WithFields(logrus.Fields{"details": quotaDetails}).Warn(err)
+		} else if err != nil {
+			d.log.Errorf("Quota request error: %s", err)
+		}
+	}
 
 	d.srv = grpc.NewServer(grpc.UnaryInterceptor(errHandler))
 	csi.RegisterIdentityServer(d.srv, d.identitySvc)
@@ -246,6 +254,36 @@ func (d *Driver) Run() error {
 	return eg.Wait()
 }
 
+func (d *Driver) checkStorageQuota() (map[string]int, error) {
+	account, err := d.upcloudclient.GetAccount()
+	if err != nil {
+		return nil, fmt.Errorf("unable to retrieve account details: %s", err)
+	}
+	ssdLimit := account.ResourceLimits.StorageSSD
+
+	storages, err := d.upcloudclient.GetStorages(&request.GetStoragesRequest{})
+	if err != nil {
+		return nil, fmt.Errorf("unable to retrieve server's storage details: %s", err)
+	}
+
+	total := 0
+	for _, s := range storages.Storages {
+		total = total + s.Size
+	}
+	sizeAvailable := ssdLimit - total
+	if sizeAvailable <= StorageSizeThreshold {
+		storageDetails := map[string]int{
+			"storage_size_quota":           ssdLimit,
+			"storage_available_ssd_size":   sizeAvailable,
+			"storage_provisioned_ssd_size": total,
+		}
+		return storageDetails, fmt.Errorf("available storage size may be insufficient for correct work of CSI controller")
+
+	}
+
+	return nil, nil
+}
+
 // Stop stops the plugin
 func (d *Driver) Stop() {
 	d.readyMu.Lock()
@@ -256,53 +294,54 @@ func (d *Driver) Stop() {
 	d.srv.Stop()
 }
 
-func WithEndpoint(endpoint string) func(*DriverOptions) {
-	return func(o *DriverOptions) {
+func WithEndpoint(endpoint string) func(*driverOptions) {
+	return func(o *driverOptions) {
 		o.endpoint = endpoint
 	}
 }
 
-func WithDriverName(driverName string) func(options *DriverOptions) {
-	return func(o *DriverOptions) {
+func WithDriverName(driverName string) func(options *driverOptions) {
+	return func(o *driverOptions) {
 		o.driverName = driverName
 	}
 }
 
-func WithVolumeName(volumeName string) func(options *DriverOptions) {
-	return func(o *DriverOptions) {
+func WithVolumeName(volumeName string) func(options *driverOptions) {
+	return func(o *driverOptions) {
 		o.volumeName = volumeName
 	}
 }
 
-func WithAddress(address string) func(options *DriverOptions) {
-	return func(o *DriverOptions) {
+func WithAddress(address string) func(options *driverOptions) {
+	return func(o *driverOptions) {
 		o.address = address
 	}
 }
 
-func WithUsername(username string) func(*DriverOptions) {
-	return func(o *DriverOptions) {
+func WithUsername(username string) func(*driverOptions) {
+	return func(o *driverOptions) {
 		o.username = username
 	}
 }
 
-func WithPassword(password string) func(*DriverOptions) {
-	return func(o *DriverOptions) {
+func WithPassword(password string) func(*driverOptions) {
+	return func(o *driverOptions) {
 		o.password = password
 	}
 }
 
-func WithControllerOn(state bool) func(*DriverOptions) {
-	return func(o *DriverOptions) {
+func WithControllerOn(state bool) func(*driverOptions) {
+	return func(o *driverOptions) {
 		o.isController = state
 	}
 }
 
-func WithNodeHost(nodeHost string) func(*DriverOptions) {
-	return func(o *DriverOptions) {
+func WithNodeHost(nodeHost string) func(*driverOptions) {
+	return func(o *driverOptions) {
 		o.nodeHost = nodeHost
 	}
 }
+
 // When building any packages that import version, pass the build/install cmd
 // ldflags like so:
 //   go build -ldflags "-X github.com/digitalocean/csi-digitalocean/driver.version=0.0.1"
