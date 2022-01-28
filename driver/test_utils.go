@@ -20,10 +20,11 @@ func NewMockDriver() *Driver {
 	endpoint := "unix://" + socket
 
 	return &Driver{
-		options: &DriverOptions{
-			zone: "demoRegion",
+		options: &driverOptions{
+			zone:     "demoRegion",
+			endpoint: endpoint,
 		},
-		upclouddriver: &x,
+		upclouddriver: &upcloudDriver,
 		log:           logrus.New().WithField("test_enabled", true),
 	}
 }
