@@ -23,13 +23,15 @@ func main() {
 		isController = flagSet.Bool("is_controller", true, "Run driver with controller included")
 	)
 
+	flagSet.Parse(os.Args[1:])
+
 	if *version {
 		fmt.Printf("%s - %s (%s)\n", driver.GetVersion(), driver.GetCommit(), driver.GetTreeState())
 		os.Exit(0)
 	}
 
 	if *nodeHost == "" {
-		log.Fatalln("nodeHost missing")
+		log.Fatalln("nodehost missing")
 	}
 
 	drv, err := driver.NewDriver(
