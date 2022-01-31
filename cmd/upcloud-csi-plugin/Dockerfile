@@ -10,10 +10,6 @@ RUN apk add ca-certificates \
     e2fsprogs-extra \
     util-linux
 
-# Step 2 build image
-
-FROM scratch
-
 ADD upcloud-csi-plugin /bin/
 
 ENTRYPOINT ["/bin/upcloud-csi-plugin"]
