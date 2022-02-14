@@ -8,18 +8,13 @@ import (
 	"github.com/golang/protobuf/ptypes/wrappers"
 )
 
-type IdentityService struct {
-	Driver *Driver
-	csi.IdentityServer
-}
-
 // GetPluginInfo returns metadata of the plugin
-func (identity *IdentityService) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
+func (driver *Driver) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
 	resp := &csi.GetPluginInfoResponse{
-		Name: identity.Driver.name,
+		Name: driver.options.driverName,
 	}
 
-	identity.Driver.log.WithFields(logrus.Fields{
+	driver.log.WithFields(logrus.Fields{
 		"response": resp,
 		"method":   "get_plugin_info",
 	}).Info("return plugin info")
@@ -28,7 +23,7 @@ func (identity *IdentityService) GetPluginInfo(ctx context.Context, req *csi.Get
 }
 
 // GetPluginCapabilities returns available capabilities of the plugin
-func (identity *IdentityService) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCapabilitiesRequest) (*csi.GetPluginCapabilitiesResponse, error) {
+func (driver *Driver) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCapabilitiesRequest) (*csi.GetPluginCapabilitiesResponse, error) {
 	resp := &csi.GetPluginCapabilitiesResponse{
 		Capabilities: []*csi.PluginCapability{
 			{
@@ -55,7 +50,7 @@ func (identity *IdentityService) GetPluginCapabilities(ctx context.Context, req 
 		},
 	}
 
-	identity.Driver.log.WithFields(logrus.Fields{
+	driver.log.WithFields(logrus.Fields{
 		"response": resp,
 		"method":   "get_plugin_capabilities",
 	}).Info("get plugin capabitilies called")
@@ -64,14 +59,14 @@ func (identity *IdentityService) GetPluginCapabilities(ctx context.Context, req 
 }
 
 // Probe returns the health and readiness of the plugin
-func (identity *IdentityService) Probe(ctx context.Context, req *csi.ProbeRequest) (*csi.ProbeResponse, error) {
-	identity.Driver.log.WithField("method", "probe").Info("check whether the plugin is ready")
-	identity.Driver.readyMu.Lock()
-	defer identity.Driver.readyMu.Unlock()
+func (driver *Driver) Probe(ctx context.Context, req *csi.ProbeRequest) (*csi.ProbeResponse, error) {
+	driver.log.WithField("method", "probe").Info("check whether the plugin is ready")
+	driver.readyMu.Lock()
+	defer driver.readyMu.Unlock()
 
 	return &csi.ProbeResponse{
 		Ready: &wrappers.BoolValue{
-			Value: identity.Driver.ready,
+			Value: driver.ready,
 		},
 	}, nil
 }

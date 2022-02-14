@@ -26,10 +26,6 @@ var (
 	}
 )
 
-type NodeService struct {
-	csi.NodeServer
-}
-
 // NodeStageVolume mounts the volume to a staging path on the node. This is
 // called by the CO before NodePublishVolume and is used to temporary mount the
 // volume to a staging path. Once mounted, NodePublishVolume will make sure to

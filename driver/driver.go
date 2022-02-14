@@ -46,13 +46,10 @@ const (
 //   csi.NodeServer
 //
 type Driver struct {
-	name string
-
 	options *driverOptions
 
-	identitySvc   *IdentityService
-	nodeSvc       *NodeService
-	controllerSvc *ControllerService
+	// TODO: remove this struct composition after finishing all controller capabilities
+	csi.ControllerServer
 
 	srv     *grpc.Server
 	httpSrv http.Server
@@ -94,29 +91,18 @@ type driverOptions struct {
 // interfaces to interact with Kubernetes over unix domain sockets for
 // managing Upcloud Block Storage
 func NewDriver(options ...func(*driverOptions)) (*Driver, error) {
-	driverOptions := &driverOptions{
-		//driverName: driverName,
-		//volumeName: driverName + "/volume-driverName",
-		//
-		//endpoint: ep,
-		//address:  address,
-		//nodeHost:   nodeServerUUID,
-		//zone: "",
-		//// for now we're assuming only the controller has a non-empty token. In
-		//// the future we should pass an explicit flag to the driver.
-		//isController: password != "",
-	}
+	driverOpts := &driverOptions{}
 
 	for _, option := range options {
-		option(driverOptions)
+		option(driverOpts)
 	}
 
-	if driverOptions.driverName == "" {
-		driverOptions.driverName = DefaultDriverName
+	if driverOpts.driverName == "" {
+		driverOpts.driverName = DefaultDriverName
 	}
 
 	// Authenticate by passing your account login credentials to the client
-	c := upcloudclient.New(driverOptions.username, driverOptions.password)
+	c := upcloudclient.New(driverOpts.username, driverOpts.password)
 
 	// It is generally a good idea to override the default timeout of the underlying HTTP client since some requests block for longer periods of time
 	c.SetTimeout(time.Second * ClientTimeout)
@@ -130,22 +116,22 @@ func NewDriver(options ...func(*driverOptions)) (*Driver, error) {
 	}
 	fmt.Printf("%+v", acc)
 
-	serverDetails, err := determineServer(svc, driverOptions.nodeHost)
+	serverDetails, err := determineServer(svc, driverOpts.nodeHost)
 	if err != nil {
 		panic(err)
 	}
 
-	driverOptions.zone = serverDetails.Server.Zone
-	driverOptions.nodeId = serverDetails.Server.UUID
+	driverOpts.zone = serverDetails.Server.Zone
+	driverOpts.nodeId = serverDetails.Server.UUID
 
 	healthChecker := NewHealthChecker(&upcloudHealthChecker{account: svc.GetAccount})
 	log := logrus.New().WithFields(logrus.Fields{
-		"region":  driverOptions.zone,
-		"node_id": driverOptions.nodeHost,
+		"region":  driverOpts.zone,
+		"node_id": driverOpts.nodeHost,
 	})
 
 	return &Driver{
-		options: driverOptions,
+		options: driverOpts,
 		mounter: newMounter(log),
 		log:     log,
 
@@ -216,9 +202,9 @@ func (d *Driver) Run() error {
 	}
 
 	d.srv = grpc.NewServer(grpc.UnaryInterceptor(errHandler))
-	csi.RegisterIdentityServer(d.srv, d.identitySvc)
-	csi.RegisterControllerServer(d.srv, d.controllerSvc)
-	csi.RegisterNodeServer(d.srv, d.nodeSvc)
+	csi.RegisterIdentityServer(d.srv, d)
+	csi.RegisterControllerServer(d.srv, d)
+	csi.RegisterNodeServer(d.srv, d)
 
 	httpListener, err := net.Listen("tcp", d.options.address)
 	if err != nil {

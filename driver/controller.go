@@ -11,11 +11,6 @@ import (
 	"strings"
 )
 
-type ControllerService struct {
-	Driver *Driver
-	csi.ControllerServer
-}
-
 // TODO confirm capabilities for alpha version
 var supportedCapabilities = []csi.ControllerServiceCapability_RPC_Type{
 	csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
