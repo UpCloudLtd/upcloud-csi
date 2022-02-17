@@ -25,7 +25,7 @@ import (
 const (
 	// DefaultDriverName defines the driverName that is used in Kubernetes and the CSI
 	// system for the canonical, official driverName of this plugin
-	DefaultDriverName = "csi.upcloud.com"
+	DefaultDriverName = "storage.csi.upcloud.com"
 	// DefaultAddress is the default address that the csi plugin will serve its
 	// http handler on.
 	DefaultAddress = "127.0.0.1:13071"
@@ -110,15 +110,16 @@ func NewDriver(options ...func(*driverOptions)) (*Driver, error) {
 	// Create the service object
 	svc := upcloudservice.New(c)
 	acc, err := svc.GetAccount()
-
 	if err != nil {
-		fmt.Println(err)
+		fmt.Printf("Failed to login in API: %s\n", err)
+		os.Exit(1)
 	}
 	fmt.Printf("%+v", acc)
 
 	serverDetails, err := determineServer(svc, driverOpts.nodeHost)
 	if err != nil {
-		panic(err)
+		fmt.Printf("Unable to list servers: %s\n", err)
+		os.Exit(1)
 	}
 
 	driverOpts.zone = serverDetails.Server.Zone
@@ -142,7 +143,10 @@ func NewDriver(options ...func(*driverOptions)) (*Driver, error) {
 }
 
 func determineServer(svc *upcloudservice.Service, nodeHost string) (*upcloud.ServerDetails, error) {
-	servers, _ := svc.GetServers()
+	servers, err := svc.GetServers()
+	if err != nil {
+		return nil, fmt.Errorf("couldn't fetch servers list")
+	}
 	for _, s := range servers.Servers {
 		if nodeHost == s.Hostname {
 			r := request.GetServerDetailsRequest{UUID: s.UUID}
