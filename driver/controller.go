@@ -19,7 +19,6 @@ var supportedCapabilities = []csi.ControllerServiceCapability_RPC_Type{
 	csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
 	csi.ControllerServiceCapability_RPC_LIST_SNAPSHOTS,
 	csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
-	csi.ControllerServiceCapability_RPC_LIST_VOLUMES_PUBLISHED_NODES,
 }
 
 // CreateVolume provisions storage via UpCloud Storage service
@@ -78,7 +77,7 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 		}
 		vol := volumes[0].Storage
 
-		if vol.Size != int(storageSize) {
+		if vol.Size*giB != int(storageSize) {
 			return nil, status.Errorf(codes.AlreadyExists, fmt.Sprintf("invalid storage size requested: %d", storageSize))
 		}
 
@@ -86,7 +85,7 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 		return &csi.CreateVolumeResponse{
 			Volume: &csi.Volume{
 				VolumeId:      vol.UUID,
-				CapacityBytes: int64(vol.Size),
+				CapacityBytes: int64(vol.Size) * giB,
 			},
 		}, nil
 	}
@@ -94,11 +93,12 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 	volumeReq := &request.CreateStorageRequest{
 		Zone:  d.options.zone,
 		Title: volumeName,
-		Size:  int(storageSize),
+		Size:  int(storageSize / giB),
 		Tier:  "maxiops",
 	}
 
 	log.WithField("volume_req", volumeReq).Info("creating volume")
+	log.Debugf("volume request: %#v", *volumeReq)
 	vol, err := d.upclouddriver.createStorage(ctx, volumeReq)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
@@ -323,7 +323,7 @@ func (d *Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (
 		entries = append(entries, &csi.ListVolumesResponse_Entry{
 			Volume: &csi.Volume{
 				VolumeId:      vol.UUID,
-				CapacityBytes: int64(vol.Size),
+				CapacityBytes: int64(vol.Size) * giB,
 			},
 		})
 	}
