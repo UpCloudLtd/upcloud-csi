@@ -14,8 +14,8 @@ func main() {
 	var (
 		endpoint     = flagSet.String("endpoint", "unix:///var/lib/kubelet/plugins/"+driver.DefaultDriverName+"/csi.sock", "CSI endpoint")
 		nodeHost     = flagSet.String("nodehost", "", "Node hostname to determine node's zone and UUID")
-		username     = flagSet.String("username", "", "Upcloud username")
-		password     = flagSet.String("password", "", "Upcloud password")
+		username     = flagSet.String("username", "", "UpCloud username")
+		password     = flagSet.String("password", "", "UpCloud password")
 		driverName   = flagSet.String("driver-name", driver.DefaultDriverName, "Name for the driver")
 		address      = flagSet.String("address", driver.DefaultAddress, "Address to serve on")
 		volumeName   = flagSet.String("volume_name", "", "Name for the volume being provisioned by driver")
