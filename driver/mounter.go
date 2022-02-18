@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -226,20 +225,15 @@ func (m *mounter) IsFormatted(source string) (bool, error) {
 }
 
 func (m *mounter) isPrepared(source string) (string, error) {
-	devices, err := filepath.Glob("/dev/vd?")
+	unformattedDevice := ""
+	formatted, err := m.IsFormatted(source)
 	if err != nil {
 		return "", err
 	}
-	unformattedDevice := ""
-	for _, device := range devices {
-		formatted, err := m.IsFormatted(device)
-		if err != nil {
-			return "", err
-		}
-		if !formatted {
-			unformattedDevice = device
-			return unformattedDevice, nil
-		}
+
+	if !formatted {
+		unformattedDevice = source
+		return unformattedDevice, nil
 	}
 	return "", fmt.Errorf("no conclusive unformatted device found. recover manually")
 }
