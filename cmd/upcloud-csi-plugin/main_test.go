@@ -10,7 +10,6 @@ import (
 )
 
 func TestRun(t *testing.T) {
-	// TODO hmmmm could just go into driver package...
 	flagSet := pflag.NewFlagSet("default", pflag.ContinueOnError)
 
 	var (

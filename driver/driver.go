@@ -82,7 +82,7 @@ type driverOptions struct {
 	address      string
 	nodeHost     string
 	nodeId       string
-	zone         string // TODO check if we should use zone &|| region
+	zone         string
 	upcloudTag   string
 	isController bool
 }
@@ -191,7 +191,7 @@ func (d *Driver) Run() error {
 	errHandler := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		resp, err := handler(ctx, req)
 		if err != nil {
-			d.log.WithField("method", info.FullMethod).Error("method failed", err)
+			d.log.WithField("method", info.FullMethod).Errorf("method failed: %s", err)
 		}
 		return resp, err
 	}
@@ -334,7 +334,7 @@ func WithNodeHost(nodeHost string) func(*driverOptions) {
 
 // When building any packages that import version, pass the build/install cmd
 // ldflags like so:
-//   go build -ldflags "-X github.com/digitalocean/csi-digitalocean/driver.version=0.0.1"
+//   go build -ldflags "-X github.com/UpCloudLtd/upcloud-csi/driver.version=0.0.1"
 
 // TODO look at cleaner way to set these :(
 var (
