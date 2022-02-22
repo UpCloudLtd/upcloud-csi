@@ -111,18 +111,18 @@ func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRe
 			nodeStageLog.Info("done preparing volume")
 		} else {
 			nodeStageLog.Info("expected source device location found")
-			nodeStageLog.Infof("checking whether volume %s is f", source)
-			f, err := d.mounter.IsFormatted(source)
+			nodeStageLog.Infof("checking whether volume %s is formatted", source)
+			formatted, err := d.mounter.IsFormatted(source)
 			if err != nil {
 				return nil, err
 			}
-			if !f {
+			if !formatted {
 				nodeStageLog.Info("formatting the volume for staging")
 				if err := d.mounter.Format(source, fsType, []string{}); err != nil {
 					return nil, status.Error(codes.Internal, err.Error())
 				}
 			} else {
-				nodeStageLog.Info("source device is already f")
+				nodeStageLog.Info("source device is already formatted")
 			}
 		}
 
