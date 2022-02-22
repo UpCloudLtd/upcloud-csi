@@ -68,7 +68,7 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: csi-upcloud-plugin
-          image: ghcr.io/mescudi21/upcloud-csi:test
+          image: ghcr.io/upcloudltd/upcloud-csi:alpha
           args:
             - "--endpoint=$(CSI_ENDPOINT)"
             - "--nodehost=$(NODE_ID)"
@@ -167,7 +167,7 @@ metadata:
 rules:
   - apiGroups: [ "" ]
     resources: [ "persistentvolumes" ]
-    verbs: [ "get", "list", "watch", "update" , "patch"]
+    verbs: [ "get", "list", "watch", "update", "patch"]
   - apiGroups: [ "" ]
     resources: [ "nodes" ]
     verbs: [ "get", "list", "watch" ]
@@ -176,7 +176,10 @@ rules:
     verbs: [ "get", "list", "watch" ]
   - apiGroups: [ "storage.k8s.io" ]
     resources: [ "volumeattachments" ]
-    verbs: [ "get", "list", "watch", "update" ]
+    verbs: [ "get", "list", "watch", "update", "patch" ]
+  - apiGroups: [ "storage.k8s.io" ]
+    resources: [ "volumeattachments/status" ]
+    verbs: [ "get", "list", "watch", "update", "patch" ]
 
 ---
 kind: ClusterRoleBinding
@@ -296,7 +299,7 @@ spec:
             - name: registration-dir
               mountPath: /registration/
         - name: csi-upcloud-plugin
-          image: ghcr.io/mescudi21/upcloud-csi:test
+          image: ghcr.io/upcloudltd/upcloud-csi:alpha
           args:
             - "--endpoint=$(CSI_ENDPOINT)"
             - "--nodehost=$(NODE_ID)"
