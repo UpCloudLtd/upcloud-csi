@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	diskIDPath = "/dev/disk/by-uuid"
-
+	diskIDPath        = "/dev/disk/by-id"
+	diskPrefix        = "virtio-"
 	maxVolumesPerNode = 7
 )
 
@@ -50,6 +50,8 @@ func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRe
 	} else {
 		volumeName = volName
 	}
+
+	d.log.Infof("request struct: %#v", *req)
 
 	source := d.getDiskSource(req.VolumeId)
 	target := req.StagingTargetPath
@@ -88,7 +90,7 @@ func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRe
 		_, err := os.Stat(source)
 		if os.IsNotExist(err) {
 			nodeStageLog.Info("expected source device location not found. checking whether device present and identifiable")
-			newDevice, err := d.mounter.isPrepared(req.VolumeId)
+			newDevice, err := d.mounter.isPrepared(source)
 			if err != nil {
 				return nil, err
 			}
@@ -419,5 +421,6 @@ func (d *Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolume
 
 // getDiskSource returns the absolute path of the attached volume for the given volumeID
 func (d *Driver) getDiskSource(volumeID string) string {
-	return filepath.Join(diskIDPath, volumeID)
+	fullId := strings.Join(strings.Split(volumeID, "-"), "")
+	return filepath.Join(diskIDPath, diskPrefix+fullId[:20])
 }
