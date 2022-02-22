@@ -3,6 +3,7 @@ package driver
 import (
 	"context"
 	"fmt"
+	"github.com/UpCloudLtd/upcloud-go-api/upcloud"
 	"github.com/UpCloudLtd/upcloud-go-api/upcloud/request"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/sirupsen/logrus"
@@ -94,7 +95,7 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 		Zone:  d.options.zone,
 		Title: volumeName,
 		Size:  int(storageSize / giB),
-		Tier:  "maxiops",
+		Tier:  upcloud.StorageTierMaxIOPS,
 	}
 
 	log.WithField("volume_req", volumeReq).Info("creating volume")
@@ -173,6 +174,7 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 	// check if volume exist before trying to attach it
 	volumes, err := d.upclouddriver.getStorageByUUID(ctx, req.VolumeId)
 	if err != nil {
+		d.log.Errorf("get storage by uuid error: %s, %#v", err, volumes)
 		return nil, err
 	}
 
@@ -207,7 +209,12 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 	}
 
 	// attach the volume to the correct node
-	err = d.upclouddriver.attachStorage(ctx, req.VolumeId, req.NodeId)
+	server, err := d.upclouddriver.getServerByHostname(ctx, req.NodeId)
+	if err != nil {
+		return nil, err
+	}
+
+	err = d.upclouddriver.attachStorage(ctx, req.VolumeId, server.UUID)
 	if err != nil {
 		// already attached to the node
 		return nil, err
@@ -240,13 +247,12 @@ func (d *Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.Control
 		return nil, err
 	}
 
-	// check if droplet exists before trying to detach the volume from the droplet
-	_, err = d.upclouddriver.getServer(ctx, req.NodeId)
+	server, err := d.upclouddriver.getServerByHostname(ctx, req.NodeId)
 	if err != nil {
 		return nil, err
 	}
 
-	err = d.upclouddriver.detachStorage(ctx, req.VolumeId, req.NodeId)
+	err = d.upclouddriver.detachStorage(ctx, req.VolumeId, server.UUID)
 	if err != nil {
 		return nil, err
 	}
