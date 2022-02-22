@@ -91,5 +91,10 @@ func (m *mockDriver) listStorage(ctx context.Context, zone string) ([]*upcloud.S
 }
 
 func (m *mockDriver) getServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error) {
-	return nil, nil
+	return &upcloud.ServerDetails{}, nil
+}
+
+func (m *mockDriver) getServerByHostname(ctx context.Context, hostname string) (*upcloud.Server, error) {
+	id, _ := uuid.NewUUID()
+	return &upcloud.Server{UUID: id.String()}, nil
 }

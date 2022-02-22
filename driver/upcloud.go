@@ -24,6 +24,7 @@ type upcloudService interface {
 	detachStorage(context.Context, string, string) error
 	listStorage(context.Context, string) ([]*upcloud.Storage, error)
 	getServer(context.Context, string) (*upcloud.ServerDetails, error)
+	getServerByHostname(context.Context, string) (*upcloud.Server, error)
 }
 
 func (u *upcloudClient) getStorageByUUID(ctx context.Context, storageUUID string) ([]*upcloud.StorageDetails, error) {
@@ -146,4 +147,19 @@ func (u *upcloudClient) getServer(ctx context.Context, uuid string) (*upcloud.Se
 		return nil, err
 	}
 	return server, nil
+}
+
+func (u *upcloudClient) getServerByHostname(ctx context.Context, hostname string) (*upcloud.Server, error) {
+	servers, err := u.svc.GetServers()
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch servers: %s", err)
+	}
+
+	for _, server := range servers.Servers {
+		if server.Hostname == hostname {
+			return &server, nil
+		}
+	}
+
+	return nil, fmt.Errorf("server with such hostname does not exist")
 }
