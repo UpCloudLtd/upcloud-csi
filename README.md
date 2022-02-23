@@ -31,7 +31,7 @@ Before reaching the **v1.0.0** version, UpCloud CSI Driver is **NOT** recommende
 
 ### Create a Kubernetes secret
 
-Execute the following commands to add UpCloud credentials as Kubernetes secret
+Execute the following commands to add UpCloud credentials as Kubernetes secret:
 
 ```bash
 export UPCLOUD_USERNAME=your-username && export UPCLOUD_PASSWORD=your-password
@@ -51,7 +51,7 @@ stringData:
 ```
 
 After the message, that secret was created, you can run this command to check the existence of `upcloud` secret
-in `kube-system` namespace
+in `kube-system` namespace:
 
 ```sh
 $ kubectl -n kube-system get secret upcloud
@@ -85,7 +85,7 @@ kubectl get pvc/csi-pvc pods/csi-app
 kubectl describe pvc/csi-pvc pods/csi-app | less
 ```
 
-Now, let's add some data into the PVC, delete the POD, and recreate the pod. Our data will remain intact.
+To check the persistence feature - you may create the sample file in Pod, later, delete the pod and re-create it from yaml manifest and notice that the file is still in mounted directory 
 
 ```sh
 $ kubectl exec -it csi-app -- /bin/sh -c "touch /data/persistent-file.txt"
