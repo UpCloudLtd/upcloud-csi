@@ -8,6 +8,8 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  PKG: github.com/UpCloudLtd/upcloud-csi/cmd/upcloud-csi-plugin
+  NAME: upcloud-csi-plugin
 
 jobs:
   build-and-push-image:
@@ -33,10 +35,16 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
+      - name: Build Go binary
+        uses: actions/setup-go@v2
+        run: go build -mod=vendor -ldflags "-w -s" -o cmd/upcloud-csi-plugin/${{ env.NAME }} ${{ env.PKG }}
+
       - name: Build and push Docker image
         uses: docker/build-push-action@ad44023a93711e3deb337508980b4b5e9bcdc5dc
         with:
+          file: cmd/upcloud-csi-plugin/Dockerfile
           context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64
