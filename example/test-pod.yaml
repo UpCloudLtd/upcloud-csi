@@ -11,7 +11,7 @@ spec:
       volumeMounts:
         - mountPath: "/data"
           name: upcloud-volume
-      command: ["sleep", "1000000"]
+      command: [ "sleep", "1000000" ]
   volumes:
     - name: upcloud-volume
       persistentVolumeClaim:

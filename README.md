@@ -24,7 +24,6 @@ Before reaching the **v1.0.0** version, UpCloud CSI Driver is **NOT** recommende
 | beta    | TBD        |
 | 1.0.0   | TBD        |
 
-
 ### Requirements
 
 * Kubernetes v1.16+
