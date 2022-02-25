@@ -47,7 +47,7 @@ metadata:
 stringData:
   username: "$UPCLOUD_USERNAME"
   password: "$UPCLOUD_PASSWORD"
-  EOF
+EOF
 ```
 
 After the message, that secret was created, you can run this command to check the existence of `upcloud` secret
