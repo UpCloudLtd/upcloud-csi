@@ -20,15 +20,15 @@ const (
 const (
 	// minimumVolumeSizeInBytes is used to validate that the user is not trying
 	// to create a volume that is smaller than what we support
-	minimumVolumeSizeInBytes int64 = 1 * giB
+	minimumVolumeSizeInBytes int64 = 10 * giB
 
 	// maximumVolumeSizeInBytes is used to validate that the user is not trying
 	// to create a volume that is larger than what we support
-	maximumVolumeSizeInBytes int64 = 16 * tiB
+	maximumVolumeSizeInBytes int64 = 4096 * giB
 
 	// defaultVolumeSize is used when the user did not provide a size or
 	// the size they provided did not satisfy our requirements
-	defaultVolumeSize = 16 * giB
+	defaultVolumeSize = 10 * giB
 )
 
 var (
