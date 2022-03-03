@@ -25,6 +25,7 @@ type upcloudService interface {
 	listStorage(context.Context, string) ([]*upcloud.Storage, error)
 	getServer(context.Context, string) (*upcloud.ServerDetails, error)
 	getServerByHostname(context.Context, string) (*upcloud.Server, error)
+	resizeStorage(ctx context.Context, uuid string, newSize int) (*upcloud.StorageDetails, error)
 }
 
 func (u *upcloudClient) getStorageByUUID(ctx context.Context, storageUUID string) ([]*upcloud.StorageDetails, error) {
@@ -162,4 +163,16 @@ func (u *upcloudClient) getServerByHostname(ctx context.Context, hostname string
 	}
 
 	return nil, fmt.Errorf("server with such hostname does not exist")
+}
+
+func (u *upcloudClient) resizeStorage(ctx context.Context, uuid string, newSize int) (*upcloud.StorageDetails, error) {
+	storage, err := u.svc.ModifyStorage(&request.ModifyStorageRequest{
+		UUID: uuid,
+		Size: newSize,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return storage, nil
 }
