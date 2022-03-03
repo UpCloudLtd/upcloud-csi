@@ -98,3 +98,8 @@ func (m *mockDriver) getServerByHostname(ctx context.Context, hostname string) (
 	id, _ := uuid.NewUUID()
 	return &upcloud.Server{UUID: id.String()}, nil
 }
+
+func (m *mockDriver) resizeStorage(ctx context.Context, uuid_ string, newSize int) (*upcloud.StorageDetails, error) {
+	id, _ := uuid.NewUUID()
+	return &upcloud.StorageDetails{Storage: upcloud.Storage{UUID: id.String()}}, nil
+}
