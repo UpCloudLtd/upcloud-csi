@@ -10,6 +10,8 @@ env:
   IMAGE_NAME: ${{ github.repository }}
   PKG: github.com/UpCloudLtd/upcloud-csi/cmd/upcloud-csi-plugin
   NAME: upcloud-csi-plugin
+  GOOS: linux
+  GOARCH: amd64
 
 jobs:
   build-and-push-image:
@@ -51,4 +53,4 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/x86_64
+          platforms: linux/amd64
