@@ -68,7 +68,7 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: csi-upcloud-plugin
-          image: ghcr.io/upcloudltd/upcloud-csi:alpha
+          image: ghcr.io/upcloudltd/upcloud-csi:beta
           args:
             - "--endpoint=$(CSI_ENDPOINT)"
             - "--nodehost=$(NODE_ID)"
@@ -299,7 +299,7 @@ spec:
             - name: registration-dir
               mountPath: /registration/
         - name: csi-upcloud-plugin
-          image: ghcr.io/upcloudltd/upcloud-csi:alpha
+          image: ghcr.io/upcloudltd/upcloud-csi:beta
           args:
             - "--endpoint=$(CSI_ENDPOINT)"
             - "--nodehost=$(NODE_ID)"
