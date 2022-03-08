@@ -11,7 +11,7 @@ env:
   PKG: github.com/UpCloudLtd/upcloud-csi/cmd/upcloud-csi-plugin
   NAME: upcloud-csi-plugin
   GOOS: linux
-  GOARCH: x86_64
+  GOARCH: amd64
 
 jobs:
   build-and-push-image:
