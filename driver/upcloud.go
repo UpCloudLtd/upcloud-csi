@@ -11,6 +11,11 @@ import (
 
 // TODO sort out naming conventions
 
+const (
+	startServerTimeout = 25
+	stopServerTimeout  = 15
+)
+
 type upcloudClient struct {
 	svc *service.Service
 }
@@ -26,6 +31,8 @@ type upcloudService interface {
 	getServer(context.Context, string) (*upcloud.ServerDetails, error)
 	getServerByHostname(context.Context, string) (*upcloud.Server, error)
 	resizeStorage(ctx context.Context, uuid string, newSize int) (*upcloud.StorageDetails, error)
+	stopServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error)
+	startServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error)
 }
 
 func (u *upcloudClient) getStorageByUUID(ctx context.Context, storageUUID string) ([]*upcloud.StorageDetails, error) {
@@ -175,4 +182,26 @@ func (u *upcloudClient) resizeStorage(ctx context.Context, uuid string, newSize 
 	}
 
 	return storage, nil
+}
+
+func (u *upcloudClient) stopServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error) {
+	server, err := u.svc.StopServer(&request.StopServerRequest{
+		UUID:    uuid,
+		Timeout: stopServerTimeout,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return server, nil
+}
+
+func (u *upcloudClient) startServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error) {
+	server, err := u.svc.StartServer(&request.StartServerRequest{
+		UUID:    uuid,
+		Timeout: startServerTimeout,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return server, nil
 }

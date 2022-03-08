@@ -443,10 +443,31 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 		return &csi.ControllerExpandVolumeResponse{CapacityBytes: int64(volumes[0].Size * giB), NodeExpansionRequired: true}, nil
 	}
 
+	nodeId := volumes[0].ServerUUIDs[0]
+	stoppedServer, err := d.upclouddriver.stopServer(ctx, nodeId)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to stop the server %s before volume expansion: %s", nodeId, err)
+	}
+
+	d.log.WithFields(logrus.Fields{
+		"attached_devices": stoppedServer.StorageDevices,
+		"node_id":          nodeId,
+	}).Info("server stopped")
+
 	resizedStorage, err := d.upclouddriver.resizeStorage(ctx, volumes[0].UUID, int(resizeGigaBytes))
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "cannot resizeStorage volumes %s: %s", volumeId, err.Error())
 	}
+
+	startedServer, err := d.upclouddriver.startServer(ctx, nodeId)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to start the server %s after volume expansion: %s", nodeId, err)
+	}
+
+	d.log.WithFields(logrus.Fields{
+		"attached_devices": startedServer.StorageDevices,
+		"node_id":          nodeId,
+	}).Info("server started")
 
 	d.log.WithField("storage_state", resizedStorage.State).Info("resize on storage called")
 
@@ -464,7 +485,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 	nodeExpansionRequired := true
 	if req.VolumeCapability != nil {
 		if _, ok := req.VolumeCapability.AccessType.(*csi.VolumeCapability_Block); ok {
-			log.Info("node expansion is not required for block volumes")
+			log.Info("nodeId expansion is not required for block volumes")
 			nodeExpansionRequired = false
 		}
 	}
