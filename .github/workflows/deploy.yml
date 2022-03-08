@@ -46,7 +46,7 @@ jobs:
         run: GOOS=${{ env.GOOS }} GOARCH=${{ env.GOARCH }} go build -mod=vendor -ldflags "-w -s" -o cmd/upcloud-csi-plugin/${{ env.NAME }} ${{ env.PKG }}
 
       - name: Test go run
-        run: go run cmd/upcloud-csi-plugin/main.go
+        run: bash cmd/upcloud-csi-plugin/${{ env.NAME }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v2.9.0
