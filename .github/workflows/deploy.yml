@@ -10,6 +10,8 @@ env:
   IMAGE_NAME: ${{ github.repository }}
   PKG: github.com/UpCloudLtd/upcloud-csi/cmd/upcloud-csi-plugin
   NAME: upcloud-csi-plugin
+  GOOS: linux
+  GOARCH: amd64
 
 jobs:
   build-and-push-image:
@@ -36,15 +38,15 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
       - name: Set go environment
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3.0.0
         with:
           go-version: 1.17.0
 
       - name: Build Go binary
-        run: go build -mod=vendor -ldflags "-w -s" -o cmd/upcloud-csi-plugin/${{ env.NAME }} ${{ env.PKG }}
+        run: GOOS=${{ env.GOOS }} GOARCH=${{ env.GOARCH }} CGO_ENABLED=0 go build -mod=vendor -ldflags "-w -s" -o cmd/upcloud-csi-plugin/${{ env.NAME }} ${{ env.PKG }}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@ad44023a93711e3deb337508980b4b5e9bcdc5dc
+        uses: docker/build-push-action@v2.9.0
         with:
           file: cmd/upcloud-csi-plugin/Dockerfile
           context: cmd/upcloud-csi-plugin/
