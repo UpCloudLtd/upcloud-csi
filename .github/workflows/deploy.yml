@@ -43,10 +43,7 @@ jobs:
           go-version: 1.17.0
 
       - name: Build Go binary
-        run: GOOS=${{ env.GOOS }} GOARCH=${{ env.GOARCH }} go build -mod=vendor -ldflags "-w -s" -o cmd/upcloud-csi-plugin/${{ env.NAME }} ${{ env.PKG }}
-
-      - name: Test go run
-        run: bash cmd/upcloud-csi-plugin/${{ env.NAME }}
+        run: GOOS=${{ env.GOOS }} GOARCH=${{ env.GOARCH }} CGO_ENABLED=0 go build -mod=vendor -ldflags "-w -s" -o cmd/upcloud-csi-plugin/${{ env.NAME }} ${{ env.PKG }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v2.9.0
@@ -56,4 +53,4 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/x86_64
+          platforms: linux/amd64
