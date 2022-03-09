@@ -415,7 +415,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 	volumeId := req.VolumeId
 
 	if len(volumeId) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "ControllerExpandVolume volumes ID missing in request")
+		return nil, status.Error(codes.InvalidArgument, "ControllerExpandVolume volume ID missing in request")
 	}
 
 	volumes, err := d.upclouddriver.getStorageByUUID(ctx, volumeId)
@@ -441,14 +441,18 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 		"method":    "controller_expand_volume",
 	})
 
-	log.Info("controller expand volumes called: volumes - %s", volumes)
+	log.Info("controller expand volume called: volume - %s", volumes)
 
 	if resizeGigaBytes <= int64(volume.Size) {
 		log.WithFields(logrus.Fields{
 			"current_volume_size":   volume.Size,
 			"requested_volume_size": resizeGigaBytes,
-		}).Info("skipping volumes resizeStorage because current volumes size exceeds requested volumes size")
+		}).Info("skipping volume resizeStorage because current volume size exceeds requested volume size")
 		return &csi.ControllerExpandVolumeResponse{CapacityBytes: int64(volume.Size * giB), NodeExpansionRequired: true}, nil
+	}
+
+	if len(volume.ServerUUIDs) == 0 {
+		return nil, fmt.Errorf("volume is not attached to any server")
 	}
 
 	nodeId := volume.ServerUUIDs[0]
@@ -464,7 +468,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 
 	resizedStorage, err := d.upclouddriver.resizeStorage(ctx, volume.UUID, int(resizeGigaBytes))
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "cannot resizeStorage volumes %s: %s", volumeId, err.Error())
+		return nil, status.Errorf(codes.Internal, "cannot resizeStorage volume %s: %s", volumeId, err.Error())
 	}
 
 	err = d.upclouddriver.attachStorage(ctx, volumeId, nodeId)
@@ -488,7 +492,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 	//	}
 	//}
 
-	log.Info("volumes was resized")
+	log.Info("volume was resized")
 
 	nodeExpansionRequired := true
 	if req.VolumeCapability != nil {
