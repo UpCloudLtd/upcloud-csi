@@ -391,9 +391,6 @@ func (d *Driver) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeS
 }
 
 func (d *Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
-	d.log.WithField("method", "node_expand_volume").
-		Info("node expand volume called")
-
 	volumeID := req.GetVolumeId()
 	if len(volumeID) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "NodeExpandVolume volume ID not provided")
@@ -404,18 +401,50 @@ func (d *Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolume
 		return nil, status.Error(codes.InvalidArgument, "NodeExpandVolume volume path not provided")
 	}
 
+	log := d.log.WithFields(logrus.Fields{
+		"volume_id":   req.VolumeId,
+		"volume_path": req.VolumePath,
+		"method":      "node_expand_volume",
+	})
+	log.Info("node expand volume called")
+
+	if req.GetVolumeCapability() != nil {
+		switch req.GetVolumeCapability().GetAccessType().(type) {
+		case *csi.VolumeCapability_Block:
+			log.Info("filesystem expansion is skipped for block volumes")
+			return &csi.NodeExpandVolumeResponse{}, nil
+		}
+	}
+
+	mounted, err := d.mounter.IsMounted(volumePath)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "NodeExpandVolume failed to check if volume path %q is mounted: %s", volumePath, err)
+	}
+
+	if !mounted {
+		return nil, status.Errorf(codes.NotFound, "NodeExpandVolume volume path %q is not mounted", volumePath)
+	}
+
 	mounter := mount.New("")
-	devicePath, _, err := mount.GetDeviceNameFromMount(mounter, volumePath)
+	devicePath, err := d.mounter.GetDeviceName(mounter, volumePath)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "NodeExpandVolume unable to get device path for %q: %v", volumePath, err)
 	}
 
-	r := mount.NewResizeFs(utilexec.New())
+	if devicePath == "" {
+		return nil, status.Errorf(codes.NotFound, "NodeExpandVolume device path for volume path %q not found", volumePath)
+	}
 
+	r := mount.NewResizeFs(utilexec.New())
+	log = log.WithFields(logrus.Fields{
+		"device_path": devicePath,
+	})
+	log.Info("resizing the volume")
 	if _, err := r.Resize(devicePath, volumePath); err != nil {
 		return nil, status.Errorf(codes.Internal, "NodeExpandVolume could not resize volume %q (%q):  %v", volumeID, req.GetVolumePath(), err)
 	}
 
+	log.Info("volume as resized")
 	return &csi.NodeExpandVolumeResponse{}, nil
 }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"k8s.io/mount-utils"
 	"os"
 	"os/exec"
 	"strings"
@@ -65,6 +66,8 @@ type Mounter interface {
 	GetStatistics(volumePath string) (volumeStatistics, error)
 
 	wipeDevice(deviceId string) error
+
+	GetDeviceName(mounter mount.Interface, mountPath string) (string, error)
 }
 
 type mounter struct {
@@ -356,4 +359,9 @@ func (m *mounter) GetStatistics(volumePath string) (volumeStatistics, error) {
 	}
 
 	return volStats, nil
+}
+
+func (m *mounter) GetDeviceName(mounter mount.Interface, mountPath string) (string, error) {
+	devicePath, _, err := mount.GetDeviceNameFromMount(mounter, mountPath)
+	return devicePath, err
 }
