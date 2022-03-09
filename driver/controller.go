@@ -180,7 +180,7 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 	}
 
 	if len(volumes) == 0 {
-		return nil, fmt.Errorf("volume doesnt exist")
+		return nil, fmt.Errorf("volume doesn't exist")
 	} else if len(volumes) > 1 {
 		return nil, fmt.Errorf("too many volumes")
 	}
@@ -417,10 +417,18 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 	if len(volumeId) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "ControllerExpandVolume volumes ID missing in request")
 	}
+
 	volumes, err := d.upclouddriver.getStorageByUUID(ctx, volumeId)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "ControllerExpandVolume could not retrieve existing volumes: %v", err)
 	}
+
+	if len(volumes) == 0 {
+		return nil, fmt.Errorf("volume doesn't exist")
+	} else if len(volumes) > 1 {
+		return nil, fmt.Errorf("too many volumes")
+	}
+	volume := volumes[0]
 
 	resizeBytes, err := obtainSize(req.CapacityRange)
 	if err != nil {
@@ -433,17 +441,17 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 		"method":    "controller_expand_volume",
 	})
 
-	log.Info("controller expand volumes called")
+	log.Info("controller expand volumes called: volumes - %s", volumes)
 
-	if resizeGigaBytes <= int64(volumes[0].Size) {
+	if resizeGigaBytes <= int64(volume.Size) {
 		log.WithFields(logrus.Fields{
-			"current_volume_size":   volumes[0].Size,
+			"current_volume_size":   volume.Size,
 			"requested_volume_size": resizeGigaBytes,
 		}).Info("skipping volumes resizeStorage because current volumes size exceeds requested volumes size")
-		return &csi.ControllerExpandVolumeResponse{CapacityBytes: int64(volumes[0].Size * giB), NodeExpansionRequired: true}, nil
+		return &csi.ControllerExpandVolumeResponse{CapacityBytes: int64(volume.Size * giB), NodeExpansionRequired: true}, nil
 	}
 
-	nodeId := volumes[0].ServerUUIDs[0]
+	nodeId := volume.ServerUUIDs[0]
 	err = d.upclouddriver.detachStorage(ctx, volumeId, nodeId)
 	if err != nil {
 		return nil, err
@@ -454,7 +462,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 		"node_id":   nodeId,
 	}).Info("volume detached")
 
-	resizedStorage, err := d.upclouddriver.resizeStorage(ctx, volumes[0].UUID, int(resizeGigaBytes))
+	resizedStorage, err := d.upclouddriver.resizeStorage(ctx, volume.UUID, int(resizeGigaBytes))
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "cannot resizeStorage volumes %s: %s", volumeId, err.Error())
 	}
