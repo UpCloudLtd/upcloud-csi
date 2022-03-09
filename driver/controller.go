@@ -444,30 +444,30 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 	}
 
 	nodeId := volumes[0].ServerUUIDs[0]
-	stoppedServer, err := d.upclouddriver.stopServer(ctx, nodeId)
+	err = d.upclouddriver.detachStorage(ctx, volumeId, nodeId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to stop the server %s before volume expansion: %s", nodeId, err)
+		return nil, err
 	}
 
 	d.log.WithFields(logrus.Fields{
-		"attached_devices": stoppedServer.StorageDevices,
-		"node_id":          nodeId,
-	}).Info("server stopped")
+		"volume_id": volumeId,
+		"node_id":   nodeId,
+	}).Info("volume detached")
 
 	resizedStorage, err := d.upclouddriver.resizeStorage(ctx, volumes[0].UUID, int(resizeGigaBytes))
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "cannot resizeStorage volumes %s: %s", volumeId, err.Error())
 	}
 
-	startedServer, err := d.upclouddriver.startServer(ctx, nodeId)
+	err = d.upclouddriver.attachStorage(ctx, volumeId, nodeId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to start the server %s after volume expansion: %s", nodeId, err)
+		return nil, err
 	}
 
 	d.log.WithFields(logrus.Fields{
-		"attached_devices": startedServer.StorageDevices,
-		"node_id":          nodeId,
-	}).Info("server started")
+		"volume_id": volumeId,
+		"node_id":   nodeId,
+	}).Info("volume attached")
 
 	d.log.WithField("storage_state", resizedStorage.State).Info("resize on storage called")
 
