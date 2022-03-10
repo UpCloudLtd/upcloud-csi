@@ -440,11 +440,17 @@ func (d *Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolume
 		"device_path": devicePath,
 	})
 	log.Info("resizing the volume")
-	if _, err := r.Resize(devicePath, volumePath); err != nil {
+	resized, err := r.Resize(devicePath, volumePath)
+	if err != nil {
 		return nil, status.Errorf(codes.Internal, "NodeExpandVolume could not resize volume %q (%q):  %v", volumeID, req.GetVolumePath(), err)
 	}
 
-	log.Info("volume as resized")
+	if !resized {
+		log.WithField("volume_resized", resized).Error("volume failed to resize")
+	} else {
+		log.Info("volume is resized")
+	}
+
 	return &csi.NodeExpandVolumeResponse{}, nil
 }
 
