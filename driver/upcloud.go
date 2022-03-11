@@ -181,10 +181,12 @@ func (u *upcloudClient) resizeStorage(ctx context.Context, uuid string, newSize 
 		return nil, err
 	}
 
-	_, err = u.svc.ResizeStorageFilesystem(&request.ResizeStorageFilesystemRequest{UUID: uuid})
+	backup, err := u.svc.ResizeStorageFilesystem(&request.ResizeStorageFilesystemRequest{UUID: uuid})
 	if err != nil {
 		return nil, err
 	}
+
+	fmt.Printf("backup: %#v\n", *backup)
 
 	return storage, nil
 }
