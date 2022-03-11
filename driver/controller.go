@@ -466,7 +466,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 		"node_id":   nodeId,
 	}).Info("volume detached")
 
-	resizedStorage, err := d.upclouddriver.resizeStorage(ctx, volume.UUID, int(resizeGigaBytes))
+	_, err = d.upclouddriver.resizeStorage(ctx, volume.UUID, int(resizeGigaBytes))
 	if err != nil {
 		d.log.Errorf("cannot resizeStorage volume %s: %s", volumeId, err.Error())
 	}
@@ -480,8 +480,6 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 		"volume_id": volumeId,
 		"node_id":   nodeId,
 	}).Info("volume attached")
-
-	d.log.WithField("storage_state", resizedStorage.State).Info("resize on storage called")
 
 	log = log.WithField("new_volume_size", resizeGigaBytes)
 
