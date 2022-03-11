@@ -1,9 +1,8 @@
-module github.com/UpCloudLtd/csi
+module github.com/UpCloudLtd/upcloud-csi
 
 go 1.17
 
 require (
-	github.com/UpCloudLtd/upcloud-csi v0.0.0-20220225131301-568e9a791bb5
 	github.com/UpCloudLtd/upcloud-go-api/v4 v4.2.0
 	github.com/container-storage-interface/spec v1.5.0
 	github.com/golang/protobuf v1.5.2
@@ -19,13 +18,12 @@ require (
 )
 
 require (
-	github.com/UpCloudLtd/upcloud-go-api v0.0.0-20210930073303-cc664e35078d // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/go-logr/logr v1.2.0 // indirect
-	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
+	github.com/hashicorp/go-cleanhttp v0.5.1 // indirect
 	golang.org/x/net v0.0.0-20211209124913-491a49abca63 // indirect
 	golang.org/x/text v0.3.7 // indirect
-	google.golang.org/genproto v0.0.0-20211208223120-3a66f561d7aa // indirect
+	google.golang.org/genproto v0.0.0-20201019141844-1ed22bb0c154 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
 	k8s.io/klog/v2 v2.30.0 // indirect
 )
