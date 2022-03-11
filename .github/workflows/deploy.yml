@@ -8,7 +8,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  PKG: cmd/upcloud-csi-plugin
+  PKG: ./cmd/upcloud-csi-plugin
   NAME: upcloud-csi-plugin
   GOOS: linux
   GOARCH: amd64
