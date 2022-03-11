@@ -8,7 +8,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  PKG: ./cmd/upcloud-csi-plugin
+  PKG: github.com/UpCloudLtd/upcloud-csi/cmd/upcloud-csi-plugin
   NAME: upcloud-csi-plugin
   GOOS: linux
   GOARCH: amd64
@@ -43,7 +43,7 @@ jobs:
           go-version: 1.17.0
 
       - name: Build Go binary
-        run: GOOS=${{ env.GOOS }} GOARCH=${{ env.GOARCH }} CGO_ENABLED=0 go build -mod=vendor -ldflags "-w -s" -o cmd/upcloud-csi-plugin/${{ env.NAME }} ${{ env.PKG }}
+        run: GOOS=${{ env.GOOS }} GOARCH=${{ env.GOARCH }} CGO_ENABLED=0 go build -mod=mod -ldflags "-w -s" -o cmd/upcloud-csi-plugin/${{ env.NAME }} ${{ env.PKG }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v2.9.0
