@@ -3,8 +3,8 @@ package driver
 import (
 	"context"
 	"fmt"
-	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud"
-	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/request"
+	"github.com/UpCloudLtd/upcloud-go-api/upcloud"
+	"github.com/UpCloudLtd/upcloud-go-api/upcloud/request"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
@@ -97,17 +97,4 @@ func (m *mockDriver) getServer(ctx context.Context, uuid string) (*upcloud.Serve
 func (m *mockDriver) getServerByHostname(ctx context.Context, hostname string) (*upcloud.Server, error) {
 	id, _ := uuid.NewUUID()
 	return &upcloud.Server{UUID: id.String()}, nil
-}
-
-func (m *mockDriver) resizeStorage(ctx context.Context, uuid_ string, newSize int) (*upcloud.StorageDetails, error) {
-	id, _ := uuid.NewUUID()
-	return &upcloud.StorageDetails{Storage: upcloud.Storage{UUID: id.String()}}, nil
-}
-
-func (m *mockDriver) startServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error) {
-	return nil, nil
-}
-
-func (m *mockDriver) stopServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error) {
-	return nil, nil
 }

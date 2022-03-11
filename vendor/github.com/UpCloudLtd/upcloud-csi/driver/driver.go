@@ -14,10 +14,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud"
-	upcloudclient "github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/client"
-	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/request"
-	upcloudservice "github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/service"
+	"github.com/UpCloudLtd/upcloud-go-api/upcloud"
+	upcloudclient "github.com/UpCloudLtd/upcloud-go-api/upcloud/client"
+	"github.com/UpCloudLtd/upcloud-go-api/upcloud/request"
+	upcloudservice "github.com/UpCloudLtd/upcloud-go-api/upcloud/service"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 )

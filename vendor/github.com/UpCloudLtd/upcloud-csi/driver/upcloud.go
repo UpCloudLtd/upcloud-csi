@@ -4,17 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud"
-	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/request"
-	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/service"
+	"github.com/UpCloudLtd/upcloud-go-api/upcloud"
+	"github.com/UpCloudLtd/upcloud-go-api/upcloud/request"
+	"github.com/UpCloudLtd/upcloud-go-api/upcloud/service"
 )
 
 // TODO sort out naming conventions
-
-const (
-	startServerTimeout = 25
-	stopServerTimeout  = 15
-)
 
 type upcloudClient struct {
 	svc *service.Service
@@ -30,9 +25,6 @@ type upcloudService interface {
 	listStorage(context.Context, string) ([]*upcloud.Storage, error)
 	getServer(context.Context, string) (*upcloud.ServerDetails, error)
 	getServerByHostname(context.Context, string) (*upcloud.Server, error)
-	resizeStorage(ctx context.Context, uuid string, newSize int) (*upcloud.StorageDetails, error)
-	stopServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error)
-	startServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error)
 }
 
 func (u *upcloudClient) getStorageByUUID(ctx context.Context, storageUUID string) ([]*upcloud.StorageDetails, error) {
@@ -170,43 +162,4 @@ func (u *upcloudClient) getServerByHostname(ctx context.Context, hostname string
 	}
 
 	return nil, fmt.Errorf("server with such hostname does not exist")
-}
-
-func (u *upcloudClient) resizeStorage(ctx context.Context, uuid string, newSize int) (*upcloud.StorageDetails, error) {
-	storage, err := u.svc.ModifyStorage(&request.ModifyStorageRequest{
-		UUID: uuid,
-		Size: newSize,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = u.svc.ResizeStorageFilesystem(&request.ResizeStorageFilesystemRequest{UUID: uuid})
-	if err != nil {
-		return nil, err
-	}
-
-	return storage, nil
-}
-
-func (u *upcloudClient) stopServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error) {
-	server, err := u.svc.StopServer(&request.StopServerRequest{
-		UUID:    uuid,
-		Timeout: stopServerTimeout,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return server, nil
-}
-
-func (u *upcloudClient) startServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error) {
-	server, err := u.svc.StartServer(&request.StartServerRequest{
-		UUID:    uuid,
-		Timeout: startServerTimeout,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return server, nil
 }

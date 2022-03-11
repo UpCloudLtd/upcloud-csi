@@ -3,13 +3,12 @@ package driver
 import (
 	"context"
 	"fmt"
-	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud"
-	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/request"
+	"github.com/UpCloudLtd/upcloud-go-api/upcloud"
+	"github.com/UpCloudLtd/upcloud-go-api/upcloud/request"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"strconv"
 	"strings"
 )
 
@@ -180,7 +179,7 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 	}
 
 	if len(volumes) == 0 {
-		return nil, fmt.Errorf("volume doesn't exist")
+		return nil, fmt.Errorf("volume doesnt exist")
 	} else if len(volumes) > 1 {
 		return nil, fmt.Errorf("too many volumes")
 	}
@@ -412,170 +411,6 @@ func (d *Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsReques
 
 // ControllerExpandVolume is called from the resizer to increase the volume size.
 func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
-	volumeId := req.VolumeId
-
-	if len(volumeId) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "ControllerExpandVolume volume ID missing in request")
-	}
-
-	volumes, err := d.upclouddriver.getStorageByUUID(ctx, volumeId)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "ControllerExpandVolume could not retrieve existing volumes: %v", err)
-	}
-
-	if len(volumes) == 0 {
-		return nil, fmt.Errorf("volume doesn't exist")
-	} else if len(volumes) > 1 {
-		return nil, fmt.Errorf("too many volumes")
-	}
-	volume := volumes[0]
-
-	resizeBytes, err := obtainSize(req.CapacityRange)
-	if err != nil {
-		return nil, status.Errorf(codes.OutOfRange, "ControllerExpandVolume invalid capacity range: %v", err)
-	}
-	resizeGigaBytes := resizeBytes / giB
-
-	log := d.log.WithFields(logrus.Fields{
-		"volume_id": volumeId,
-		"method":    "controller_expand_volume",
-	})
-
-	log.Info("controller expand volume called: volume - %s", volumes)
-
-	if resizeGigaBytes <= int64(volume.Size) {
-		log.WithFields(logrus.Fields{
-			"current_volume_size":   volume.Size,
-			"requested_volume_size": resizeGigaBytes,
-		}).Info("skipping volume resizeStorage because current volume size exceeds requested volume size")
-		return &csi.ControllerExpandVolumeResponse{CapacityBytes: int64(volume.Size * giB), NodeExpansionRequired: true}, nil
-	}
-
-	if len(volume.ServerUUIDs) == 0 {
-		return nil, fmt.Errorf("volume is not attached to any server")
-	}
-
-	nodeId := volume.ServerUUIDs[0]
-	err = d.upclouddriver.detachStorage(ctx, volumeId, nodeId)
-	if err != nil {
-		return nil, err
-	}
-
-	d.log.WithFields(logrus.Fields{
-		"volume_id": volumeId,
-		"node_id":   nodeId,
-	}).Info("volume detached")
-
-	resizedStorage, err := d.upclouddriver.resizeStorage(ctx, volume.UUID, int(resizeGigaBytes))
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "cannot resizeStorage volume %s: %s", volumeId, err.Error())
-	}
-
-	err = d.upclouddriver.attachStorage(ctx, volumeId, nodeId)
-	if err != nil {
-		return nil, err
-	}
-
-	d.log.WithFields(logrus.Fields{
-		"volume_id": volumeId,
-		"node_id":   nodeId,
-	}).Info("volume attached")
-
-	d.log.WithField("storage_state", resizedStorage.State).Info("resize on storage called")
-
-	log = log.WithField("new_volume_size", resizeGigaBytes)
-
-	//if resizedStorage != nil {
-	//	log.Info("waiting until volumes is resized")
-	//	if err := d.waitAction(ctx, log, volumeId, resizedStorage.ID); err != nil {
-	//		return nil, status.Errorf(codes.Internal, "failed waiting for volumes to get resized: %s", err)
-	//	}
-	//}
-
-	log.Info("volume was resized")
-
-	nodeExpansionRequired := true
-	if req.VolumeCapability != nil {
-		if _, ok := req.VolumeCapability.AccessType.(*csi.VolumeCapability_Block); ok {
-			log.Info("nodeId expansion is not required for block volumes")
-			nodeExpansionRequired = false
-		}
-	}
-
-	return &csi.ControllerExpandVolumeResponse{CapacityBytes: resizeGigaBytes * giB, NodeExpansionRequired: nodeExpansionRequired}, nil
-}
-
-func obtainSize(capRange *csi.CapacityRange) (int64, error) {
-	if capRange == nil {
-		return defaultVolumeSize, nil
-	}
-
-	requiredBytes := capRange.GetRequiredBytes()
-	requiredSet := 0 < requiredBytes
-	limitBytes := capRange.GetLimitBytes()
-	limitSet := 0 < limitBytes
-
-	if !requiredSet && !limitSet {
-		return defaultVolumeSize, nil
-	}
-
-	if requiredSet && limitSet && limitBytes < requiredBytes {
-		return 0, fmt.Errorf("limit (%v) can not be less than required (%v) size", formatBytes(limitBytes), formatBytes(requiredBytes))
-	}
-
-	if requiredSet && !limitSet && requiredBytes < minimumVolumeSizeInBytes {
-		return 0, fmt.Errorf("required (%v) can not be less than minimum supported volume size (%v)", formatBytes(requiredBytes), formatBytes(minimumVolumeSizeInBytes))
-	}
-
-	if limitSet && limitBytes < minimumVolumeSizeInBytes {
-		return 0, fmt.Errorf("limit (%v) can not be less than minimum supported volume size (%v)", formatBytes(limitBytes), formatBytes(minimumVolumeSizeInBytes))
-	}
-
-	if requiredSet && requiredBytes > maximumVolumeSizeInBytes {
-		return 0, fmt.Errorf("required (%v) can not exceed maximum supported volume size (%v)", formatBytes(requiredBytes), formatBytes(maximumVolumeSizeInBytes))
-	}
-
-	if !requiredSet && limitSet && limitBytes > maximumVolumeSizeInBytes {
-		return 0, fmt.Errorf("limit (%v) can not exceed maximum supported volume size (%v)", formatBytes(limitBytes), formatBytes(maximumVolumeSizeInBytes))
-	}
-
-	if requiredSet && limitSet && requiredBytes == limitBytes {
-		return requiredBytes, nil
-	}
-
-	if requiredSet {
-		return requiredBytes, nil
-	}
-
-	if limitSet {
-		return limitBytes, nil
-	}
-
-	return defaultVolumeSize, nil
-}
-
-func formatBytes(inputBytes int64) string {
-	output := float64(inputBytes)
-	unit := ""
-
-	switch {
-	case inputBytes >= tiB:
-		output = output / tiB
-		unit = "Tb"
-	case inputBytes >= giB:
-		output = output / giB
-		unit = "Gb"
-	case inputBytes >= miB:
-		output = output / miB
-		unit = "Mb"
-	case inputBytes >= kiB:
-		output = output / kiB
-		unit = "Kb"
-	case inputBytes == 0:
-		return "0"
-	}
-
-	result := strconv.FormatFloat(output, 'f', 1, 64)
-	result = strings.TrimSuffix(result, ".0")
-	return result + unit
+	// TODO
+	return nil, status.Error(codes.Unimplemented, "")
 }
