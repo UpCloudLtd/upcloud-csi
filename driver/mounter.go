@@ -103,11 +103,12 @@ func (m *mounter) Format(source, fsType string, mkfsArgs []string) error {
 
 	var buf bytes.Buffer
 	awkCmd.Stdin, _ = devicesCmd.StdoutPipe()
-	awkCmd.Stdout = &buf
 
 	_ = awkCmd.Start()
 	_ = devicesCmd.Run()
 	_ = awkCmd.Wait()
+
+	io.Copy(awkCmd.Stdout, &buf)
 
 	m.log.Infof("lsblk output %v", buf)
 
