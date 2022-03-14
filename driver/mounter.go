@@ -1,6 +1,7 @@
 package driver
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -82,16 +83,6 @@ func newMounter(log *logrus.Entry) *mounter {
 }
 
 func (m *mounter) Format(source, fsType string, mkfsArgs []string) error {
-	mkfsCmd := fmt.Sprintf("mkfs.%s", fsType)
-
-	_, err := exec.LookPath(mkfsCmd)
-	if err != nil {
-		if err == exec.ErrNotFound {
-			return fmt.Errorf("%q executable not found in $PATH", mkfsCmd)
-		}
-		return err
-	}
-
 	if fsType == "" {
 		return errors.New("fs type is not specified for formatting the volume")
 	}
@@ -103,6 +94,31 @@ func (m *mounter) Format(source, fsType string, mkfsArgs []string) error {
 	// mkfsArgs = append(mkfsArgs, source)
 	if fsType == "ext4" || fsType == "ext3" {
 		mkfsArgs = append(mkfsArgs, "-F", source)
+	}
+
+	m.log.Infoln("running lsblk")
+
+	devicesCmd := exec.Command("lsblk")
+	awkCmd := exec.Command("awk 'END{print $1}'")
+
+	var buf bytes.Buffer
+	awkCmd.Stdin, _ = devicesCmd.StdoutPipe()
+	awkCmd.Stdout = &buf
+
+	_ = awkCmd.Start()
+	_ = devicesCmd.Run()
+	_ = awkCmd.Wait()
+
+	m.log.Infof("lsblk output %v", buf)
+
+	mkfsCmd := fmt.Sprintf("mkfs.%s", fsType)
+
+	_, err := exec.LookPath(mkfsCmd)
+	if err != nil {
+		if err == exec.ErrNotFound {
+			return fmt.Errorf("%q executable not found in $PATH", mkfsCmd)
+		}
+		return err
 	}
 
 	m.log.WithFields(logrus.Fields{
