@@ -1,7 +1,6 @@
 package driver
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +8,7 @@ import (
 	"k8s.io/mount-utils"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"syscall"
 
@@ -96,25 +96,18 @@ func (m *mounter) Format(source, fsType string, mkfsArgs []string) error {
 		mkfsArgs = append(mkfsArgs, "-F", source)
 	}
 
-	m.log.Infoln("running lsblk")
+	m.log.Info("source: %s", source)
+	m.log.Info("get last device")
+	lastDevice, err := getLastDevice(source)
+	if err != nil {
+		return err
+	}
 
-	devicesCmd := exec.Command("lsblk")
-	awkCmd := exec.Command("awk 'END{print $1}'")
-
-	var buf bytes.Buffer
-	awkCmd.Stdin, _ = devicesCmd.StdoutPipe()
-
-	_ = awkCmd.Start()
-	_ = devicesCmd.Run()
-	_ = awkCmd.Wait()
-
-	io.Copy(awkCmd.Stdout, &buf)
-
-	m.log.Infof("lsblk output %v", buf)
+	m.log.Info("last device: %s", lastDevice)
 
 	mkfsCmd := fmt.Sprintf("mkfs.%s", fsType)
 
-	_, err := exec.LookPath(mkfsCmd)
+	_, err = exec.LookPath(mkfsCmd)
 	if err != nil {
 		if err == exec.ErrNotFound {
 			return fmt.Errorf("%q executable not found in $PATH", mkfsCmd)
@@ -381,4 +374,23 @@ func (m *mounter) GetStatistics(volumePath string) (volumeStatistics, error) {
 func (m *mounter) GetDeviceName(mounter mount.Interface, mountPath string) (string, error) {
 	devicePath, _, err := mount.GetDeviceNameFromMount(mounter, mountPath)
 	return devicePath, err
+}
+
+func getLastDevice(device string) (string, error) {
+	out, err := exec.Command("parted", "--machine", "--script", device, "print").Output()
+	if err != nil {
+		return "", err
+	}
+
+	fmt.Printf("parted output: %s\n", out)
+
+	expr, err := regexp.Compile("^\\d")
+	if err != nil {
+		return "", err
+	}
+
+	partitions := strings.Split(string(out), "\n")
+	lastDevice := device + expr.FindString(partitions[len(partitions)-1])
+
+	return lastDevice, nil
 }
