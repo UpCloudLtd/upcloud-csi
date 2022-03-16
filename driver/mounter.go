@@ -376,7 +376,7 @@ func (m *mounter) GetDeviceName(mounter mount.Interface, mountPath string) (stri
 
 func getLastPartition() string {
 	sfdisk := exec.Command("sfdisk", "-q", "--list")
-	awk := exec.Command("awk", "'NR>1{print$1}'")
+	awk := exec.Command("awk", "NR>1{print $1}")
 
 	r, w := io.Pipe()
 	sfdisk.Stdout = w
@@ -408,7 +408,7 @@ func getLastPartition() string {
 
 func getLastDevice() string {
 	lsblk := exec.Command("lsblk", "-dp")
-	awk := exec.Command("awk", "'NR>1{print$1}'")
+	awk := exec.Command("awk", "NR>1{print $1}")
 
 	r, w := io.Pipe()
 	lsblk.Stdout = w
