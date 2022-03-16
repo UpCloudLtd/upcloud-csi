@@ -1,6 +1,7 @@
 package driver
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,7 +9,6 @@ import (
 	"k8s.io/mount-utils"
 	"os"
 	"os/exec"
-	"regexp"
 	"strings"
 	"syscall"
 
@@ -91,23 +91,21 @@ func (m *mounter) Format(source, fsType string, mkfsArgs []string) error {
 		return errors.New("source is not specified for formatting the volume")
 	}
 
-	// mkfsArgs = append(mkfsArgs, source)
-	if fsType == "ext4" || fsType == "ext3" {
-		mkfsArgs = append(mkfsArgs, "-F", source)
-	}
-
-	m.log.Info("source: %s", source)
 	m.log.Info("get last device")
-	lastDevice, err := getLastDevice(source)
-	if err != nil {
-		return err
-	}
-
+	lastDevice := getLastDevice()
 	m.log.Info("last device: %s", lastDevice)
+
+	createPartition(lastDevice)
+	lastPartition := getLastPartition()
+	m.log.Info("last partition: %s", lastPartition)
+
+	if fsType == "ext4" || fsType == "ext3" {
+		mkfsArgs = append(mkfsArgs, "-F", lastPartition)
+	}
 
 	mkfsCmd := fmt.Sprintf("mkfs.%s", fsType)
 
-	_, err = exec.LookPath(mkfsCmd)
+	_, err := exec.LookPath(mkfsCmd)
 	if err != nil {
 		if err == exec.ErrNotFound {
 			return fmt.Errorf("%q executable not found in $PATH", mkfsCmd)
@@ -376,21 +374,78 @@ func (m *mounter) GetDeviceName(mounter mount.Interface, mountPath string) (stri
 	return devicePath, err
 }
 
-func getLastDevice(device string) (string, error) {
-	out, err := exec.Command("parted", "--machine", "--script", device, "print").Output()
-	if err != nil {
-		return "", err
+func getLastPartition() string {
+	sfdisk := exec.Command("sfdisk", "-q", "--list")
+	awk := exec.Command("awk", "'NR>1{print$1}'")
+
+	r, w := io.Pipe()
+	sfdisk.Stdout = w
+	awk.Stdin = r
+
+	var buf bytes.Buffer
+	awk.Stdout = &buf
+
+	sfdisk.Start()
+	awk.Start()
+	sfdisk.Wait()
+	w.Close()
+	awk.Wait()
+
+	out := buf.String()
+	partitions := strings.Split(out, "\n")
+
+	var lastPartition string
+	for _, p := range partitions {
+		if strings.Contains(p, "/dev") {
+			lastPartition = p
+		} else {
+			break
+		}
 	}
 
-	fmt.Printf("parted output: %s\n", out)
+	return lastPartition
+}
 
-	expr, err := regexp.Compile("^\\d")
-	if err != nil {
-		return "", err
-	}
+func getLastDevice() string {
+	lsblk := exec.Command("lsblk", "-dp")
+	awk := exec.Command("awk", "'NR>1{print$1}'")
 
-	partitions := strings.Split(string(out), "\n")
-	lastDevice := device + expr.FindString(partitions[len(partitions)-1])
+	r, w := io.Pipe()
+	lsblk.Stdout = w
+	awk.Stdin = r
 
-	return lastDevice, nil
+	var buf bytes.Buffer
+	awk.Stdout = &buf
+
+	lsblk.Start()
+	awk.Start()
+	lsblk.Wait()
+	w.Close()
+	awk.Wait()
+
+	out := buf.String()
+	disks := strings.Split(out, "\n")
+	lastDevice := disks[len(disks)-1]
+
+	return lastDevice
+}
+
+func createPartition(device string) string {
+	echo := exec.Command("echo", "'type=83'")
+	sfdisk := exec.Command("sfdisk", device)
+
+	r, w := io.Pipe()
+	echo.Stdout = w
+	sfdisk.Stdin = r
+
+	var buf bytes.Buffer
+	sfdisk.Stdout = &buf
+
+	echo.Start()
+	sfdisk.Start()
+	echo.Wait()
+	w.Close()
+	sfdisk.Wait()
+
+	return buf.String()
 }
