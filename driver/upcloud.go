@@ -43,7 +43,6 @@ func (u *upcloudClient) getStorageByUUID(ctx context.Context, storageUUID string
 	}
 	volumes := make([]*upcloud.StorageDetails, 0)
 	for _, s := range storages.Storages {
-		fmt.Printf("%+v\n", s)
 		if s.UUID == storageUUID {
 			sd, _ := u.svc.GetStorageDetails(&request.GetStorageDetailsRequest{UUID: s.UUID})
 			volumes = append(volumes, sd)
@@ -60,7 +59,6 @@ func (u *upcloudClient) getStorageByName(ctx context.Context, storageName string
 	}
 	volumes := make([]*upcloud.StorageDetails, 0)
 	for _, s := range storages.Storages {
-		fmt.Printf("%+v\n", s)
 		if s.Title == storageName {
 			sd, _ := u.svc.GetStorageDetails(&request.GetStorageDetailsRequest{UUID: s.UUID})
 			volumes = append(volumes, sd)
