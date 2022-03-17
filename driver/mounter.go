@@ -91,8 +91,12 @@ func (m *mounter) Format(source, fsType string, mkfsArgs []string) error {
 		return errors.New("source is not specified for formatting the volume")
 	}
 
+	m.log.Infof("source: %s", source)
+
 	m.log.Info("create partition called")
-	createPartition(source)
+	result := createPartition(source)
+
+	m.log.Infof("create partition res: %s", result)
 
 	m.log.Info("get last partition called")
 	lastPartition := getLastPartition()
