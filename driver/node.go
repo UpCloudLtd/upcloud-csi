@@ -136,6 +136,7 @@ func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRe
 	}
 
 	if !mounted {
+		source = getLastPartition()
 		stageMountedLog := d.log.WithFields(logrus.Fields{
 			"source":  source,
 			"target":  target,
