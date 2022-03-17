@@ -441,11 +441,10 @@ func createPartition(device string) (string, error) {
 		return "", err
 	}
 
-	espSize := 100 * 1024 * 1024
 	diskSize := uint64(disk.Size)
+	blkSize := uint64(512)
 
-	blkSize := 512
-	partitionSectors := uint64(espSize / blkSize)
+	partitionSectors := diskSize / blkSize
 	partitionStart := uint64(2048)
 	partitionEnd := partitionSectors - partitionStart + 1
 
