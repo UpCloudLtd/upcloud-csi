@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/diskfs/go-diskfs"
+	"github.com/diskfs/go-diskfs/partition/gpt"
 	"io"
 	"k8s.io/mount-utils"
 	"os"
@@ -94,9 +96,10 @@ func (m *mounter) Format(source, fsType string, mkfsArgs []string) error {
 	m.log.Infof("source: %s", source)
 
 	m.log.Info("create partition called")
-	result := createPartition(source)
-
-	m.log.Infof("create partition res: %s", result)
+	_, err := createPartition(source)
+	if err != nil {
+		return err
+	}
 
 	m.log.Info("get last partition called")
 	lastPartition := getLastPartition()
@@ -107,7 +110,7 @@ func (m *mounter) Format(source, fsType string, mkfsArgs []string) error {
 
 	mkfsCmd := fmt.Sprintf("mkfs.%s", fsType)
 
-	_, err := exec.LookPath(mkfsCmd)
+	_, err = exec.LookPath(mkfsCmd)
 	if err != nil {
 		if err == exec.ErrNotFound {
 			return fmt.Errorf("%q executable not found in $PATH", mkfsCmd)
@@ -432,22 +435,50 @@ func getLastDevice() string {
 	return lastDevice
 }
 
-func createPartition(device string) string {
-	echo := exec.Command("echo", "'type=83'")
-	sfdisk := exec.Command("sfdisk", device)
+func createPartition(device string) (string, error) {
+	disk, err := diskfs.Open(device)
+	if err != nil {
+		return "", err
+	}
 
-	r, w := io.Pipe()
-	echo.Stdout = w
-	sfdisk.Stdin = r
+	espSize := 100 * 1024 * 1024
+	diskSize := uint64(disk.Size)
 
-	var buf bytes.Buffer
-	sfdisk.Stdout = &buf
+	blkSize := 512
+	partitionSectors := uint64(espSize / blkSize)
+	partitionStart := uint64(2048)
+	partitionEnd := partitionSectors - partitionStart + 1
 
-	echo.Start()
-	sfdisk.Start()
-	echo.Wait()
-	w.Close()
-	sfdisk.Wait()
+	table := &gpt.Table{
+		Partitions: []*gpt.Partition{{
+			Start: partitionStart,
+			End:   partitionEnd,
+			Size:  diskSize,
+			Type:  gpt.LinuxRootX86_64,
+		}},
+	}
+	err = disk.Partition(table)
+	if err != nil {
+		return "", err
+	}
 
-	return buf.String()
+	return "", nil
+
+	//echo := exec.Command("echo", "'type=83'")
+	//sfdisk := exec.Command("sfdisk", device)
+	//
+	//r, w := io.Pipe()
+	//echo.Stdout = w
+	//sfdisk.Stdin = r
+	//
+	//var buf bytes.Buffer
+	//sfdisk.Stdout = &buf
+	//
+	//echo.Start()
+	//sfdisk.Start()
+	//echo.Wait()
+	//w.Close()
+	//sfdisk.Wait()
+	//
+	//return buf.String()
 }

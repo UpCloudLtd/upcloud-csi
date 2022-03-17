@@ -5,6 +5,7 @@ go 1.17
 require (
 	github.com/UpCloudLtd/upcloud-go-api/v4 v4.2.0
 	github.com/container-storage-interface/spec v1.5.0
+	github.com/diskfs/go-diskfs v1.2.0
 	github.com/golang/protobuf v1.5.2
 	github.com/google/uuid v1.3.0
 	github.com/sirupsen/logrus v1.8.1
@@ -21,9 +22,13 @@ require (
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/go-logr/logr v1.2.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.1 // indirect
+	github.com/pierrec/lz4 v2.3.0+incompatible // indirect
+	github.com/pkg/xattr v0.4.1 // indirect
+	github.com/ulikunitz/xz v0.5.6 // indirect
 	golang.org/x/net v0.0.0-20211209124913-491a49abca63 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	google.golang.org/genproto v0.0.0-20201019141844-1ed22bb0c154 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
+	gopkg.in/djherbis/times.v1 v1.2.0 // indirect
 	k8s.io/klog/v2 v2.30.0 // indirect
 )
