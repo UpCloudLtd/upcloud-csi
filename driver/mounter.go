@@ -442,11 +442,9 @@ func createPartition(device string) (string, error) {
 	}
 
 	diskSize := uint64(disk.Size)
-	blkSize := uint64(512)
 
-	partitionSectors := diskSize / blkSize
 	partitionStart := uint64(2048)
-	partitionEnd := partitionSectors - partitionStart + 1
+	partitionEnd := diskSize + 1
 
 	table := &gpt.Table{
 		Partitions: []*gpt.Partition{{
