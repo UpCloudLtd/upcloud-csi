@@ -2,6 +2,7 @@ package driver
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -69,7 +70,7 @@ func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRe
 		"volume_name":         volumeName,
 		"volume_context":      req.VolumeContext,
 		"publish_context":     req.PublishContext,
-		"staging_target_path": req.StagingTargetPath,
+		"staging_target_path": target,
 		"source":              source,
 		"fsType":              fsType,
 		"mount_options":       options,
@@ -125,7 +126,6 @@ func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRe
 				nodeStageLog.Info("source device is already formatted")
 			}
 		}
-
 	}
 
 	nodeStageLog.Info("mounting the volume for staging")
@@ -136,7 +136,12 @@ func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRe
 	}
 
 	if !mounted {
-		stageMountedLog := d.log.WithFields(logrus.Fields{"source": source, "target": target, "fsType": fsType, "options": options})
+		stageMountedLog := d.log.WithFields(logrus.Fields{
+			"source":  source,
+			"target":  target,
+			"fsType":  fsType,
+			"options": options,
+		})
 		stageMountedLog.Info("mount options")
 		if err := d.mounter.Mount(source, target, fsType, options...); err != nil {
 			return nil, status.Error(codes.Internal, err.Error())
@@ -457,5 +462,11 @@ func (d *Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolume
 // getDiskSource returns the absolute path of the attached volume for the given volumeID
 func (d *Driver) getDiskSource(volumeID string) string {
 	fullId := strings.Join(strings.Split(volumeID, "-"), "")
-	return filepath.Join(diskIDPath, diskPrefix+fullId[:20])
+	source, err := os.Readlink(filepath.Join(diskIDPath, diskPrefix+fullId[:20]))
+	if err != nil {
+		fmt.Println(fmt.Errorf("failed to get the link to source"))
+		return ""
+	}
+
+	return source
 }
