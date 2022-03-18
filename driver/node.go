@@ -52,8 +52,6 @@ func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRe
 		volumeName = volName
 	}
 
-	d.log.Infof("request struct: %#v", *req)
-
 	source := d.getDiskSource(req.VolumeId)
 	target := req.StagingTargetPath
 
@@ -377,6 +375,8 @@ func (d *Driver) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeS
 		"inodes_total":     stats.totalInodes,
 		"inodes_used":      stats.usedInodes,
 	}).Info("node capacity statistics retrieved")
+
+	nodeGetVolumeStatsLog.Infof("last partition: %s", getLastPartition())
 
 	return &csi.NodeGetVolumeStatsResponse{
 		Usage: []*csi.VolumeUsage{

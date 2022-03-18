@@ -438,14 +438,13 @@ func createPartition(device string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("parted mklabel output: %s", partedMklabelOut)
+	fmt.Printf("parted mklabel output: %s\n", partedMklabelOut)
 
 	partedCreatePartitionOut, err := exec.Command("parted", "-a", "opt", device, "mkpart", "primary", "2048s", "100%").CombinedOutput()
 	if err != nil {
 		return err
 	}
-
-	fmt.Printf("mkpart output: %s", partedCreatePartitionOut)
+	fmt.Printf("mkpart output: %s\n", partedCreatePartitionOut)
 
 	return nil
 }
