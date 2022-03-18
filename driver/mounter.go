@@ -398,10 +398,11 @@ func getLastPartition() string {
 	partitions := strings.Split(out, "\n")
 
 	var lastPartition string
-	for _, p := range partitions {
-		if strings.Contains(p, "/dev") {
-			lastPartition = p
+	for i := len(partitions) - 1; i > 0; i-- {
+		if !strings.HasPrefix(partitions[i], "/dev") {
+			continue
 		} else {
+			lastPartition = partitions[i]
 			break
 		}
 	}
