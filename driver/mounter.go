@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/diskfs/go-diskfs"
-	"github.com/diskfs/go-diskfs/partition/gpt"
 	"io"
 	"k8s.io/mount-utils"
 	"os"
@@ -96,7 +94,7 @@ func (m *mounter) Format(source, fsType string, mkfsArgs []string) error {
 	m.log.Infof("source: %s", source)
 
 	m.log.Info("create partition called")
-	_, err := createPartition(source)
+	err := createPartition(source)
 	if err != nil {
 		return err
 	}
@@ -435,47 +433,19 @@ func getLastDevice() string {
 	return lastDevice
 }
 
-func createPartition(device string) (string, error) {
-	disk, err := diskfs.Open(device)
+func createPartition(device string) error {
+	partedMklabelOut, err := exec.Command("parted", device, "mklabel", "gpt").CombinedOutput()
 	if err != nil {
-		return "", err
+		return err
 	}
+	fmt.Printf("parted mklabel output: %s", partedMklabelOut)
 
-	diskSize := uint64(disk.Size)
-	
-	partitionStart := uint64(0)
-	partitionEnd := diskSize
-
-	table := &gpt.Table{
-		Partitions: []*gpt.Partition{{
-			Start: partitionStart,
-			End:   partitionEnd,
-			Size:  diskSize,
-			Type:  gpt.LinuxRootX86_64,
-		}},
-	}
-	err = disk.Partition(table)
+	partedCreatePartitionOut, err := exec.Command("parted", "-a", "opt", device, "mkpart", "primary", "2048s", "100%").CombinedOutput()
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	return "", nil
+	fmt.Printf("mkpart output: %s", partedCreatePartitionOut)
 
-	//echo := exec.Command("echo", "'type=83'")
-	//sfdisk := exec.Command("sfdisk", device)
-	//
-	//r, w := io.Pipe()
-	//echo.Stdout = w
-	//sfdisk.Stdin = r
-	//
-	//var buf bytes.Buffer
-	//sfdisk.Stdout = &buf
-	//
-	//echo.Start()
-	//sfdisk.Start()
-	//echo.Wait()
-	//w.Close()
-	//sfdisk.Wait()
-	//
-	//return buf.String()
+	return nil
 }
