@@ -376,8 +376,6 @@ func (d *Driver) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeS
 		"inodes_used":      stats.usedInodes,
 	}).Info("node capacity statistics retrieved")
 
-	nodeGetVolumeStatsLog.Infof("last partition: %s", getLastPartition())
-
 	return &csi.NodeGetVolumeStatsResponse{
 		Usage: []*csi.VolumeUsage{
 			&csi.VolumeUsage{
@@ -403,6 +401,14 @@ func (d *Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolume
 	}
 
 	volumePath := req.GetVolumePath()
+	if err := d.mounter.Unmount(volumePath); err != nil {
+		return nil, err
+	}
+
+	if err := d.mounter.Mount(getLastPartition(), volumePath, "ext4"); err != nil {
+		return nil, err
+	}
+
 	if len(volumePath) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "NodeExpandVolume volume path not provided")
 	}
