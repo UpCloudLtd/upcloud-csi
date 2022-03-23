@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -401,11 +402,28 @@ func (d *Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolume
 	}
 
 	volumePath := req.GetVolumePath()
-	if err := d.mounter.Unmount(volumePath); err != nil {
+
+	expr, err := regexp.Compile("pvc-.+/")
+	if err != nil {
+		return nil, fmt.Errorf("unable to find pattern of pvc in volume path")
+	}
+
+	stagingPath := fmt.Sprintf("/var/lib/kubelet/plugins/kubernetes.io/csi/pv/%sglobalmount", expr.FindString(volumePath))
+
+	if err = d.mounter.Unmount(stagingPath); err != nil {
 		return nil, err
 	}
 
-	if err := d.mounter.Mount(getLastPartition(), volumePath, "ext4"); err != nil {
+	if err = d.mounter.Mount(getLastPartition(), stagingPath, "ext4"); err != nil {
+		return nil, err
+	}
+
+	// unmount published path
+	if err = d.mounter.Unmount(volumePath); err != nil {
+		return nil, err
+	}
+	// mount expanded partition as publish activity
+	if err = d.mounter.Mount(stagingPath, volumePath, "ext4"); err != nil {
 		return nil, err
 	}
 
