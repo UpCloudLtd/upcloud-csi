@@ -419,7 +419,7 @@ func (d *Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolume
 	}
 
 	// mount expanded partition as publish activity
-	if err = d.mounter.Mount(stagingPath, volumePath, "ext4"); err != nil {
+	if err = d.mounter.Mount(stagingPath, volumePath, "ext4", "bind"); err != nil {
 		return nil, err
 	}
 
