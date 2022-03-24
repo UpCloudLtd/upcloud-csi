@@ -410,6 +410,10 @@ func (d *Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolume
 
 	stagingPath := fmt.Sprintf("/var/lib/kubelet/plugins/kubernetes.io/csi/pv/%sglobalmount", expr.FindString(volumePath))
 
+	if err = d.mounter.Unmount(volumePath); err != nil {
+		return nil, err
+	}
+
 	if err = d.mounter.Unmount(stagingPath); err != nil {
 		return nil, err
 	}
@@ -418,7 +422,6 @@ func (d *Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolume
 		return nil, err
 	}
 
-	// mount expanded partition as publish activity
 	if err = d.mounter.Mount(stagingPath, volumePath, "ext4", "bind"); err != nil {
 		return nil, err
 	}
