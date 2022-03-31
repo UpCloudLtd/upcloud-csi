@@ -12,8 +12,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"k8s.io/mount-utils"
-	utilexec "k8s.io/utils/exec"
 )
 
 const (
@@ -402,14 +400,25 @@ func (d *Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolume
 	}
 
 	volumePath := req.GetVolumePath()
+	if len(volumePath) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "NodeExpandVolume volume path not provided")
+	}
 
 	expr, err := regexp.Compile("pvc-.+/")
 	if err != nil {
 		return nil, fmt.Errorf("unable to find pattern of pvc in volume path")
 	}
 
+	log := d.log.WithFields(logrus.Fields{
+		"volume_id":   req.VolumeId,
+		"volume_path": req.VolumePath,
+		"method":      "node_expand_volume",
+	})
+	log.Info("node expand volume called")
+
 	stagingPath := fmt.Sprintf("/var/lib/kubelet/plugins/kubernetes.io/csi/pv/%sglobalmount", expr.FindString(volumePath))
 
+	// unmount pod volume path
 	if err = d.mounter.Unmount(volumePath); err != nil {
 		return nil, err
 	}
@@ -426,59 +435,7 @@ func (d *Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolume
 		return nil, err
 	}
 
-	if len(volumePath) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "NodeExpandVolume volume path not provided")
-	}
-
-	log := d.log.WithFields(logrus.Fields{
-		"volume_id":   req.VolumeId,
-		"volume_path": req.VolumePath,
-		"method":      "node_expand_volume",
-	})
-	log.Info("node expand volume called")
-
-	if req.GetVolumeCapability() != nil {
-		switch req.GetVolumeCapability().GetAccessType().(type) {
-		case *csi.VolumeCapability_Block:
-			log.Info("filesystem expansion is skipped for block volumes")
-			return &csi.NodeExpandVolumeResponse{}, nil
-		}
-	}
-
-	mounted, err := d.mounter.IsMounted(volumePath)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "NodeExpandVolume failed to check if volume path %q is mounted: %s", volumePath, err)
-	}
-
-	if !mounted {
-		return nil, status.Errorf(codes.NotFound, "NodeExpandVolume volume path %q is not mounted", volumePath)
-	}
-
-	mounter := mount.New("")
-	devicePath, err := d.mounter.GetDeviceName(mounter, volumePath)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "NodeExpandVolume unable to get device path for %q: %v", volumePath, err)
-	}
-
-	if devicePath == "" {
-		return nil, status.Errorf(codes.NotFound, "NodeExpandVolume device path for volume path %q not found", volumePath)
-	}
-
-	r := mount.NewResizeFs(utilexec.New())
-	log = log.WithFields(logrus.Fields{
-		"device_path": devicePath,
-	})
-	log.Info("resizing the volume")
-	resized, err := r.Resize(devicePath, volumePath)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "NodeExpandVolume could not resize volume %q (%q):  %v", volumeID, req.GetVolumePath(), err)
-	}
-
-	if !resized {
-		log.WithField("volume_resized", resized).Error("volume failed to resize")
-	} else {
-		log.Info("volume is resized")
-	}
+	log.Info("volume is expanded")
 
 	return &csi.NodeExpandVolumeResponse{}, nil
 }
