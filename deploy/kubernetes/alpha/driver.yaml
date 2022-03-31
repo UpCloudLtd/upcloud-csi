@@ -15,6 +15,7 @@ metadata:
   annotations:
     storageclass.kubernetes.io/is-default-class: "true"
 provisioner: storage.csi.upcloud.com
+allowVolumeExpansion: true
 
 ---
 ##############################################
@@ -280,7 +281,7 @@ rules:
   - apiGroups: [ "" ]
     resources: [ "pods" ]
     verbs: [ "watch", "list" ]
-    
+
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
