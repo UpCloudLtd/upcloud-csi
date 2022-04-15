@@ -2,16 +2,16 @@ package driver
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"k8s.io/mount-utils"
-	utilexec "k8s.io/utils/exec"
 )
 
 const (
@@ -51,8 +51,6 @@ func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRe
 		volumeName = volName
 	}
 
-	d.log.Infof("request struct: %#v", *req)
-
 	source := d.getDiskSource(req.VolumeId)
 	target := req.StagingTargetPath
 
@@ -69,7 +67,7 @@ func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRe
 		"volume_name":         volumeName,
 		"volume_context":      req.VolumeContext,
 		"publish_context":     req.PublishContext,
-		"staging_target_path": req.StagingTargetPath,
+		"staging_target_path": target,
 		"source":              source,
 		"fsType":              fsType,
 		"mount_options":       options,
@@ -125,7 +123,6 @@ func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRe
 				nodeStageLog.Info("source device is already formatted")
 			}
 		}
-
 	}
 
 	nodeStageLog.Info("mounting the volume for staging")
@@ -136,7 +133,13 @@ func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRe
 	}
 
 	if !mounted {
-		stageMountedLog := d.log.WithFields(logrus.Fields{"source": source, "target": target, "fsType": fsType, "options": options})
+		source = getLastPartition()
+		stageMountedLog := d.log.WithFields(logrus.Fields{
+			"source":  source,
+			"target":  target,
+			"fsType":  fsType,
+			"options": options,
+		})
 		stageMountedLog.Info("mount options")
 		if err := d.mounter.Mount(source, target, fsType, options...); err != nil {
 			return nil, status.Error(codes.Internal, err.Error())
@@ -391,9 +394,6 @@ func (d *Driver) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeS
 }
 
 func (d *Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
-	d.log.WithField("method", "node_expand_volume").
-		Info("node expand volume called")
-
 	volumeID := req.GetVolumeId()
 	if len(volumeID) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "NodeExpandVolume volume ID not provided")
@@ -404,17 +404,38 @@ func (d *Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolume
 		return nil, status.Error(codes.InvalidArgument, "NodeExpandVolume volume path not provided")
 	}
 
-	mounter := mount.New("")
-	devicePath, _, err := mount.GetDeviceNameFromMount(mounter, volumePath)
+	expr, err := regexp.Compile("pvc-.+/")
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "NodeExpandVolume unable to get device path for %q: %v", volumePath, err)
+		return nil, fmt.Errorf("unable to find pattern of pvc in volume path")
 	}
 
-	r := mount.NewResizeFs(utilexec.New())
+	log := d.log.WithFields(logrus.Fields{
+		"volume_id":   req.VolumeId,
+		"volume_path": req.VolumePath,
+		"method":      "node_expand_volume",
+	})
+	log.Info("node expand volume called")
 
-	if _, err := r.Resize(devicePath, volumePath); err != nil {
-		return nil, status.Errorf(codes.Internal, "NodeExpandVolume could not resize volume %q (%q):  %v", volumeID, req.GetVolumePath(), err)
+	stagingPath := fmt.Sprintf("/var/lib/kubelet/plugins/kubernetes.io/csi/pv/%sglobalmount", expr.FindString(volumePath))
+
+	// unmount pod volume path
+	if err = d.mounter.Unmount(volumePath); err != nil {
+		return nil, err
 	}
+
+	if err = d.mounter.Unmount(stagingPath); err != nil {
+		return nil, err
+	}
+
+	if err = d.mounter.Mount(getLastPartition(), stagingPath, "ext4"); err != nil {
+		return nil, err
+	}
+
+	if err = d.mounter.Mount(stagingPath, volumePath, "ext4", "bind"); err != nil {
+		return nil, err
+	}
+
+	log.Info("volume is expanded")
 
 	return &csi.NodeExpandVolumeResponse{}, nil
 }
@@ -422,5 +443,13 @@ func (d *Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolume
 // getDiskSource returns the absolute path of the attached volume for the given volumeID
 func (d *Driver) getDiskSource(volumeID string) string {
 	fullId := strings.Join(strings.Split(volumeID, "-"), "")
-	return filepath.Join(diskIDPath, diskPrefix+fullId[:20])
+
+	link, err := os.Readlink(filepath.Join(diskIDPath, diskPrefix+fullId[:20]))
+	if err != nil {
+		fmt.Println(fmt.Errorf("failed to get the link to source"))
+		return ""
+	}
+	source := "/dev" + strings.TrimPrefix(link, "../..")
+
+	return source
 }

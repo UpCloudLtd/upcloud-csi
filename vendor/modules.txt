@@ -1,10 +1,10 @@
-# github.com/UpCloudLtd/upcloud-go-api v0.0.0-20210930073303-cc664e35078d
+# github.com/UpCloudLtd/upcloud-go-api/v4 v4.2.0
 ## explicit; go 1.14
-github.com/UpCloudLtd/upcloud-go-api/internal
-github.com/UpCloudLtd/upcloud-go-api/upcloud
-github.com/UpCloudLtd/upcloud-go-api/upcloud/client
-github.com/UpCloudLtd/upcloud-go-api/upcloud/request
-github.com/UpCloudLtd/upcloud-go-api/upcloud/service
+github.com/UpCloudLtd/upcloud-go-api/v4/internal
+github.com/UpCloudLtd/upcloud-go-api/v4/upcloud
+github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/client
+github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/request
+github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/service
 # github.com/blang/semver v3.5.1+incompatible
 ## explicit
 github.com/blang/semver
@@ -23,13 +23,11 @@ github.com/golang/protobuf/ptypes/any
 github.com/golang/protobuf/ptypes/duration
 github.com/golang/protobuf/ptypes/timestamp
 github.com/golang/protobuf/ptypes/wrappers
-# github.com/google/go-cmp v0.5.6
-## explicit; go 1.8
-# github.com/google/uuid v1.1.2
+# github.com/google/uuid v1.3.0
 ## explicit
 github.com/google/uuid
-# github.com/hashicorp/go-cleanhttp v0.5.2
-## explicit; go 1.13
+# github.com/hashicorp/go-cleanhttp v0.5.1
+## explicit
 github.com/hashicorp/go-cleanhttp
 # github.com/sirupsen/logrus v1.8.1
 ## explicit; go 1.13
@@ -48,7 +46,7 @@ golang.org/x/net/trace
 # golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 ## explicit
 golang.org/x/sync/errgroup
-# golang.org/x/sys v0.0.0-20220110181412-a018aaa089fe
+# golang.org/x/sys v0.0.0-20220310020820-b874c991c1a5
 ## explicit; go 1.17
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix
@@ -59,10 +57,10 @@ golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
-# google.golang.org/genproto v0.0.0-20211208223120-3a66f561d7aa
+# google.golang.org/genproto v0.0.0-20210602131652-f16073e35f0c
 ## explicit; go 1.11
 google.golang.org/genproto/googleapis/rpc/status
-# google.golang.org/grpc v1.43.0
+# google.golang.org/grpc v1.45.0
 ## explicit; go 1.14
 google.golang.org/grpc
 google.golang.org/grpc/attributes
@@ -142,16 +140,16 @@ google.golang.org/protobuf/types/known/anypb
 google.golang.org/protobuf/types/known/durationpb
 google.golang.org/protobuf/types/known/timestamppb
 google.golang.org/protobuf/types/known/wrapperspb
-# k8s.io/apimachinery v0.23.1
+# k8s.io/apimachinery v0.23.4
 ## explicit; go 1.16
 k8s.io/apimachinery/pkg/util/sets
 # k8s.io/klog/v2 v2.30.0
 ## explicit; go 1.13
 k8s.io/klog/v2
-# k8s.io/mount-utils v0.23.1
+# k8s.io/mount-utils v0.23.4
 ## explicit; go 1.16
 k8s.io/mount-utils
-# k8s.io/utils v0.0.0-20211208161948-7d6a63dca704
+# k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9
 ## explicit; go 1.12
 k8s.io/utils/exec
 k8s.io/utils/io

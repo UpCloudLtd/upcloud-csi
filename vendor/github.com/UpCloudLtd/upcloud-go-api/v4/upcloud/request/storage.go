@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/UpCloudLtd/upcloud-go-api/upcloud"
+	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud"
 )
 
 // Constants
@@ -336,4 +336,14 @@ func (r *GetStorageImportDetailsRequest) RequestURL() string {
 type WaitForStorageImportCompletionRequest struct {
 	StorageUUID string
 	Timeout     time.Duration
+}
+
+// ResizeStorageFilesystemRequest represents a request to resize storage filesystem
+type ResizeStorageFilesystemRequest struct {
+	UUID string
+}
+
+// RequestURL implements the Request interface
+func (r *ResizeStorageFilesystemRequest) RequestURL() string {
+	return fmt.Sprintf("/storage/%s/resize", r.UUID)
 }
