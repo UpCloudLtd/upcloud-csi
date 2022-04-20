@@ -68,6 +68,15 @@ provisioning sidecars:
 kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/alpha/deploy/kubernetes/alpha/driver.yaml
 ```
 
+### Choose storage disk type
+
+It's possible to select an option of disk type between `HDD` and `MaxIOPS`.
+For setting desired type you can set a `storageClassName` field in `PVC` to:
+* `upcloud-block-storage-maxiops`
+* `upcloud-block-storage-hdd`
+
+If `storageClassName` field is not set, the default provisioned option will be `upcloud-block-storage-maxiops`.
+
 ### Example Usage
 
 In `example` directory you may find 2 manifests for deploying a pod and persistent volume claim to test CSI Driver
