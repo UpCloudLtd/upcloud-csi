@@ -7,8 +7,8 @@ service in [CO](https://www.vmware.com/topics/glossary/content/container-orchest
 Kubernetes, to obtain stateful application deployment with ease.
 
 Additional info about the CSI can be found
-in [Kubernetes CSI Developer Documentation](https://kubernetes-csi.github.io/docs/example.html)
-and [Kubernetes Blog](https://github.com/container-storage-interface/spec/).
+in [Kubernetes CSI Developer Documentation](https://kubernetes-csi.github.io/docs/)
+and [Kubernetes Blog](https://kubernetes.io/blog/2019/01/15/container-storage-interface-ga/).
 
 ## Disclaimer
 
