@@ -47,7 +47,7 @@ metadata:
 stringData:
   username: "$UPCLOUD_USERNAME"
   password: "$UPCLOUD_PASSWORD"
-  EOF
+EOF
 ```
 
 After the message, that secret was created, you can run this command to check the existence of `upcloud` secret
@@ -67,6 +67,15 @@ provisioning sidecars:
 ```sh
 kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/alpha/deploy/kubernetes/alpha/driver.yaml
 ```
+
+### Choose storage disk type
+
+It's possible to select an option of disk type between `HDD` and `MaxIOPS`.
+For setting desired type you can set a `storageClassName` field in `PVC` to:
+* `upcloud-block-storage-maxiops`
+* `upcloud-block-storage-hdd`
+
+If `storageClassName` field is not set, the default provisioned option will be `upcloud-block-storage-maxiops`.
 
 ### Example Usage
 

@@ -92,11 +92,13 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 		}, nil
 	}
 
+	tierMapper := map[string]string{"maxiops": upcloud.StorageTierMaxIOPS, "hdd": upcloud.StorageTierHDD}
+	tier := tierMapper[req.Parameters["tier"]]
 	volumeReq := &request.CreateStorageRequest{
 		Zone:  d.options.zone,
 		Title: volumeName,
 		Size:  int(storageSize / giB),
-		Tier:  upcloud.StorageTierMaxIOPS,
+		Tier:  tier,
 	}
 
 	log.WithField("volume_req", volumeReq).Info("creating volume")

@@ -8,4 +8,4 @@ spec:
   resources:
     requests:
       storage: 10Gi
-  storageClassName: upcloud-block-storage
+  storageClassName: upcloud-block-storage-maxiops
