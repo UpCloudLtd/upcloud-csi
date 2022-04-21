@@ -5,6 +5,7 @@ metadata:
 spec:
   attachRequired: true
   podInfoOnMount: true
+  fsGroupPolicy: File
 
 ---
 kind: StorageClass
