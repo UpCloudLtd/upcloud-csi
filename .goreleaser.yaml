@@ -3,3 +3,10 @@ builds:
   - env: [CGO_ENABLED=0]
     dir: .
     main: ./cmd/upcloud-csi-plugin
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
