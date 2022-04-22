@@ -9,12 +9,12 @@ import (
 )
 
 // GetPluginInfo returns metadata of the plugin
-func (driver *Driver) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
+func (d *Driver) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
 	resp := &csi.GetPluginInfoResponse{
-		Name: driver.options.driverName,
+		Name: d.options.driverName,
 	}
 
-	driver.log.WithFields(logrus.Fields{
+	d.log.WithFields(logrus.Fields{
 		"response": resp,
 		"method":   "get_plugin_info",
 	}).Info("return plugin info")
@@ -23,7 +23,7 @@ func (driver *Driver) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoR
 }
 
 // GetPluginCapabilities returns available capabilities of the plugin
-func (driver *Driver) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCapabilitiesRequest) (*csi.GetPluginCapabilitiesResponse, error) {
+func (d *Driver) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCapabilitiesRequest) (*csi.GetPluginCapabilitiesResponse, error) {
 	resp := &csi.GetPluginCapabilitiesResponse{
 		Capabilities: []*csi.PluginCapability{
 			{
@@ -50,7 +50,7 @@ func (driver *Driver) GetPluginCapabilities(ctx context.Context, req *csi.GetPlu
 		},
 	}
 
-	driver.log.WithFields(logrus.Fields{
+	d.log.WithFields(logrus.Fields{
 		"response": resp,
 		"method":   "get_plugin_capabilities",
 	}).Info("get plugin capabitilies called")
@@ -59,14 +59,14 @@ func (driver *Driver) GetPluginCapabilities(ctx context.Context, req *csi.GetPlu
 }
 
 // Probe returns the health and readiness of the plugin
-func (driver *Driver) Probe(ctx context.Context, req *csi.ProbeRequest) (*csi.ProbeResponse, error) {
-	driver.log.WithField("method", "probe").Info("check whether the plugin is ready")
-	driver.readyMu.Lock()
-	defer driver.readyMu.Unlock()
+func (d *Driver) Probe(ctx context.Context, req *csi.ProbeRequest) (*csi.ProbeResponse, error) {
+	d.log.WithField("method", "probe").Info("check whether the plugin is ready")
+	d.readyMu.Lock()
+	defer d.readyMu.Unlock()
 
 	return &csi.ProbeResponse{
 		Ready: &wrappers.BoolValue{
-			Value: driver.ready,
+			Value: d.ready,
 		},
 	}, nil
 }

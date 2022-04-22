@@ -13,7 +13,6 @@ import (
 	"strings"
 )
 
-// TODO confirm capabilities for alpha version
 var supportedCapabilities = []csi.ControllerServiceCapability_RPC_Type{
 	csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 	csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME,
@@ -443,7 +442,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 		"method":    "controller_expand_volume",
 	})
 
-	log.Info("controller expand volume called: volume - %s", volumes)
+	log.Infof("controller expand volume called: volume - %v", volumes)
 
 	if resizeGigaBytes <= int64(volume.Size) {
 		log.WithFields(logrus.Fields{
@@ -577,5 +576,6 @@ func formatBytes(inputBytes int64) string {
 
 	result := strconv.FormatFloat(output, 'f', 1, 64)
 	result = strings.TrimSuffix(result, ".0")
+
 	return result + unit
 }
