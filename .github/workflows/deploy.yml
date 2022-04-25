@@ -2,8 +2,8 @@ name: build
 
 on:
   push:
-    branches: [ 'test', 'alpha', 'beta' ]
-    tags: [ 'v1.**' ]
+    branches: [ 'main', 'alpha', 'beta' ]
+    tags: [ 'v*' ]
 
 env:
   REGISTRY: ghcr.io
