@@ -1,6 +1,8 @@
 project_name: upcloud-csi
 builds:
-  - dir: .
+  - env:
+      - CGO_ENABLED=0
+    dir: .
     main: ./cmd/upcloud-csi-plugin
     goos:
       - linux
