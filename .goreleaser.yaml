@@ -4,7 +4,6 @@ builds:
     main: ./cmd/upcloud-csi-plugin
     goos:
       - linux
-      - windows
       - darwin
     goarch:
       - amd64
