@@ -443,6 +443,9 @@ func (d *Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolume
 // getDiskSource returns the absolute path of the attached volume for the given volumeID
 func (d *Driver) getDiskSource(volumeID string) string {
 	fullId := strings.Join(strings.Split(volumeID, "-"), "")
+	if len(fullId) <= 20 {
+		return ""
+	}
 
 	link, err := os.Readlink(filepath.Join(diskIDPath, diskPrefix+fullId[:20]))
 	if err != nil {
