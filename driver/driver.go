@@ -150,7 +150,10 @@ func determineServer(svc *upcloudservice.Service, nodeHost string) (*upcloud.Ser
 	for _, s := range servers.Servers {
 		if nodeHost == s.Hostname {
 			r := request.GetServerDetailsRequest{UUID: s.UUID}
-			serverdetails, _ := svc.GetServerDetails(&r)
+			serverdetails, err := svc.GetServerDetails(&r)
+			if err != nil {
+				return nil, err
+			}
 			return serverdetails, nil
 		}
 	}
