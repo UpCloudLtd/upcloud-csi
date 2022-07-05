@@ -1,14 +1,15 @@
 NAME=upcloud-csi-plugin
 OS ?= linux
 PKG ?= github.com/UpCloudLtd/upcloud-csi/cmd/upcloud-csi-plugin
-GO_VERSION := 1.18.3
 ARCH := amd64
 
-.PHONY: compile
-compile:
-	@echo "==> Building the project"
-	@docker run --rm -e GOOS=${OS} -e GOARCH=${ARCH} -v ${PWD}/:/app -w /app golang:${GO_VERSION}-alpine sh -c 'apk add git && go build -mod=vendor -ldflags "-w -s" -o cmd/upcloud-csi-plugin/${NAME} ${PKG}'
+.PHONY: test
+test:
+	go test ./...
 
+.PHONY: build
+build:
+	go build -mod=vendor -ldflags "-w -s" -o ${NAME} ${PKG}
 
 .PHONY: docker-build
 docker-build:
