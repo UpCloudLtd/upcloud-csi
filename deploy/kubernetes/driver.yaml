@@ -19,6 +19,7 @@ parameters:
   tier: maxiops
 provisioner: storage.csi.upcloud.com
 allowVolumeExpansion: true
+reclaimPolicy: Retain
 
 ---
 kind: StorageClass
@@ -32,6 +33,7 @@ parameters:
   tier: hdd
 provisioner: storage.csi.upcloud.com
 allowVolumeExpansion: true
+reclaimPolicy: Retain
 
 ---
 ##############################################
