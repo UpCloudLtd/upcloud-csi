@@ -16,14 +16,6 @@ Before reaching the **v1.0.0** version, UpCloud CSI Driver is **NOT** recommende
 
 ## Deployment
 
-### Releases
-
-| Version | Date       |
-|---------|------------|
-| alpha   | 22-02-2022 |
-| beta    | TBD        |
-| 1.0.0   | TBD        |
-
 ### Requirements
 
 * Kubernetes v1.16+
@@ -65,7 +57,7 @@ The following command will deploy the CSI driver with the related Kubernetes vol
 provisioning sidecars:
 
 ```sh
-kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/alpha/deploy/kubernetes/alpha/driver.yaml
+kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/deploy/kubernetes/driver.yaml
 ```
 
 ### Choose storage disk type
@@ -83,8 +75,8 @@ In `example` directory you may find 2 manifests for deploying a pod and persiste
 operations
 
 ```sh
-kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/alpha/example/test-pod.yaml
-kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/alpha/example/test-pvc.yaml
+kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/example/test-pod.yaml
+kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/example/test-pvc.yaml
 ```
 
 Check if pod is deployed with Running status and already using the PVC:
@@ -105,7 +97,7 @@ drwx------    2 root     root       16.0K Feb 22 12:25 lost+found
 $ kubectl delete pods/csi-app
 pod "csi-app" deleted
 
-$ kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/alpha/example/test-pod.yaml
+$ kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/example/test-pod.yaml
 pod/csi-app created
 
 $ kubectl exec -it csi-app -- /bin/sh -c "ls -l /data"
