@@ -2,10 +2,11 @@ package testruns
 
 import (
 	"context"
+	"log"
+
 	"github.com/UpCloudLtd/upcloud-csi/test/e2e/mock"
 	"github.com/google/uuid"
 	"github.com/onsi/gomega"
-	"log"
 )
 
 func TestProvisionResizeVolume() {

@@ -6,11 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"k8s.io/mount-utils"
 	"os"
 	"os/exec"
 	"strings"
 	"syscall"
+
+	"k8s.io/mount-utils"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
@@ -75,7 +76,7 @@ type mounter struct {
 	log *logrus.Entry
 }
 
-// newMounter returns a new mounter instance
+// newMounter returns a new mounter instance.
 func newMounter(log *logrus.Entry) *mounter {
 	return &mounter{
 		log: log,
@@ -156,7 +157,7 @@ func (m *mounter) Mount(source, target, fsType string, opts ...string) error {
 	mountArgs = append(mountArgs, target)
 
 	// create target, os.Mkdirall is noop if it exists
-	err := os.MkdirAll(target, 0750)
+	err := os.MkdirAll(target, 0o750)
 	if err != nil {
 		return err
 	}
@@ -325,7 +326,7 @@ func (m *mounter) IsMounted(target string) (bool, error) {
 	}
 
 	// no response means there is no mount
-	if string(out) == "" {
+	if len(out) == 0 {
 		return false, nil
 	}
 

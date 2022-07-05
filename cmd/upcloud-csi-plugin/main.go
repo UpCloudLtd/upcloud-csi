@@ -2,10 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/UpCloudLtd/upcloud-csi/driver"
-	"github.com/spf13/pflag"
 	"log"
 	"os"
+
+	"github.com/UpCloudLtd/upcloud-csi/driver"
+	"github.com/spf13/pflag"
 )
 
 func main() {

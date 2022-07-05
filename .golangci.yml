@@ -1,0 +1,604 @@
+#
+# UpCloud golangci-lint configuration
+#
+
+run:
+  go: &run_go_version "1.18"
+
+linters:
+  #
+  # We use a custom set of linters, so disable all and enable one-by-one.
+  #
+  disable-all: true
+  #
+  # Run golangci-lint linters or see https://golangci-lint.run/usage/linters/
+  # for a list of all linters. This config was last updated for v1.45.2.
+  #
+  # Please keep the list sorted alphabetically.
+  #
+  # Key:
+  #   #: Transitionally disabled or optional, possibly to be enabled
+  #  ##: Permanently, intentionally disabled due to implementation concerns
+  #      or redundancy with something else that is enabled
+  # ###: Permanently, intentionally disabled due to deprecation
+  #
+  # If disabling a linter that is enabled in the default config or enabling
+  # one marked with DISABLE in it, please append a `# PROJECT: reasoning here`
+  # comment. For optionals, the comment is recommended but not required.
+  # Permanently disabled linters should not be enabled.
+  #
+  # Do consider inline case by case disabling of particular issues flagged
+  # instead of disabling something wholesale on this level.
+  #
+  enable:
+    # Makes sure there are no non-ASCII identifiers that could be confusing or
+    # hard to use.
+    - asciicheck
+
+    # Warns on "dangerous" unicode characters, in order to prevent "trojan
+    # source" problems,
+    # https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-42574.
+    # While it's not that interesting for various projects, it doesn't really
+    # hurt either, and the probability of false positives is very low.
+    - bidichk
+
+    # Checks that HTTP response body (a `ReadCloser`) is closed properly.
+    # Somewhat chore/prone to false positives in tests.
+    - bodyclose
+
+    # Warns about `context.Context` members in structs, which is a "do not"
+    # in the `context` docs. See also https://go.dev/blog/context-and-structs.
+    # Some daemon life cycle management patterns are at odds with this.
+    - containedctx
+
+    # Checks that parent Contexts are passed on, possibly after adding to,
+    # instead of being dropped or new ones created in too low level code.
+    # Essentially `context.With*()` should be used for adding to existing
+    # Contexts, and Contexts carried around through the whole call chain down
+    # to wherever they are used. Tends to require largish refactoring in places
+    # where this is not met.
+    - contextcheck
+
+    # Checks function and package cyclomatic complexity. Could result in better
+    # readable and maintainable code, but in practice seems more often to get
+    # in the way, resolving flagged issues it not always a net win. Compared to
+    # `gocyclo`, calculates both function and package cyclomatic complexity.
+    # Similar: `gocognit`, `gocyclo`, `maintidx`.
+    ## - cyclop # DISABLE
+
+    # Finds unused code. Getting rid of unused code is good and with version
+    # control, doesn't really have downsides. Redundant with `unused` and
+    # `varcheck` enabled, possibly to be deprecated in golangci-lint v2.
+    ## - deadcode # DISABLE
+
+    # Encourage various rules on grouping and arranging `const`s, `var`s,
+    # `type`s and `func`s, configurability per mentioned keyword; and `init`
+    # func first. `init` first could be nice and differentiates this from
+    # alternatives, but on the other hand has similar considerations as
+    # one for single declaration requirement: it may not be desirable,
+    # as e.g. higher level grouping by placing related globals and `init`,
+    # functions next to their uses arguably more desirable -- then again
+    # this could/should be handled by splitting to more files, and if so,
+    # perhaps we should actually enable this? `gofumpt` makes the grouping
+    # redundant. Enabling would call for some discussion on desired order
+    # of managed types of declarations, and configuring that (does nothing
+    # by default without config).
+    # Similar: `gofumpt`, `grouper`.
+    ## - decorder # DISABLE
+
+    # Go linter that checks if package imports are in a list of acceptable
+    # packages. We do not have a default global list (yet?).
+    # Similar: `gomodguard`.
+    ## - depguard # DISABLE
+
+    # Warns on too many blank receivers in an assignment, for example
+    # `_, _, _, err := doSomething()`. Commonly this would indicate a potential
+    # need for refactoring, if we're using a method and ignoring most of what
+    # it returns. Frequently met and kind of unavoidable in some fairly rare
+    # use cases, such as using `runtime.Caller` to get the current file name.
+    - dogsled
+
+    # Warns on bits of code that have long, identical series of tokens. Helps
+    # with keeping code DRY which in turn helps with maintenance, readability,
+    # and testability. Not always trivial to fix, needs some understanding of
+    # the code in question. Refactoring these out can be prone to errors, due
+    # to missing subtle differences. Good idea to enable this as early in
+    # project lifecycle as possible.
+    - dupl
+
+    # Checks for two durations multiplied together. Seems like this could
+    # prevent potential bugs, but based on the experiences with actual code,
+    # not sure how common and serious the bugs would actually be and whether it
+    # actually helps or not. Code variants that pass the linter are not
+    # necessarily any clearer, just different.
+    ## - durationcheck # DISABLE
+
+    # Warns about not checking errors for functions that return an error.
+    # Makes it impossible for the developer to miss an error being returned, as
+    # all errors need either to be checked or `//nolint`ed. A bit of a chore in
+    # tests, in particular, where there are sometimes places where one might not
+    # really care about errors (e.g. crashing would be ok). However, seems like
+    # a small price to pay for the upside.
+    - errcheck
+
+    # Specialized linter for JSON error checks. Contains smarts to not require
+    # error handling for marshaling operations that "cannot" return an error.
+    # However there are some doubts about this, including whether/how
+    # exhaustive it is, how futureproof regarding Go versions it is, and
+    # stopping using this linter would place us at risk unless something else
+    # would cover for its fallout. Ignoring errors is also a bad general
+    # practice, which could spread. The default config in golangci-lint is good
+    # and conservative, "cannot happen" error flagging is not enabled.
+    - errchkjson
+
+    # Verifies consistent naming for error types (`type FooError ...`) and
+    # sentinels (`var ErrFoo = errors.New(...)`), as used in stdlib and
+    # described in the conventions, see
+    # https://github.com/golang/go/wiki/Errors#naming.
+    - errname
+
+    # Promotes use of the stdlib error handling primitives (`errors.Is`,
+    # `errors.As`, `%w` in `fmt.Errorf`, etc). Somewhat at odds with codebases
+    # using `pkg/errors`, but those are generally moving towards stdlib.
+    - errorlint
+
+    # Checks that switches of enum(-like) types cover every possible case.
+    # Very helpful when we need to add new cases to enums, making sure that all
+    # the relevant bits are checked. Can become annoying if there's a _lot_ of
+    # possible cases, for example with `reflect.Kind`.
+    - exhaustive
+
+    # Checks if all struct's fields are initialized. Good in the sense that
+    # doing so would make it easier to spot changes to underlying structs.
+    # Breaks the "empty struct as default value" convention of Go code.
+    ## - exhaustivestruct # DISABLE
+
+    # Forbids passing pointers to the loop variable out of scope. This is a
+    # common class of bugs in Go code, as the semantics aren't immediately
+    # obvious to everyone. In Go, the loop variable is re-used on every run of
+    # the loop meaning that any pointers pointing to it are also pointing to
+    # the same location across iterations. Some codebases seem to have a common
+    # pattern of storing the pointer and immediately breaking the loop
+    # afterwards, which should be fine. However, it certainly opens up the door
+    # for regressions down the road if the changes to that code do not keep it
+    # as such. Enabling `exportloopref` forces such cases to be commented, at
+    # least. Redundant with `gosec`s G601, which also catches more cases of
+    # this category.
+    ## - exportloopref # DISABLE
+
+    # Forbid use of particular identifiers. Most commonly used to disallow use
+    # of `println` and `fmt.Print*`. Rationale here is that these are commonly
+    # used as debugging tools and as such, should not make their way into the
+    # actual commits. A bit of a chore to avoid in cases where we actually
+    # _want_ to print to stdout. `fmt.Fprint*` and/or using an appropriate
+    # logging package serve as examples of replacements.
+    - forbidigo
+
+    # Promotes checking of all type conversions. We shouldn't need to do that
+    # much type converting in general (`interface{}` is a bit of a code smell
+    # in most cases) but when we do, making sure we got the right type and
+    # handling it gracefully beats panicing. This is at odds in some projects
+    # that need to follow dependencies' conventions involving `interface{}`
+    # passing and their type safety checked by other means. `errcheck`
+    # configured with `check-type-assertions: true` makes this redundant.
+    ## - forcetypeassert # DISABLE
+
+    # Limits the size of functions to a maximum number of lines and statements.
+    # Difficult to enable later on, as many of the long functions are hard to
+    # break up later. By setting a limitation from day 1, it should be easier
+    # to avoid writing complex functions that are hard to maintain and
+    # test/validate.
+    # Similar: cyclomatic complexity and maintainability linters, but this very
+    # basic and easy to understand limit is good enough for most cases.
+    - funlen
+
+    # Control package import order and make it deterministic. Handles empty
+    # lines better than `goimport` does. Gets rid of commits that change the
+    # order, which would otherwise pollute commits and/or history. Autofixable.
+    # Redundant with `gofumpt`.
+    # Similar: `gofumpt`, `goimports`.
+    ## - gci # DISABLE
+
+    # Warns about global variables. Global variables make it hard to follow
+    # what happens and add hard to spot side effects to importing. Avoidable
+    # in most cases.
+    - gochecknoglobals
+
+    # Warns about `init()`s. `init()`s make it hard to follow what happens and
+    # add hard to spot side effects to importing, as well as some startup
+    # costs. Avoidable in most cases.
+    - gochecknoinits
+
+    # See `cyclop` for discussion.
+    ## - gocognit # DISABLE
+
+    # Promotes making consts out of repeated strings. Eases maintenance,
+    # lessens the chance of typo errors and helps with DX as well.
+    # Perhaps slightly on the aggressive side for example in tests.
+    - goconst
+
+    # Quite an opinionated linter, but has a lot of good suggestions and
+    # catches bugs. See `linters-settings` for some more info.
+    - gocritic
+
+    # See `cyclop` for discussion.
+    ## - gocyclo # DISABLE
+
+    # Quite a minor one, only checks (autofixable) that comments end in a
+    # period as the Go code review comments suggest:
+    # https://github.com/golang/go/wiki/CodeReviewComments#comment-sentences.
+    - godot
+
+    # Warns on comments with TODO, FIXME, etc. These kinds of comments
+    # typically get forgotten quickly, only to be discovered by whoever is
+    # working on the code next who then has two tasks at hand, instead of the
+    # one expected. The rationale here is that these kinds of things should be
+    # handled through the same issue management tools as everything else,
+    # rather than leaving code comments. Usefulness depends on project
+    # lifecycle, can be a chore early on.
+    # - godox # OPTIONAL
+
+    # Check error handling expressions. Redundant with `errorlint`.
+    ## - goerr113 # DISABLE
+
+    # The ubiquitous, official Go formatter. We like to take a compatible step
+    # further, and enable `gofumpt` instead, making this redundant.
+    # Similar: `gofumpt`, `goimports`.
+    ## - gofmt # DISABLE
+
+    # A more opinionated superset of `gofmt`, enforcing a standard formatting
+    # of code, autofixable. See the list of added rules over `go fmt` at
+    # https://github.com/mvdan/gofumpt#added-rules. IDE configured to format
+    # with gofumpt recommended.
+    # Similar: `gofmt` + `gci`, `goimports`.
+    - gofumpt
+
+    # Check file header matches a configured pattern. We don't have a standard
+    # one applicable to all projects.
+    ## - goheader # DISABLE
+
+    # Does everything `gofmt` does, and additionally fixes up and formats
+    # imports. Our use of `gofumpt` makes this redundant.
+    # Similar: `gci`, `gofmt`, `gofumpt`.
+    ## - goimports # DISABLE
+
+    ### - golint # deprecated, replaced by revive
+
+    # Analyzer to detect magic numbers. Could be useful, but the default
+    # configuration (disabling almost all bare numbers) seems a tad aggressive
+    # and will trigger a lot of changes. Could be worked around by config,
+    # but how to get a good one going? Disabling in `strconv.Parse*` could
+    # be a start.
+    ## - gomnd # DISABLE
+
+    # Ensures that `go.mod` files stay clean. Limits the use of `replace` and
+    # `retract` and `exclude` directives in `go.mod`, which are mostly used
+    # ad-hoc in development, and becoming obsolete as of Go 1.18's workspaces.
+    - gomoddirectives
+
+    # See discussion in `depguard`.
+    ## - gomodguard # DISABLE
+
+    # Checks that printf-style functions have a tailing `f` in their name.
+    - goprintffuncname
+
+    # Warns on a lot of different potentially insecure bits of code. There are
+    # some case dependent false positives that are not easily avoidable through
+    # config, for example related to intentionally relaxed file permissions and
+    # `math/rand` vs `crypto/rand`.
+    - gosec
+
+    # Suggests various simplifications in code, hopefully resulting in better
+    # readability. Perhaps slightly on the aggressive side.
+    - gosimple
+
+    # `go vet` is the 'official' linter, found in stdlib. Seems to do a lot of
+    # the same stuff as `staticcheck`, but as both are enabled in golangci-lint
+    # by default, and neither is advertized as being a replacement for the
+    # other, we keep both enabled as well.
+    - govet
+
+    # Do various checks on grouping and arranging `const`s, `var`s, `type`s and
+    # `import`s, configurability per mentioned keyword. Partially redundant
+    # with `gofumpt`, `decorder` would be a superset of this if we'd like to
+    # expand beyond what `gofumpt` does.
+    ## - grouper # DISABLE
+
+    # Simplifies if statements and encourages the "single line" style of `if`s.
+    # Arguably decrease readability in some cases as well, approach with common
+    # sense.
+    - ifshort
+
+    # Promotes consistent style of import aliasing. Enabled as long as there
+    # are some entries to configure, see `linters-settings` for more info.
+    - importas
+
+    # Detects when assignments to existing variables are not used. Can uncover
+    # variable shadowing bugs as well. Redundant with `wastedassign`, but
+    # kept enabled for now due to its issues with Go 1.18:
+    # https://github.com/sanposhiho/wastedassign/issues/41
+    - ineffassign
+
+    ### - interfacer # deprecated
+
+    # Implements the return part of the popular "accept abstract types, return
+    # concrete types" programming paradigm; essentially, advises not to return
+    # interfaces. Although not always that clear cut, returning interfaces
+    # tends to require callers to jump through an unneeded layer of indirection
+    # hoops.
+    # - ireturn # OPTIONAL
+
+    # Report too long lines. Likely calls for discussion before enabling.
+    ## - lll # DISABLE
+
+    # See discussion in `cyclop`.
+    ## - maintidx # DISABLE
+
+    # Warns on `make`:ing slices with non-0 length but > 0 capacity, that get
+    # appended to shortly afterwards. Essentially, picks up that
+    # `slice := make([]int, 1)` (this list would be `[]int{ 0 }` with cap 1)
+    # should be `slice := make([]int, 0, 1)` (an empty list with cap 1) if
+    # followed by `slice = append(slice, 1)`. This is a classic Go bug at this
+    # point as `append` is the common way of adding to a slice and it's easy to
+    # forget the initial size from the `make` call by accident.
+    - makezero
+
+    ### - maligned # deprecated
+
+    # Finds commonly misspelled English words, autofixable. Fixes/suggestions
+    # need to be handled with care, as they include occurrences of misspelled
+    # words in strings which could have external dependencies, such as APIs.
+    - misspell
+
+    # Forbids final naked returns (eg. named return values and just `return` as
+    # the last statement) in functions longer than 5 (by default) lines.
+    # Naked returns are nice for simple helper methods, but in many cases they
+    # can be a bit difficult to follow along and make things more confusing
+    # compared to just explicit `return foo, nil`.
+    - nakedret
+
+    # Warns on deeply nested if-statements. These are hard to read and follow.
+    # Can be a chore to address after the fact, enabling early recommended.
+    - nestif
+
+    # Flags returning a `nil` after checking for an error, a fairly common
+    # mistake to make with `==` vs `!=`.
+    - nilerr
+
+    # Warns against both return value and error being `nil`, instructs using a
+    # sentinel value for the return in non-error conditions. Non-error `nil`
+    # return values are unusual and tend to need additional checks or extra
+    # care on use. Going against this rule is sometimes necessary due to
+    # contracts in implemented interfaces.
+    - nilnil
+
+    # Checks for a new line before return and branch statements to increase
+    # code clarity. Helps with readability. Rendered redundant by `whitespace`.
+    # Similar: `whitespace`, `wsl`
+    ## - nlreturn # DISABLE
+
+    # Checks for use of Context in HTTP requests. Contexts should be supported
+    # in relevant places, in order to allow for cancellation etc., but more
+    # importantly, to make the developer consider the scenario too.
+    - noctx
+
+    # Promotes consistent style for `//nolint` directives, requiring them to
+    # specify the disabled linter _and_ have a comment, describing why it was
+    # disabled in the case at hand. Does very little in its default
+    # golangci-lint config, see `linters-settings` for non-defaults we set.
+    - nolintlint
+
+    # Together with `tparallel', encourages the use of `t.Parallel()` in all
+    # tests and catches some common problems with them. Using `t.Parallel()` as
+    # much as possible improves confidence in our code being thread-safe and
+    # working in parallel, forces the developer to think about parallelism,
+    # improves the encapsulation of tests as sharing state typically makes it
+    # difficult to run tests in parallel, speeds up running of tests, greatly
+    # improving DX. A chore to introduce afterwards, so should be enabled as
+    # early as possible.
+    - paralleltest
+
+    # Promotes preallocating slices and maps with a known length. Go grows
+    # these on demand, but in clear cases we should help it out as it can have
+    # a non-negligible performance benefit. Arguably makes code a little bit
+    # more brittle (need to remember to take this into account when
+    # refactoring) and a bit less readable (simple default value slices are
+    # clearer).
+    - prealloc
+
+    # Forbids using names that would shadow
+    # [predeclared Go identifiers](https://golang.org/ref/spec#Predeclared_identifiers).
+    # While Go allows this, it seems like common sense to not shadow built-in
+    # identifiers as that might make some code rather surprising.
+    - predeclared
+
+    # Check Prometheus metrics naming via promlint. Not applicable for now.
+    ## - promlinter # DISABLE
+
+    # A better (e.g. more rules and faster) version of the original `golint`
+    # which has been deprecated.
+    # Similar: `stylecheck` (`revive` seems more extensive, `stylecheck` is a
+    # sibling project to `staticcheck`).
+    - revive
+
+    # Verifies that `sql.Rows` `.Error()` is checked when querying database.
+    # Easy to miss but important to do, for example to be aware of connection
+    # breakages while iterating results, thus getting only a subset.
+    - rowserrcheck
+
+    ### - scopelint # deprecated
+
+    # Checks that `sql.Rows` and `sql.Stmt` are closed properly. Not closing
+    # can cause exhaustion of the connection pool and problems.
+    - sqlclosecheck
+
+    # A lot of different checks, `go vet` on steroids, as described by the
+    # author. Encourages some basic good practices, catches some hard to debug
+    # problems.
+    - staticcheck
+
+    # Finds unused struct fields, i.e. fields that are not referenced from
+    # anywhere else. Helps remove dead code.
+    - structcheck
+
+    # Encourages various opinionated styles and rules including naming.
+    # Redundant with `revive`.
+    ## - stylecheck # DISABLE
+
+    # Checks the struct tags for correct and consistent style.
+    # Many struct tags exist for interoperability in possibly third party
+    # JSON APIs, which the code needs to abide by no matter consistency or
+    # style concerns.
+    ## - tagliatelle # DISABLE
+
+    # Advises to use `t.SetEnv` instead of `os.SetEnv` so that one does not
+    # need to bother with restoring the pre-test env var value. `t.SetEnv` is
+    # available in Go >= 1.17. Note that this is not applicable to parallel
+    # tests.
+    - tenv
+
+    # Promotes using test packages (eg. `package foo_test`) in regular tests
+    # (files ending with `_test.go`), allows for internal tests (in the same
+    # package) only to exist in files ending with `_internal_test.go`.
+    # This separation forces the developer to think about the exported
+    # interface and how it is used, keeps test packages better separated as
+    # it's more difficult (impossible?) to refer to other packages' tests,
+    # and makes it harder to accidentally export test-related helpers and mocks
+    # that could be confusing. Somewhat chore to address afterwards, so good
+    # to enable in as early project lifecycle as possible.
+    - testpackage
+
+    # Checks for `t.Helper()` in helper methods. Using `t.Helper()` improves
+    # the output of testing and thus gives better information to the developer,
+    # improving DX. Helps with some good practices in test functions as well,
+    # such as `t *testing.T` as the first parameter.
+    - thelper
+
+    # See discussion for `paralleltest`.
+    - tparallel
+
+    # Basically does what the frontend of the Go compiler does, parses and type
+    # checks code. More of a sanity check before committing than an actual
+    # linter.
+    - typecheck
+
+    # Warns on unnecessary type conversions. Unnecessary conversions make code
+    # harder to read and can also relay false information to the developer,
+    # e.g. assuming that a particular method returns a type that needs to be
+    # converted.
+    - unconvert
+
+    # Reports unused function parameters. Drawbacks include catching methods
+    # in tests that always get called with the same parameters, and checking
+    # return values where always returning a `nil` err is required for
+    # interface contracts. Poor signal to noise ratio in experiments.
+    ## - unparam # DISABLE
+
+    # Checks code for unused constants, variables, functions and types.
+    # Removing unused bits is good, as they could easily confuse future
+    # development and even cause unnecessary work.
+    - unused
+
+    # Finds unused global variables and constants. Helps remove dead code.
+    - varcheck
+
+    # Variable name length checks, takes definition and use span lengths into
+    # account. Nice idea, idiomatic Go, but needs discussion if we want to go
+    # with their defaults which cause a lot of errors in various existing
+    # codebases, or if we want to refine what our default limits would be.
+    # - varnamelen # OPTIONAL
+
+    # Warns on assignments that are never read or are overwritten before
+    # reading. This helps with readability of the code as it's not always so
+    # clear where the actual value comes from, especially if it's overwritten
+    # in assignments. Might also prevent some bugs where a value gets
+    # overwritten by accident. Detects more cases than `ineffassign`, and
+    # gives better explanations.
+    # Similar: `ineffassign`
+    - wastedassign
+
+    # Checks for whitespace/empty lines around blocks, autofixable. Does
+    # generally enough without being too overbearing.
+    # Similar: `wsl` (more aggressive, not autofixable (?)), `nlreturn`
+    # (also not seem to be autofixable (?), at least through golangci-lint).
+    - whitespace
+
+    # Makes sure that errors returned originating from external packages are
+    # wrapped. This is good for consistency of emitted errors, but might be a
+    # tad much to always wrap everything.
+    # - wrapcheck  # Disabled for now, worth to look into enabling later
+
+    # A whitespace linter that is quite aggressive, causing a lot of changes
+    # in typical codebases. `whitespace` is the generally preferred choice
+    # over this.
+    ## - wsl # DISABLE
+
+output:
+  # Get all issues from all linters, instead of just first per line, so we
+  # get to see everything on first pass.
+  uniq-by-line: false
+
+issues:
+  exclude:
+  # We used to have a mixture of initialisms and non-initialisms between and
+  # even within projects, but are converging towards the initialisms practice
+  # that is the most common one with Go code in general. Note that changing
+  # the naming is a breaking change, and whether/when/how to do it depends on
+  # the case at hand.
+  # - "^var-naming: .+ should be " # OPTIONAL, if needed
+  # Disable per linter/same-issue limits, again to get the whole picture on
+  # first pass.
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  # Fix found issues where supported, because life is too short. Be sure to
+  # sanity check the diffs.
+  fix: true
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - funlen
+        - noctx
+        - bodyclose
+linters-settings:
+  errcheck:
+    # See discussion in `forcetypeassert`.
+    check-type-assertions: true
+
+  gocritic:
+    disabled-checks:
+      # commentFormatting is redundant with/inferior to gofumpt which can also
+      # autofix this.
+      - commentFormatting
+      # hugeParam, range*Copy (from performance tag) to be discussed, arguably
+      # promote unconventional code.
+      - hugeParam
+      - rangeValCopy
+      - rangeExprCopy
+    enabled-tags:
+      # Most performance checks also encourage clean/idiomatic code.
+      - performance
+    settings:
+      captLocal:
+        paramsOnly: false
+
+  gofumpt:
+    lang-version: *run_go_version
+    extra-rules: true
+
+  gosimple:
+    go: *run_go_version
+
+  importas:
+    no-unaliased: true
+    alias:
+      # Prominently differentiate pkg/errors and stdlib errors.
+      - pkg: github.com/pkg/errors
+        alias: pkgerrors
+
+  nolintlint:
+    allow-leading-space: false
+    require-explanation: true
+    require-specific: true
+
+  staticcheck:
+    go: *run_go_version

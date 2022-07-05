@@ -2,9 +2,10 @@ package driver
 
 import (
 	"fmt"
-	"github.com/container-storage-interface/spec/lib/go/csi"
 	"strconv"
 	"strings"
+
+	"github.com/container-storage-interface/spec/lib/go/csi"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 )
@@ -19,27 +20,25 @@ const (
 
 const (
 	// minimumVolumeSizeInBytes is used to validate that the user is not trying
-	// to create a volume that is smaller than what we support
+	// to create a volume that is smaller than what we support.
 	minimumVolumeSizeInBytes int64 = 10 * giB
 
 	// maximumVolumeSizeInBytes is used to validate that the user is not trying
-	// to create a volume that is larger than what we support
+	// to create a volume that is larger than what we support.
 	maximumVolumeSizeInBytes int64 = 4096 * giB
 
 	// defaultVolumeSize is used when the user did not provide a size or
-	// the size they provided did not satisfy our requirements
+	// the size they provided did not satisfy our requirements.
 	defaultVolumeSize = 10 * giB
 )
 
-var (
-	// TODO lots of rewording
-	// DO currently only support a single node to be attached to a single node
-	// in read/write mode. This corresponds to `accessModes.ReadWriteOnce` in a
-	// PVC resource on Kubernetes
-	supportedAccessMode = &csi.VolumeCapability_AccessMode{
-		Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
-	}
-)
+// TODO lots of rewording
+// DO currently only support a single node to be attached to a single node
+// in read/write mode. This corresponds to `accessModes.ReadWriteOnce` in a
+// PVC resource on Kubernetes.
+var supportedAccessMode = &csi.VolumeCapability_AccessMode{
+	Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+}
 
 type storageRange struct {
 	requiredBytes int64
@@ -104,7 +103,7 @@ func getStorageRange(cr *csi.CapacityRange) (int64, error) {
 	return defaultVolumeSize, nil
 }
 
-// displayByteString takes a byte representation of storage size and returns a human-readable string: (1 GiB)
+// displayByteString takes a byte representation of storage size and returns a human-readable string: (1 GiB).
 func displayByteString(bytes int64) string {
 	output := float64(bytes)
 	unit := ""

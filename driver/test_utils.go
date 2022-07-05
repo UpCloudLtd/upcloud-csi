@@ -3,26 +3,25 @@ package driver
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
 	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud"
 	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/request"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"os"
-	"path/filepath"
-	"strings"
 )
 
-var (
-	volCap = &csi.VolumeCapability{
-		AccessType: &csi.VolumeCapability_Mount{
-			Mount: &csi.VolumeCapability_MountVolume{},
-		},
-		AccessMode: &csi.VolumeCapability_AccessMode{
-			Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
-		},
-	}
-)
+var volCap = &csi.VolumeCapability{
+	AccessType: &csi.VolumeCapability_Mount{
+		Mount: &csi.VolumeCapability_MountVolume{},
+	},
+	AccessMode: &csi.VolumeCapability_AccessMode{
+		Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+	},
+}
 
 type MockDriver struct {
 	Driver
@@ -85,7 +84,6 @@ func (m *mockUpCloudDriver) Run() error {
 }
 
 func (m *mockUpCloudDriver) getStorageByUUID(ctx context.Context, storageUUID string) ([]*upcloud.StorageDetails, error) {
-
 	return m.getStorageByName(ctx, storageUUID)
 }
 

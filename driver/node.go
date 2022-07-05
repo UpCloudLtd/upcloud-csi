@@ -20,16 +20,14 @@ const (
 	maxVolumesPerNode = 7
 )
 
-var (
-	annsNoFormatVolume = []string{
-		"storage.csi.upcloud.com/noformat",
-	}
-)
+var annsNoFormatVolume = []string{
+	"storage.csi.upcloud.com/noformat",
+}
 
 // NodeStageVolume mounts the volume to a staging path on the node. This is
 // called by the CO before NodePublishVolume and is used to temporary mount the
 // volume to a staging path. Once mounted, NodePublishVolume will make sure to
-// mount it to the appropriate path
+// mount it to the appropriate path.
 func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
 	d.log.Info("node stage volume called")
 	if req.VolumeId == "" {
@@ -152,7 +150,7 @@ func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRe
 	return &csi.NodeStageVolumeResponse{}, nil
 }
 
-// NodeUnstageVolume unstages the volume from the staging path
+// NodeUnstageVolume unstages the volume from the staging path.
 func (d *Driver) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "NodeUnstageVolume Volume ID must be provided")
@@ -188,7 +186,7 @@ func (d *Driver) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolu
 	return &csi.NodeUnstageVolumeResponse{}, nil
 }
 
-// NodePublishVolume mounts the volume mounted to the staging path to the target path
+// NodePublishVolume mounts the volume mounted to the staging path to the target path.
 func (d *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
 	d.log.Info("node publish volume called")
 	if req.VolumeId == "" {
@@ -250,7 +248,7 @@ func (d *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolu
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 
-// NodeUnpublishVolume unmounts the volume from the target path
+// NodeUnpublishVolume unmounts the volume from the target path.
 func (d *Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "NodeUnpublishVolume Volume ID must be provided")
@@ -286,24 +284,24 @@ func (d *Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublish
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
-// NodeGetCapabilities returns the supported capabilities of the node server
+// NodeGetCapabilities returns the supported capabilities of the node server.
 func (d *Driver) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
 	nscaps := []*csi.NodeServiceCapability{
-		&csi.NodeServiceCapability{
+		{
 			Type: &csi.NodeServiceCapability_Rpc{
 				Rpc: &csi.NodeServiceCapability_RPC{
 					Type: csi.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME,
 				},
 			},
 		},
-		&csi.NodeServiceCapability{
+		{
 			Type: &csi.NodeServiceCapability_Rpc{
 				Rpc: &csi.NodeServiceCapability_RPC{
 					Type: csi.NodeServiceCapability_RPC_EXPAND_VOLUME,
 				},
 			},
 		},
-		&csi.NodeServiceCapability{
+		{
 			Type: &csi.NodeServiceCapability_Rpc{
 				Rpc: &csi.NodeServiceCapability_RPC{
 					Type: csi.NodeServiceCapability_RPC_GET_VOLUME_STATS,
@@ -377,13 +375,13 @@ func (d *Driver) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeS
 
 	return &csi.NodeGetVolumeStatsResponse{
 		Usage: []*csi.VolumeUsage{
-			&csi.VolumeUsage{
+			{
 				Available: stats.availableBytes,
 				Total:     stats.totalBytes,
 				Used:      stats.usedBytes,
 				Unit:      csi.VolumeUsage_BYTES,
 			},
-			&csi.VolumeUsage{
+			{
 				Available: stats.availableInodes,
 				Total:     stats.totalInodes,
 				Used:      stats.usedInodes,
@@ -440,7 +438,7 @@ func (d *Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolume
 	return &csi.NodeExpandVolumeResponse{}, nil
 }
 
-// getDiskSource returns the absolute path of the attached volume for the given volumeID
+// getDiskSource returns the absolute path of the attached volume for the given volumeID.
 func (d *Driver) getDiskSource(volumeID string) string {
 	fullId := strings.Join(strings.Split(volumeID, "-"), "")
 	if len(fullId) <= 20 {

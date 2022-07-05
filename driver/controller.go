@@ -3,14 +3,15 @@ package driver
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud"
 	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/request"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"strconv"
-	"strings"
 )
 
 var supportedCapabilities = []csi.ControllerServiceCapability_RPC_Type{
@@ -22,7 +23,7 @@ var supportedCapabilities = []csi.ControllerServiceCapability_RPC_Type{
 	csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
 }
 
-// CreateVolume provisions storage via UpCloud Storage service
+// CreateVolume provisions storage via UpCloud Storage service.
 func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (resp *csi.CreateVolumeResponse, err error) {
 	if req.Name == "" {
 		return nil, status.Error(codes.InvalidArgument, "CreateVolume Name cannot be empty")
@@ -126,7 +127,7 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 	return volResp, nil
 }
 
-// DeleteVolume deletes storage via UpCloud Storage service
+// DeleteVolume deletes storage via UpCloud Storage service.
 func (d *Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "DeleteVolume Volume ID must be provided")
@@ -148,7 +149,7 @@ func (d *Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest)
 	return &csi.DeleteVolumeResponse{}, nil
 }
 
-// ControllerPublishVolume attaches storage to a node via UpCloud Storage service
+// ControllerPublishVolume attaches storage to a node via UpCloud Storage service.
 func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.ControllerPublishVolumeRequest) (*csi.ControllerPublishVolumeResponse, error) {
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "ControllerPublishVolume Volume ID must be provided")
@@ -230,7 +231,7 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 	}, nil
 }
 
-// ControllerUnpublishVolume detaches storage from a node via UpCloud Storage service
+// ControllerUnpublishVolume detaches storage from a node via UpCloud Storage service.
 func (d *Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest) (*csi.ControllerUnpublishVolumeResponse, error) {
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "ControllerUnpublishVolume Volume ID must be provided")
@@ -263,7 +264,7 @@ func (d *Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.Control
 	return &csi.ControllerUnpublishVolumeResponse{}, nil
 }
 
-// ValidateVolumeCapabilities checks if the volume capabilities are valid
+// ValidateVolumeCapabilities checks if the volume capabilities are valid.
 func (d *Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "ValidateVolumeCapabilities Volume ID must be provided")
@@ -302,7 +303,7 @@ func (d *Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Valida
 	return resp, nil
 }
 
-// ListVolumes returns a list of all requested volumes
+// ListVolumes returns a list of all requested volumes.
 func (d *Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
 	log := d.log.WithFields(logrus.Fields{
 		"max_entries":        req.MaxEntries,
@@ -349,7 +350,7 @@ func (d *Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (
 	return resp, nil
 }
 
-// GetCapacity returns the capacity of the storage pool
+// GetCapacity returns the capacity of the storage pool.
 func (d *Driver) GetCapacity(ctx context.Context, req *csi.GetCapacityRequest) (*csi.GetCapacityResponse, error) {
 	// TODO
 	d.log.WithFields(logrus.Fields{
@@ -360,7 +361,7 @@ func (d *Driver) GetCapacity(ctx context.Context, req *csi.GetCapacityRequest) (
 	return nil, status.Error(codes.Unimplemented, "")
 }
 
-// ControllerGetCapabilities returns the capacity of the storage pool
+// ControllerGetCapabilities returns the capacity of the storage pool.
 func (d *Driver) ControllerGetCapabilities(ctx context.Context, req *csi.ControllerGetCapabilitiesRequest) (*csi.ControllerGetCapabilitiesResponse, error) {
 	newCap := func(cap csi.ControllerServiceCapability_RPC_Type) *csi.ControllerServiceCapability {
 		return &csi.ControllerServiceCapability{

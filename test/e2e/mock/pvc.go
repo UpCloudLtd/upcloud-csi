@@ -2,11 +2,12 @@ package mock
 
 import (
 	"context"
+	"time"
+
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"time"
 )
 
 func (c *Client) CreatePVC(ctx context.Context, p string) (*v1.PersistentVolumeClaim, error) {
@@ -39,7 +40,7 @@ func (c *Client) CreatePVC(ctx context.Context, p string) (*v1.PersistentVolumeC
 	return pvc, nil
 }
 
-func (c *Client) DeletePVC(ctx context.Context, pvcName string, namespace string) error {
+func (c *Client) DeletePVC(ctx context.Context, pvcName, namespace string) error {
 	return c.k8s.CoreV1().PersistentVolumeClaims(namespace).Delete(ctx, pvcName, metav1.DeleteOptions{})
 }
 
@@ -58,7 +59,7 @@ func (c *Client) ListVolumes(ctx context.Context) (*v1.PersistentVolumeList, err
 	return c.k8s.CoreV1().PersistentVolumes().List(ctx, metav1.ListOptions{})
 }
 
-func (c *Client) isPVCRunning(ctx context.Context, pvcName string, namespace string) wait.ConditionFunc {
+func (c *Client) isPVCRunning(ctx context.Context, pvcName, namespace string) wait.ConditionFunc {
 	return func() (bool, error) {
 		pvc, err := c.k8s.CoreV1().PersistentVolumeClaims(namespace).Get(ctx, pvcName, metav1.GetOptions{})
 		if err != nil {
@@ -69,6 +70,6 @@ func (c *Client) isPVCRunning(ctx context.Context, pvcName string, namespace str
 	}
 }
 
-func (c *Client) WaitForPVC(ctx context.Context, pvcName string, namespace string) error {
+func (c *Client) WaitForPVC(ctx context.Context, pvcName, namespace string) error {
 	return wait.PollImmediate(time.Second, time.Minute, c.isPVCRunning(ctx, pvcName, namespace))
 }

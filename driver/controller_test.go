@@ -2,10 +2,10 @@ package driver
 
 import (
 	"context"
-
-	"github.com/container-storage-interface/spec/lib/go/csi"
 	"reflect"
 	"testing"
+
+	"github.com/container-storage-interface/spec/lib/go/csi"
 )
 
 func TestControllerService_ControllerGetCapabilities(t *testing.T) {
@@ -128,7 +128,6 @@ func TestControllerService_CreateVolume(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			d := NewMockDriver()
 
 			gotResp, err := d.CreateVolume(tt.args.ctx, tt.args.req)
@@ -142,7 +141,6 @@ func TestControllerService_CreateVolume(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestControllerService_DeleteVolume(t *testing.T) {
@@ -249,7 +247,6 @@ func TestControllerService_ControllerUnpublishVolume(t *testing.T) {
 				t.Errorf("ControllerUnpublishVolume() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-
 		})
 	}
 }

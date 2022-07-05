@@ -1,7 +1,7 @@
 NAME=upcloud-csi-plugin
 OS ?= linux
 PKG ?= github.com/UpCloudLtd/upcloud-csi/cmd/upcloud-csi-plugin
-GO_VERSION := 1.17.6
+GO_VERSION := 1.18.3
 ARCH := amd64
 
 .PHONY: compile
