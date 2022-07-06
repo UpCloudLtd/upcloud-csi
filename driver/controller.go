@@ -187,9 +187,10 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 		return nil, fmt.Errorf("too many volumes")
 	}
 	volume := volumes[0]
-	if volume.State == "maintenance" {
-		// TODO
-	}
+
+	// TODO
+	/*if volume.State == "maintenance" {
+	}*/
 
 	attachedID := ""
 	for _, id := range volume.ServerUUIDs {

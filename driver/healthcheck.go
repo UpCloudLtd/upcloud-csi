@@ -53,10 +53,9 @@ func (c *upcloudHealthChecker) Name() string {
 }
 
 func (c *upcloudHealthChecker) Check(ctx context.Context) error {
-	ctx, cancel := context.WithTimeout(ctx, upcloudHealthTimeout)
+	_, cancel := context.WithTimeout(ctx, upcloudHealthTimeout)
 	defer cancel()
-	_, err := c.account()
-	if err != nil {
+	if _, err := c.account(); err != nil {
 		return fmt.Errorf("checking health: %w", err)
 	}
 	return nil
