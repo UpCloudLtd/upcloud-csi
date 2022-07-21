@@ -331,14 +331,14 @@ func (d *Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (
 		return nil, status.Errorf(codes.Internal, "listvolumes failed with: %s", err.Error())
 	}
 
-	entries := make([]*csi.ListVolumesResponse_Entry, 0, len(volumes))
-	for _, vol := range volumes {
-		entries = append(entries, &csi.ListVolumesResponse_Entry{
+	entries := make([]*csi.ListVolumesResponse_Entry, len(volumes), len(volumes))
+	for i, vol := range volumes {
+		entries[i] = &csi.ListVolumesResponse_Entry{
 			Volume: &csi.Volume{
 				VolumeId:      vol.UUID,
 				CapacityBytes: int64(vol.Size) * giB,
 			},
-		})
+		}
 	}
 
 	resp := &csi.ListVolumesResponse{
@@ -378,9 +378,9 @@ func (d *Driver) ControllerGetCapabilities(ctx context.Context, req *csi.Control
 	}
 
 	supportedCaps := listSupportedCapabilities()
-	caps := make([]*csi.ControllerServiceCapability, 0, len(supportedCaps))
-	for _, capability := range supportedCaps {
-		caps = append(caps, newCap(capability))
+	caps := make([]*csi.ControllerServiceCapability, len(supportedCaps), len(supportedCaps))
+	for i, capability := range supportedCaps {
+		caps[i] = newCap(capability)
 	}
 
 	resp := &csi.ControllerGetCapabilitiesResponse{
@@ -504,4 +504,8 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 		CapacityBytes:         resizeGigaBytes * giB,
 		NodeExpansionRequired: nodeExpansionRequired,
 	}, nil
+}
+
+func (d *Driver) ControllerGetVolume(ctx context.Context, req *csi.ControllerGetVolumeRequest) (*csi.ControllerGetVolumeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "ControllerGetVolume is unimplemented")
 }
