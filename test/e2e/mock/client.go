@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
@@ -47,7 +47,7 @@ func (c *Client) Exec(params ExecParams) error {
 
 	defer func() {
 		err := os.Chdir("test/e2e")
-		Expect(err).NotTo(HaveOccurred())
+		gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	}()
 
 	projectRoot, err := os.Getwd()
@@ -79,7 +79,6 @@ func (c *Client) Exec(params ExecParams) error {
 func GetKubeconfig() string {
 	if os.Getenv("KUBECONFIG") == "" {
 		return filepath.Join(homedir.HomeDir(), ".kube", "config")
-	} else {
-		return os.Getenv("KUBECONFIG")
 	}
+	return os.Getenv("KUBECONFIG")
 }

@@ -2,8 +2,9 @@ package mock
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"time"
 
 	appv1 "k8s.io/api/apps/v1"
@@ -15,7 +16,11 @@ import (
 func (c *Client) CreateDeployment(ctx context.Context, pvc *v1.PersistentVolumeClaim, command string) (*appv1.Deployment, error) {
 	replicaCount := int32(1)
 	generateName := "csi-volume-tester-"
-	selectorValue := fmt.Sprintf("%s%d", generateName, rand.Int())
+	randInt, err := rand.Int(rand.Reader, big.NewInt(999))
+	if err != nil {
+		return &appv1.Deployment{}, err
+	}
+	selectorValue := fmt.Sprintf("%s%d", generateName, randInt)
 
 	deployment := &appv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{

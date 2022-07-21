@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
-	"log"
 	"os"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/UpCloudLtd/upcloud-csi/driver"
 	"github.com/spf13/pflag"
@@ -30,7 +30,7 @@ func main() {
 	}
 
 	if *version {
-		fmt.Printf("%s - %s (%s)\n", driver.GetVersion(), driver.GetCommit(), driver.GetTreeState())
+		log.Debugf("%s - %s (%s)\n", driver.GetVersion(), driver.GetCommit(), driver.GetTreeState())
 		os.Exit(0)
 	}
 

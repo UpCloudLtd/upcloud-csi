@@ -28,7 +28,7 @@ func (c *Client) CreatePVC(ctx context.Context, p string) (*v1.PersistentVolumeC
 					v1.ResourceStorage: resource.MustParse("10Gi"),
 				},
 			},
-			StorageClassName: &storageClassName,
+			StorageClassName: getMaxIOPSStorageClass(),
 		},
 	}
 
@@ -72,4 +72,15 @@ func (c *Client) isPVCRunning(ctx context.Context, pvcName, namespace string) wa
 
 func (c *Client) WaitForPVC(ctx context.Context, pvcName, namespace string) error {
 	return wait.PollImmediate(time.Second, time.Minute, c.isPVCRunning(ctx, pvcName, namespace))
+}
+
+func getMaxIOPSStorageClass() *string {
+	maxIOPS := "upcloud-block-storage-maxiops"
+	return &maxIOPS
+}
+
+//nolint:unused // Will be used in future additional tests for HDD disks
+func getHDDStorageClass() *string {
+	hdd := "upcloud-block-storage-hdd"
+	return &hdd
 }

@@ -480,7 +480,8 @@ linters:
     # Basically does what the frontend of the Go compiler does, parses and type
     # checks code. More of a sanity check before committing than an actual
     # linter.
-    - typecheck
+    # DISABLED for go 1.18
+    # - typecheck
 
     # Warns on unnecessary type conversions. Unnecessary conversions make code
     # harder to read and can also relay false information to the developer,

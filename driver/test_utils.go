@@ -2,26 +2,12 @@ package driver
 
 import (
 	"context"
-	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud"
 	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/request"
-	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
-
-var volCap = &csi.VolumeCapability{
-	AccessType: &csi.VolumeCapability_Mount{
-		Mount: &csi.VolumeCapability_MountVolume{},
-	},
-	AccessMode: &csi.VolumeCapability_AccessMode{
-		Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
-	},
-}
 
 type MockDriver struct {
 	Driver
@@ -34,30 +20,22 @@ type MockDriver struct {
 	log     *logrus.Entry
 	//
 	//upcloudclient *upcloudservice.Service
-	//upclouddriver upcloudService
+	upclouddriver upcloudService
 	//
-	//healthChecker *HealthChecker
-	//
-	//storage upcloud.Storage
-	//// ready defines whether the driver is ready to function. This value will
-	//// be used by the `Identity` service via the `Probe()` method.
-	//readyMu sync.Mutex // protects ready
-	//ready   bool
 }
 
 type mockUpCloudDriver struct {
 	volumeExists bool
 }
 
-func NewMockDriver() *Driver {
+func NewMockDriver() *MockDriver {
 	upcloudDriver := mockUpCloudDriver{}
 
 	socket := "/tmp/csi.sock"
 	endpoint := "unix://" + socket
 
 	log := logrus.New().WithField("test_enabled", true)
-
-	return &Driver{
+	return &MockDriver{
 		options: &driverOptions{
 			zone:       "demoRegion",
 			endpoint:   endpoint,
@@ -79,7 +57,7 @@ func newMockStorage() *upcloud.Storage {
 }
 
 func (m *mockUpCloudDriver) Run() error {
-	fmt.Println("sup")
+	logrus.Infoln("run mock driver")
 	return nil
 }
 
@@ -89,7 +67,7 @@ func (m *mockUpCloudDriver) getStorageByUUID(ctx context.Context, storageUUID st
 
 func (m *mockUpCloudDriver) getStorageByName(ctx context.Context, storageName string) ([]*upcloud.StorageDetails, error) {
 	if m.volumeExists {
-		return nil, nil
+		return []*upcloud.StorageDetails{}, nil
 	}
 
 	s := []*upcloud.StorageDetails{
@@ -138,31 +116,14 @@ func (m *mockUpCloudDriver) getServerByHostname(ctx context.Context, hostname st
 	return &upcloud.Server{UUID: id.String()}, nil
 }
 
-func (m *mockUpCloudDriver) resizeStorage(ctx context.Context, uuid_ string, newSize int) (*upcloud.StorageDetails, error) {
-	id, _ := uuid.NewUUID()
-	return &upcloud.StorageDetails{Storage: upcloud.Storage{UUID: id.String()}}, nil
+func (m *mockUpCloudDriver) resizeStorage(ctx context.Context, uuid string, newSize int) (*upcloud.StorageDetails, error) {
+	return &upcloud.StorageDetails{Storage: upcloud.Storage{UUID: uuid}}, nil
 }
 
 func (m *mockUpCloudDriver) startServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error) {
-	return nil, nil
+	return &upcloud.ServerDetails{}, nil
 }
 
 func (m *mockUpCloudDriver) stopServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error) {
-	return nil, nil
-}
-
-func (m *mockUpCloudDriver) getDiskSource(volumeID string) string {
-	fullId := strings.Join(strings.Split(volumeID, "-"), "")
-	if len(fullId) <= 20 {
-		return ""
-	}
-
-	link, err := os.Readlink(filepath.Join(diskIDPath, diskPrefix+fullId[:20]))
-	if err != nil {
-		fmt.Println(fmt.Errorf("failed to get the link to source"))
-		return ""
-	}
-	source := "/dev" + strings.TrimPrefix(link, "../..")
-
-	return source
+	return &upcloud.ServerDetails{}, nil
 }

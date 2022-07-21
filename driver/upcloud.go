@@ -3,10 +3,14 @@ package driver
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud"
 	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/request"
 	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/service"
+	log "github.com/sirupsen/logrus"
 )
 
 // TODO sort out naming conventions
@@ -70,7 +74,7 @@ func (u *upcloudClient) getStorageByName(ctx context.Context, storageName string
 func (u *upcloudClient) createStorage(ctx context.Context, csr *request.CreateStorageRequest) (*upcloud.StorageDetails, error) {
 	s, err := u.svc.CreateStorage(csr)
 	if err != nil {
-		fmt.Println(err)
+		log.Errorln(err)
 		return nil, err
 	}
 	return s, nil
@@ -136,8 +140,9 @@ func (u *upcloudClient) listStorage(ctx context.Context, zone string) ([]*upclou
 		return nil, err
 	}
 	zoneStorage := make([]*upcloud.Storage, 0)
-	for _, s := range storages.Storages {
-		if s.Zone == zone {
+	for _, storage := range storages.Storages {
+		if storage.Zone == zone {
+			s := storage
 			zoneStorage = append(zoneStorage, &s)
 		}
 	}
@@ -158,7 +163,7 @@ func (u *upcloudClient) getServer(ctx context.Context, uuid string) (*upcloud.Se
 func (u *upcloudClient) getServerByHostname(ctx context.Context, hostname string) (*upcloud.Server, error) {
 	servers, err := u.svc.GetServers()
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch servers: %s", err)
+		return nil, fmt.Errorf("failed to fetch servers: %w", err)
 	}
 
 	for _, server := range servers.Servers {
@@ -184,7 +189,7 @@ func (u *upcloudClient) resizeStorage(ctx context.Context, uuid string, newSize 
 		return nil, err
 	}
 
-	fmt.Printf("backup: %#v\n", *backup)
+	log.Printf("backup after resizing: %v", *backup)
 
 	return storage, nil
 }
@@ -209,4 +214,21 @@ func (u *upcloudClient) startServer(ctx context.Context, uuid string) (*upcloud.
 		return nil, err
 	}
 	return server, nil
+}
+
+// getDiskSource returns the absolute path of the attached volume for the given volumeID.
+func (d *Driver) getDiskSource(volumeID string) string {
+	fullID := strings.Join(strings.Split(volumeID, "-"), "")
+	if len(fullID) <= 20 {
+		return ""
+	}
+
+	link, err := os.Readlink(filepath.Join(diskIDPath, diskPrefix+fullID[:20]))
+	if err != nil {
+		log.Errorln("failed to get the link to source")
+		return ""
+	}
+	source := "/dev" + strings.TrimPrefix(link, "../..")
+
+	return source
 }

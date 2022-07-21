@@ -33,7 +33,8 @@ func NewHealthChecker(checks ...HealthCheck) *HealthChecker {
 func (c *HealthChecker) Check(ctx context.Context) error {
 	var eg errgroup.Group
 
-	for _, check := range c.checks {
+	for _, c := range c.checks {
+		check := c
 		eg.Go(func() error {
 			return check.Check(ctx)
 		})
@@ -42,7 +43,7 @@ func (c *HealthChecker) Check(ctx context.Context) error {
 	return eg.Wait()
 }
 
-var upcloudHealthTimeout = 15 * time.Second
+const upcloudHealthTimeout = 15 * time.Second
 
 type upcloudHealthChecker struct {
 	account func() (*upcloud.Account, error)

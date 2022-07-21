@@ -1,35 +1,37 @@
-package driver
+package driver_test
 
 import (
 	"context"
 	"reflect"
 	"testing"
 
+	"github.com/UpCloudLtd/upcloud-csi/driver"
+
 	"github.com/container-storage-interface/spec/lib/go/csi"
 )
 
 func TestControllerService_ControllerGetCapabilities(t *testing.T) {
+	t.Parallel()
 	type args struct {
-		ctx context.Context
 		req *csi.ControllerGetCapabilitiesRequest
 	}
+	ctx := context.Background()
 	tests := []struct {
 		name    string
 		args    args
 		wantErr bool
 	}{
 		{
-			name: "Get Capabilities",
-			args: args{
-				ctx: context.Background(),
-			},
+			name:    "Get Capabilities",
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			d := NewMockDriver()
-			gotResp, err := d.ControllerGetCapabilities(tt.args.ctx, tt.args.req)
+			t.Parallel()
+			d := driver.NewMockDriver()
+			gotResp, err := d.ControllerGetCapabilities(ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ControllerGetCapabilities() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -43,10 +45,11 @@ func TestControllerService_ControllerGetCapabilities(t *testing.T) {
 }
 
 func TestControllerService_ControllerPublishVolume(t *testing.T) {
+	t.Parallel()
 	type args struct {
-		ctx context.Context
 		req *csi.ControllerPublishVolumeRequest
 	}
+	ctx := context.Background()
 	tests := []struct {
 		name     string
 		args     args
@@ -56,7 +59,6 @@ func TestControllerService_ControllerPublishVolume(t *testing.T) {
 		{
 			name: "Test Publish Volume",
 			args: args{
-				ctx: context.Background(),
 				req: &csi.ControllerPublishVolumeRequest{
 					VolumeId: "test-volume-id",
 					NodeId:   "test-node-id",
@@ -71,9 +73,11 @@ func TestControllerService_ControllerPublishVolume(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			d := NewMockDriver()
-			gotResp, err := d.ControllerPublishVolume(tt.args.ctx, tt.args.req)
+			t.Parallel()
+			d := driver.NewMockDriver()
+			gotResp, err := d.ControllerPublishVolume(ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ControllerPublishVolume() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -86,10 +90,12 @@ func TestControllerService_ControllerPublishVolume(t *testing.T) {
 }
 
 func TestControllerService_CreateVolume(t *testing.T) {
+	t.Parallel()
 	type args struct {
-		ctx context.Context
 		req *csi.CreateVolumeRequest
 	}
+
+	ctx := context.Background()
 	tests := []struct {
 		name         string
 		args         args
@@ -100,7 +106,6 @@ func TestControllerService_CreateVolume(t *testing.T) {
 		{
 			name: "Test Volume Already Exists",
 			args: args{
-				context.Background(),
 				&csi.CreateVolumeRequest{
 					Name: "testVolume",
 					VolumeCapabilities: []*csi.VolumeCapability{
@@ -127,10 +132,12 @@ func TestControllerService_CreateVolume(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			d := NewMockDriver()
+			t.Parallel()
+			d := driver.NewMockDriver()
 
-			gotResp, err := d.CreateVolume(tt.args.ctx, tt.args.req)
+			gotResp, err := d.CreateVolume(ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("CreateVolume() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -144,10 +151,12 @@ func TestControllerService_CreateVolume(t *testing.T) {
 }
 
 func TestControllerService_DeleteVolume(t *testing.T) {
+	t.Parallel()
 	type args struct {
-		ctx context.Context
 		req *csi.DeleteVolumeRequest
 	}
+
+	ctx := context.Background()
 	tests := []struct {
 		name     string
 		args     args
@@ -157,7 +166,6 @@ func TestControllerService_DeleteVolume(t *testing.T) {
 		{
 			name: "Test Delete Volume",
 			args: args{
-				context.Background(),
 				&csi.DeleteVolumeRequest{
 					VolumeId: "testVolume",
 				},
@@ -167,9 +175,11 @@ func TestControllerService_DeleteVolume(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			d := NewMockDriver()
-			gotResp, err := d.DeleteVolume(tt.args.ctx, tt.args.req)
+			t.Parallel()
+			d := driver.NewMockDriver()
+			gotResp, err := d.DeleteVolume(ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("DeleteVolume() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -182,10 +192,12 @@ func TestControllerService_DeleteVolume(t *testing.T) {
 }
 
 func TestControllerService_ListVolumes(t *testing.T) {
+	t.Parallel()
 	type args struct {
-		ctx context.Context
 		req *csi.ListVolumesRequest
 	}
+
+	ctx := context.Background()
 	tests := []struct {
 		name     string
 		args     args
@@ -195,16 +207,17 @@ func TestControllerService_ListVolumes(t *testing.T) {
 		{
 			name: "Test List Volumes",
 			args: args{
-				context.Background(),
 				&csi.ListVolumesRequest{},
 			},
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			d := NewMockDriver()
-			gotResp, err := d.ListVolumes(tt.args.ctx, tt.args.req)
+			t.Parallel()
+			d := driver.NewMockDriver()
+			gotResp, err := d.ListVolumes(ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ListVolumes() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -218,10 +231,12 @@ func TestControllerService_ListVolumes(t *testing.T) {
 }
 
 func TestControllerService_ControllerUnpublishVolume(t *testing.T) {
+	t.Parallel()
 	type args struct {
-		ctx context.Context
 		req *csi.ControllerUnpublishVolumeRequest
 	}
+
+	ctx := context.Background()
 	tests := []struct {
 		name    string
 		args    args
@@ -231,7 +246,6 @@ func TestControllerService_ControllerUnpublishVolume(t *testing.T) {
 		{
 			name: "Test Unpublish Volume",
 			args: args{
-				context.Background(),
 				&csi.ControllerUnpublishVolumeRequest{
 					VolumeId: "testVolume",
 				},
@@ -240,9 +254,11 @@ func TestControllerService_ControllerUnpublishVolume(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			d := NewMockDriver()
-			_, err := d.ControllerUnpublishVolume(tt.args.ctx, tt.args.req)
+			t.Parallel()
+			d := driver.NewMockDriver()
+			_, err := d.ControllerUnpublishVolume(ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ControllerUnpublishVolume() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -252,10 +268,12 @@ func TestControllerService_ControllerUnpublishVolume(t *testing.T) {
 }
 
 func TestControllerService_ValidateVolumeCapabilities(t *testing.T) {
+	t.Parallel()
 	type args struct {
-		ctx context.Context
 		req *csi.ValidateVolumeCapabilitiesRequest
 	}
+
+	ctx := context.Background()
 	tests := []struct {
 		name    string
 		args    args
@@ -265,7 +283,6 @@ func TestControllerService_ValidateVolumeCapabilities(t *testing.T) {
 		{
 			name: "Test ValidateVolumeCapabilities",
 			args: args{
-				context.Background(),
 				&csi.ValidateVolumeCapabilitiesRequest{
 					VolumeId: "testVolume",
 					VolumeCapabilities: []*csi.VolumeCapability{
@@ -277,14 +294,17 @@ func TestControllerService_ValidateVolumeCapabilities(t *testing.T) {
 					},
 				},
 			},
-			want:    supportedAccessMode,
+			want:    driver.GetDefaultAccessMode(),
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
+		// Bypass goroutine (t.Parallel) on loop iterator variable
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			d := NewMockDriver()
-			got, err := d.ValidateVolumeCapabilities(tt.args.ctx, tt.args.req)
+			t.Parallel()
+			d := driver.NewMockDriver()
+			got, err := d.ValidateVolumeCapabilities(ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateVolumeCapabilities() error = %v, wantErr %v", err, tt.wantErr)
 				return

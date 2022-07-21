@@ -3,7 +3,6 @@ package driver
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud"
@@ -14,16 +13,19 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-var supportedCapabilities = []csi.ControllerServiceCapability_RPC_Type{
-	csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
-	csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME,
-	csi.ControllerServiceCapability_RPC_LIST_VOLUMES,
-	csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
-	csi.ControllerServiceCapability_RPC_LIST_SNAPSHOTS,
-	csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
+func listSupportedCapabilities() []csi.ControllerServiceCapability_RPC_Type {
+	return []csi.ControllerServiceCapability_RPC_Type{
+		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
+		csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME,
+		csi.ControllerServiceCapability_RPC_LIST_VOLUMES,
+		csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
+		csi.ControllerServiceCapability_RPC_LIST_SNAPSHOTS,
+		csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
+	}
 }
 
 // CreateVolume provisions storage via UpCloud Storage service.
+//nolint:funlen // Requires refactoring of request fields validation
 func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (resp *csi.CreateVolumeResponse, err error) {
 	if req.Name == "" {
 		return nil, status.Error(codes.InvalidArgument, "CreateVolume Name cannot be empty")
@@ -34,7 +36,7 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 	}
 
 	violations := validateCapabilities(req.VolumeCapabilities)
-	if violations != nil && len(violations) > 0 {
+	if len(violations) > 0 {
 		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("CreateVolume failed with the following violations: %s", strings.Join(violations, ", ")))
 	}
 
@@ -150,6 +152,7 @@ func (d *Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest)
 }
 
 // ControllerPublishVolume attaches storage to a node via UpCloud Storage service.
+//nolint:funlen // Requires refactoring of request fields validation
 func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.ControllerPublishVolumeRequest) (*csi.ControllerPublishVolumeResponse, error) {
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "ControllerPublishVolume Volume ID must be provided")
@@ -278,7 +281,7 @@ func (d *Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Valida
 	log := d.log.WithFields(logrus.Fields{
 		"volume_id":              req.VolumeId,
 		"volume_capabilities":    req.VolumeCapabilities,
-		"supported_capabilities": supportedAccessMode,
+		"supported_capabilities": GetDefaultAccessMode(),
 		"method":                 "validate_volume_capabilities",
 	})
 	log.Info("validate volume capabilities called")
@@ -294,7 +297,7 @@ func (d *Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Valida
 		Confirmed: &csi.ValidateVolumeCapabilitiesResponse_Confirmed{
 			VolumeCapabilities: []*csi.VolumeCapability{
 				{
-					AccessMode: supportedAccessMode,
+					AccessMode: GetDefaultAccessMode(),
 				},
 			},
 		},
@@ -328,7 +331,7 @@ func (d *Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (
 		return nil, status.Errorf(codes.Internal, "listvolumes failed with: %s", err.Error())
 	}
 
-	var entries []*csi.ListVolumesResponse_Entry
+	entries := make([]*csi.ListVolumesResponse_Entry, 0, len(volumes))
 	for _, vol := range volumes {
 		entries = append(entries, &csi.ListVolumesResponse_Entry{
 			Volume: &csi.Volume{
@@ -364,18 +367,19 @@ func (d *Driver) GetCapacity(ctx context.Context, req *csi.GetCapacityRequest) (
 
 // ControllerGetCapabilities returns the capacity of the storage pool.
 func (d *Driver) ControllerGetCapabilities(ctx context.Context, req *csi.ControllerGetCapabilitiesRequest) (*csi.ControllerGetCapabilitiesResponse, error) {
-	newCap := func(cap csi.ControllerServiceCapability_RPC_Type) *csi.ControllerServiceCapability {
+	newCap := func(cap_ csi.ControllerServiceCapability_RPC_Type) *csi.ControllerServiceCapability {
 		return &csi.ControllerServiceCapability{
 			Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
-					Type: cap,
+					Type: cap_,
 				},
 			},
 		}
 	}
 
-	var caps []*csi.ControllerServiceCapability
-	for _, capability := range supportedCapabilities {
+	supportedCaps := listSupportedCapabilities()
+	caps := make([]*csi.ControllerServiceCapability, 0, len(supportedCaps))
+	for _, capability := range supportedCaps {
 		caps = append(caps, newCap(capability))
 	}
 
@@ -414,14 +418,15 @@ func (d *Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsReques
 }
 
 // ControllerExpandVolume is called from the resizer to increase the volume size.
+//nolint:funlen // Requires refactoring of request fields validation
 func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
-	volumeId := req.VolumeId
+	volumeID := req.VolumeId
 
-	if len(volumeId) == 0 {
+	if len(volumeID) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "ControllerExpandVolume volume ID missing in request")
 	}
 
-	volumes, err := d.upclouddriver.getStorageByUUID(ctx, volumeId)
+	volumes, err := d.upclouddriver.getStorageByUUID(ctx, volumeID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "ControllerExpandVolume could not retrieve existing volumes: %v", err)
 	}
@@ -433,14 +438,14 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 	}
 	volume := volumes[0]
 
-	resizeBytes, err := obtainSize(req.CapacityRange)
+	resizeBytes, err := getStorageRange(req.CapacityRange)
 	if err != nil {
 		return nil, status.Errorf(codes.OutOfRange, "ControllerExpandVolume invalid capacity range: %v", err)
 	}
 	resizeGigaBytes := resizeBytes / giB
 
 	log := d.log.WithFields(logrus.Fields{
-		"volume_id": volumeId,
+		"volume_id": volumeID,
 		"method":    "controller_expand_volume",
 	})
 
@@ -458,126 +463,45 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 		return nil, fmt.Errorf("volume is not attached to any server")
 	}
 
-	nodeId := volume.ServerUUIDs[0]
-	err = d.upclouddriver.detachStorage(ctx, volumeId, nodeId)
+	nodeID := volume.ServerUUIDs[0]
+	err = d.upclouddriver.detachStorage(ctx, volumeID, nodeID)
 	if err != nil {
 		return nil, err
 	}
 
 	d.log.WithFields(logrus.Fields{
-		"volume_id": volumeId,
-		"node_id":   nodeId,
+		"volume_id": volumeID,
+		"node_id":   nodeID,
 	}).Info("volume detached")
 
 	_, err = d.upclouddriver.resizeStorage(ctx, volume.UUID, int(resizeGigaBytes))
 	if err != nil {
-		d.log.Errorf("cannot resizeStorage volume %s: %s", volumeId, err.Error())
+		d.log.Errorf("cannot resizeStorage volume %s: %s", volumeID, err.Error())
 	}
 
-	err = d.upclouddriver.attachStorage(ctx, volumeId, nodeId)
+	err = d.upclouddriver.attachStorage(ctx, volumeID, nodeID)
 	if err != nil {
 		return nil, err
 	}
 
 	d.log.WithFields(logrus.Fields{
-		"volume_id": volumeId,
-		"node_id":   nodeId,
+		"volume_id": volumeID,
+		"node_id":   nodeID,
 	}).Info("volume attached")
 
 	log = log.WithField("new_volume_size", resizeGigaBytes)
-
-	//if resizedStorage != nil {
-	//	log.Info("waiting until volumes is resized")
-	//	if err := d.waitAction(ctx, log, volumeId, resizedStorage.ID); err != nil {
-	//		return nil, status.Errorf(codes.Internal, "failed waiting for volumes to get resized: %s", err)
-	//	}
-	//}
-
 	log.Info("volume was resized")
 
 	nodeExpansionRequired := true
 	if req.VolumeCapability != nil {
 		if _, ok := req.VolumeCapability.AccessType.(*csi.VolumeCapability_Block); ok {
-			log.Info("nodeId expansion is not required for block volumes")
+			log.Info("nodeID expansion is not required for block volumes")
 			nodeExpansionRequired = false
 		}
 	}
 
-	return &csi.ControllerExpandVolumeResponse{CapacityBytes: resizeGigaBytes * giB, NodeExpansionRequired: nodeExpansionRequired}, nil
-}
-
-func obtainSize(capRange *csi.CapacityRange) (int64, error) {
-	if capRange == nil {
-		return defaultVolumeSize, nil
-	}
-
-	requiredBytes := capRange.GetRequiredBytes()
-	requiredSet := 0 < requiredBytes
-	limitBytes := capRange.GetLimitBytes()
-	limitSet := 0 < limitBytes
-
-	if !requiredSet && !limitSet {
-		return defaultVolumeSize, nil
-	}
-
-	if requiredSet && limitSet && limitBytes < requiredBytes {
-		return 0, fmt.Errorf("limit (%v) can not be less than required (%v) size", formatBytes(limitBytes), formatBytes(requiredBytes))
-	}
-
-	if requiredSet && !limitSet && requiredBytes < minimumVolumeSizeInBytes {
-		return 0, fmt.Errorf("required (%v) can not be less than minimum supported volume size (%v)", formatBytes(requiredBytes), formatBytes(minimumVolumeSizeInBytes))
-	}
-
-	if limitSet && limitBytes < minimumVolumeSizeInBytes {
-		return 0, fmt.Errorf("limit (%v) can not be less than minimum supported volume size (%v)", formatBytes(limitBytes), formatBytes(minimumVolumeSizeInBytes))
-	}
-
-	if requiredSet && requiredBytes > maximumVolumeSizeInBytes {
-		return 0, fmt.Errorf("required (%v) can not exceed maximum supported volume size (%v)", formatBytes(requiredBytes), formatBytes(maximumVolumeSizeInBytes))
-	}
-
-	if !requiredSet && limitSet && limitBytes > maximumVolumeSizeInBytes {
-		return 0, fmt.Errorf("limit (%v) can not exceed maximum supported volume size (%v)", formatBytes(limitBytes), formatBytes(maximumVolumeSizeInBytes))
-	}
-
-	if requiredSet && limitSet && requiredBytes == limitBytes {
-		return requiredBytes, nil
-	}
-
-	if requiredSet {
-		return requiredBytes, nil
-	}
-
-	if limitSet {
-		return limitBytes, nil
-	}
-
-	return defaultVolumeSize, nil
-}
-
-func formatBytes(inputBytes int64) string {
-	output := float64(inputBytes)
-	unit := ""
-
-	switch {
-	case inputBytes >= tiB:
-		output = output / tiB
-		unit = "Tb"
-	case inputBytes >= giB:
-		output = output / giB
-		unit = "Gb"
-	case inputBytes >= miB:
-		output = output / miB
-		unit = "Mb"
-	case inputBytes >= kiB:
-		output = output / kiB
-		unit = "Kb"
-	case inputBytes == 0:
-		return "0"
-	}
-
-	result := strconv.FormatFloat(output, 'f', 1, 64)
-	result = strings.TrimSuffix(result, ".0")
-
-	return result + unit
+	return &csi.ControllerExpandVolumeResponse{
+		CapacityBytes:         resizeGigaBytes * giB,
+		NodeExpansionRequired: nodeExpansionRequired,
+	}, nil
 }

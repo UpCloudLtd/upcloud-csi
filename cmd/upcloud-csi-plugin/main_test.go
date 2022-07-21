@@ -1,21 +1,23 @@
-package main
+package main_test
 
 import (
-	"fmt"
 	"os"
 	"testing"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/UpCloudLtd/upcloud-csi/driver"
 	"github.com/spf13/pflag"
 )
 
 func TestRun(t *testing.T) {
+	t.Parallel()
 	flagSet := pflag.NewFlagSet("default", pflag.ContinueOnError)
 
 	version := flagSet.Bool("version", false, "Print the version and exit.")
 
 	if *version {
-		fmt.Printf("%s - %s (%s)\n", driver.GetVersion(), driver.GetCommit(), driver.GetTreeState())
+		log.Printf("%s - %s (%s)\n", driver.GetVersion(), driver.GetCommit(), driver.GetTreeState())
 		os.Exit(0)
 	}
 

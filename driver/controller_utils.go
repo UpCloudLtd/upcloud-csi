@@ -32,19 +32,23 @@ const (
 	defaultVolumeSize = 10 * giB
 )
 
-// TODO lots of rewording
-// DO currently only support a single node to be attached to a single node
+// SupportedAccessMode TODO lots of rewording
+// currently only support a single node to be attached to a single node
 // in read/write mode. This corresponds to `accessModes.ReadWriteOnce` in a
 // PVC resource on Kubernetes.
-var supportedAccessMode = &csi.VolumeCapability_AccessMode{
-	Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
-}
 
 type storageRange struct {
 	requiredBytes int64
 	requiredSet   bool
 	limitBytes    int64
 	limitSet      bool
+}
+
+// GetDefaultAccessMode returns volume capability with.
+func GetDefaultAccessMode() *csi.VolumeCapability_AccessMode {
+	return &csi.VolumeCapability_AccessMode{
+		Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+	}
 }
 
 // TODO reword/rework
@@ -110,17 +114,17 @@ func displayByteString(bytes int64) string {
 
 	switch {
 	case bytes >= tiB:
-		output = output / tiB
-		unit = "Ti"
+		output /= tiB
+		unit = "Tb"
 	case bytes >= giB:
-		output = output / giB
-		unit = "Gi"
+		output /= giB
+		unit = "Gb"
 	case bytes >= miB:
-		output = output / miB
-		unit = "Mi"
+		output /= miB
+		unit = "Mb"
 	case bytes >= kiB:
-		output = output / kiB
-		unit = "Ki"
+		output /= kiB
+		unit = "Kb"
 	case bytes == 0:
 		return "0"
 	}
@@ -136,7 +140,7 @@ func displayByteString(bytes int64) string {
 func validateCapabilities(capacities []*csi.VolumeCapability) []string {
 	violations := sets.NewString()
 	for _, capacity := range capacities {
-		if capacity.GetAccessMode().GetMode() != supportedAccessMode.GetMode() {
+		if capacity.GetAccessMode().GetMode() != GetDefaultAccessMode().GetMode() {
 			violations.Insert(fmt.Sprintf("unsupported access mode %s", capacity.GetAccessMode().GetMode().String()))
 		}
 

@@ -10,8 +10,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-var storageClassName = "upcloud-block-storage"
-
 type Client struct {
 	k8s kubernetes.Interface
 	ns  string
