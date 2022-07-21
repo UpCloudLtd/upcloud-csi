@@ -2,19 +2,25 @@ package mock
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
+	"math/big"
+	"time"
+
 	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"math/rand"
-	"time"
 )
 
 func (c *Client) CreateDeployment(ctx context.Context, pvc *v1.PersistentVolumeClaim, command string) (*appv1.Deployment, error) {
 	replicaCount := int32(1)
 	generateName := "csi-volume-tester-"
-	selectorValue := fmt.Sprintf("%s%d", generateName, rand.Int())
+	randInt, err := rand.Int(rand.Reader, big.NewInt(999))
+	if err != nil {
+		return &appv1.Deployment{}, err
+	}
+	selectorValue := fmt.Sprintf("%s%d", generateName, randInt)
 
 	deployment := &appv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -65,7 +71,6 @@ func (c *Client) CreateDeployment(ctx context.Context, pvc *v1.PersistentVolumeC
 }
 
 func (c *Client) ReplaceDeploymentPod(ctx context.Context) error {
-
 	p, err := c.k8s.CoreV1().Pods(c.ns).List(ctx, metav1.ListOptions{})
 	if err != nil || len(p.Items) != 1 {
 		return err
@@ -100,11 +105,11 @@ func (c *Client) DeleteDeployment(ctx context.Context, deploymentName string) er
 	return c.k8s.AppsV1().Deployments(c.ns).Delete(ctx, deploymentName, metav1.DeleteOptions{})
 }
 
-func (c *Client) WaitForDeployment(ctx context.Context, deploymentName string, namespace string) error {
+func (c *Client) WaitForDeployment(ctx context.Context, deploymentName, namespace string) error {
 	return wait.PollImmediate(time.Second, time.Minute, c.isDeploymentRunning(ctx, deploymentName, namespace))
 }
 
-func (c *Client) isDeploymentRunning(ctx context.Context, deploymentName string, namespace string) wait.ConditionFunc {
+func (c *Client) isDeploymentRunning(ctx context.Context, deploymentName, namespace string) wait.ConditionFunc {
 	return func() (bool, error) {
 		deployment, err := c.k8s.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
 		if err != nil {

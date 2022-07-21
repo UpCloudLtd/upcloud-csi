@@ -2,13 +2,14 @@ package driver
 
 import (
 	"context"
+
 	"github.com/sirupsen/logrus"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/protobuf/ptypes/wrappers"
 )
 
-// GetPluginInfo returns metadata of the plugin
+// GetPluginInfo returns metadata of the plugin.
 func (d *Driver) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
 	resp := &csi.GetPluginInfoResponse{
 		Name: d.options.driverName,
@@ -22,7 +23,7 @@ func (d *Driver) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoReques
 	return resp, nil
 }
 
-// GetPluginCapabilities returns available capabilities of the plugin
+// GetPluginCapabilities returns available capabilities of the plugin.
 func (d *Driver) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCapabilitiesRequest) (*csi.GetPluginCapabilitiesResponse, error) {
 	resp := &csi.GetPluginCapabilitiesResponse{
 		Capabilities: []*csi.PluginCapability{
@@ -58,7 +59,7 @@ func (d *Driver) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCa
 	return resp, nil
 }
 
-// Probe returns the health and readiness of the plugin
+// Probe returns the health and readiness of the plugin.
 func (d *Driver) Probe(ctx context.Context, req *csi.ProbeRequest) (*csi.ProbeResponse, error) {
 	d.log.WithField("method", "probe").Info("check whether the plugin is ready")
 	d.readyMu.Lock()

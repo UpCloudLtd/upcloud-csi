@@ -1,13 +1,17 @@
-package e2e
+//go:build e2e
+// +build e2e
+
+package e2e_test
 
 import (
 	"fmt"
-	"github.com/UpCloudLtd/upcloud-csi/test/e2e/mock"
 	"log"
 	"os"
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/UpCloudLtd/upcloud-csi/test/e2e/mock"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

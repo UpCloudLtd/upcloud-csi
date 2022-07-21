@@ -2,15 +2,12 @@ package mock
 
 import (
 	"context"
+	"time"
+
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
-	"time"
-)
-
-var (
-	storageClassName = "upcloud-block-storage"
 )
 
 type Client struct {
@@ -18,7 +15,7 @@ type Client struct {
 	ns  string
 }
 
-func (c *Client) CreatePod(ctx context.Context, podName string, pvcName string) (*v1.Pod, error) {
+func (c *Client) CreatePod(ctx context.Context, podName, pvcName string) (*v1.Pod, error) {
 	req := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: podName,
@@ -57,11 +54,11 @@ func (c *Client) CreatePod(ctx context.Context, podName string, pvcName string) 
 	return pod, err
 }
 
-func (c *Client) DeletePod(ctx context.Context, podName string, namespace string) error {
+func (c *Client) DeletePod(ctx context.Context, podName, namespace string) error {
 	return c.k8s.CoreV1().Pods(namespace).Delete(ctx, podName, metav1.DeleteOptions{})
 }
 
-func (c *Client) isPodRunning(ctx context.Context, podName string, namespace string) wait.ConditionFunc {
+func (c *Client) isPodRunning(ctx context.Context, podName, namespace string) wait.ConditionFunc {
 	return func() (bool, error) {
 		pod, err := c.k8s.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
 		if err != nil {
@@ -72,6 +69,6 @@ func (c *Client) isPodRunning(ctx context.Context, podName string, namespace str
 	}
 }
 
-func (c *Client) WaitForPod(ctx context.Context, podName string, namespace string) error {
+func (c *Client) WaitForPod(ctx context.Context, podName, namespace string) error {
 	return wait.PollImmediate(time.Second, time.Minute, c.isPodRunning(ctx, podName, namespace))
 }
