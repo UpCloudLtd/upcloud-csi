@@ -2,7 +2,6 @@ package driver
 
 import (
 	"context"
-
 	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud"
 	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/request"
 	"github.com/google/uuid"
@@ -10,7 +9,6 @@ import (
 )
 
 type MockDriver struct {
-	Driver
 	options *driverOptions
 	//
 	//srv     *grpc.Server
@@ -28,14 +26,14 @@ type mockUpCloudDriver struct {
 	volumeExists bool
 }
 
-func NewMockDriver() *MockDriver {
+func NewMockDriver() *Driver {
 	upcloudDriver := mockUpCloudDriver{}
 
 	socket := "/tmp/csi.sock"
 	endpoint := "unix://" + socket
 
 	log := logrus.New().WithField("test_enabled", true)
-	return &MockDriver{
+	return &Driver{
 		options: &driverOptions{
 			zone:       "demoRegion",
 			endpoint:   endpoint,
