@@ -1,1 +1,3 @@
 cmd/upcloud-csi-plugin/upcloud-csi-plugin
+/go.work
+/go.work.sum
