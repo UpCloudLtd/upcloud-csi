@@ -17,7 +17,7 @@ const (
 )
 
 type upcloudClient struct {
-	svc *service.Service
+	svc *service.ServiceContext
 }
 
 type upcloudService interface {
@@ -37,14 +37,14 @@ type upcloudService interface {
 
 func (u *upcloudClient) getStorageByUUID(ctx context.Context, storageUUID string) ([]*upcloud.StorageDetails, error) {
 	gsr := &request.GetStoragesRequest{}
-	storages, err := u.svc.GetStorages(gsr)
+	storages, err := u.svc.GetStorages(ctx, gsr)
 	if err != nil {
 		return nil, err
 	}
 	volumes := make([]*upcloud.StorageDetails, 0)
 	for _, s := range storages.Storages {
 		if s.UUID == storageUUID {
-			sd, _ := u.svc.GetStorageDetails(&request.GetStorageDetailsRequest{UUID: s.UUID})
+			sd, _ := u.svc.GetStorageDetails(ctx, &request.GetStorageDetailsRequest{UUID: s.UUID})
 			volumes = append(volumes, sd)
 		}
 	}
@@ -53,14 +53,14 @@ func (u *upcloudClient) getStorageByUUID(ctx context.Context, storageUUID string
 
 func (u *upcloudClient) getStorageByName(ctx context.Context, storageName string) ([]*upcloud.StorageDetails, error) {
 	gsr := &request.GetStoragesRequest{}
-	storages, err := u.svc.GetStorages(gsr)
+	storages, err := u.svc.GetStorages(ctx, gsr)
 	if err != nil {
 		return nil, err
 	}
 	volumes := make([]*upcloud.StorageDetails, 0)
 	for _, s := range storages.Storages {
 		if s.Title == storageName {
-			sd, _ := u.svc.GetStorageDetails(&request.GetStorageDetailsRequest{UUID: s.UUID})
+			sd, _ := u.svc.GetStorageDetails(ctx, &request.GetStorageDetailsRequest{UUID: s.UUID})
 			volumes = append(volumes, sd)
 		}
 	}
@@ -68,7 +68,7 @@ func (u *upcloudClient) getStorageByName(ctx context.Context, storageName string
 }
 
 func (u *upcloudClient) createStorage(ctx context.Context, csr *request.CreateStorageRequest) (*upcloud.StorageDetails, error) {
-	s, err := u.svc.CreateStorage(csr)
+	s, err := u.svc.CreateStorage(ctx, csr)
 	if err != nil {
 		fmt.Println(err)
 		return nil, err
@@ -85,7 +85,7 @@ func (u *upcloudClient) deleteStorage(ctx context.Context, storageUUID string) e
 
 	for _, v := range volumes {
 		dsr := &request.DeleteStorageRequest{UUID: v.UUID}
-		err = u.svc.DeleteStorage(dsr)
+		err = u.svc.DeleteStorage(ctx, dsr)
 	}
 	if err != nil {
 		return err
@@ -94,7 +94,7 @@ func (u *upcloudClient) deleteStorage(ctx context.Context, storageUUID string) e
 }
 
 func (u *upcloudClient) attachStorage(ctx context.Context, storageUUID, serverUUID string) error {
-	details, err := u.svc.AttachStorage(&request.AttachStorageRequest{ServerUUID: serverUUID, StorageUUID: storageUUID, Address: "virtio"})
+	details, err := u.svc.AttachStorage(ctx, &request.AttachStorageRequest{ServerUUID: serverUUID, StorageUUID: storageUUID, Address: "virtio"})
 	if err != nil {
 		return err
 	}
@@ -108,14 +108,14 @@ func (u *upcloudClient) attachStorage(ctx context.Context, storageUUID, serverUU
 }
 
 func (u *upcloudClient) detachStorage(ctx context.Context, storageUUID, serverUUID string) error {
-	sd, err := u.svc.GetServerDetails(&request.GetServerDetailsRequest{UUID: serverUUID})
+	sd, err := u.svc.GetServerDetails(ctx, &request.GetServerDetailsRequest{UUID: serverUUID})
 	if err != nil {
 		return err
 	}
 
 	for _, device := range sd.StorageDevices {
 		if device.UUID == storageUUID {
-			details, err := u.svc.DetachStorage(&request.DetachStorageRequest{ServerUUID: serverUUID, Address: device.Address})
+			details, err := u.svc.DetachStorage(ctx, &request.DetachStorageRequest{ServerUUID: serverUUID, Address: device.Address})
 			if err != nil {
 				return err
 			}
@@ -131,7 +131,7 @@ func (u *upcloudClient) detachStorage(ctx context.Context, storageUUID, serverUU
 }
 
 func (u *upcloudClient) listStorage(ctx context.Context, zone string) ([]*upcloud.Storage, error) {
-	storages, err := u.svc.GetStorages(&request.GetStoragesRequest{Type: "normal", Access: "private"})
+	storages, err := u.svc.GetStorages(ctx, &request.GetStoragesRequest{Type: "normal", Access: "private"})
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +148,7 @@ func (u *upcloudClient) getServer(ctx context.Context, uuid string) (*upcloud.Se
 	r := request.GetServerDetailsRequest{
 		UUID: uuid,
 	}
-	server, err := u.svc.GetServerDetails(&r)
+	server, err := u.svc.GetServerDetails(ctx, &r)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +156,7 @@ func (u *upcloudClient) getServer(ctx context.Context, uuid string) (*upcloud.Se
 }
 
 func (u *upcloudClient) getServerByHostname(ctx context.Context, hostname string) (*upcloud.Server, error) {
-	servers, err := u.svc.GetServers()
+	servers, err := u.svc.GetServers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch servers: %s", err)
 	}
@@ -171,7 +171,7 @@ func (u *upcloudClient) getServerByHostname(ctx context.Context, hostname string
 }
 
 func (u *upcloudClient) resizeStorage(ctx context.Context, uuid string, newSize int) (*upcloud.StorageDetails, error) {
-	storage, err := u.svc.ModifyStorage(&request.ModifyStorageRequest{
+	storage, err := u.svc.ModifyStorage(ctx, &request.ModifyStorageRequest{
 		UUID: uuid,
 		Size: newSize,
 	})
@@ -179,7 +179,7 @@ func (u *upcloudClient) resizeStorage(ctx context.Context, uuid string, newSize 
 		return nil, err
 	}
 
-	backup, err := u.svc.ResizeStorageFilesystem(&request.ResizeStorageFilesystemRequest{UUID: uuid})
+	backup, err := u.svc.ResizeStorageFilesystem(ctx, &request.ResizeStorageFilesystemRequest{UUID: uuid})
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +190,7 @@ func (u *upcloudClient) resizeStorage(ctx context.Context, uuid string, newSize 
 }
 
 func (u *upcloudClient) stopServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error) {
-	server, err := u.svc.StopServer(&request.StopServerRequest{
+	server, err := u.svc.StopServer(ctx, &request.StopServerRequest{
 		UUID:    uuid,
 		Timeout: stopServerTimeout,
 	})
@@ -201,7 +201,7 @@ func (u *upcloudClient) stopServer(ctx context.Context, uuid string) (*upcloud.S
 }
 
 func (u *upcloudClient) startServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error) {
-	server, err := u.svc.StartServer(&request.StartServerRequest{
+	server, err := u.svc.StartServer(ctx, &request.StartServerRequest{
 		UUID:    uuid,
 		Timeout: startServerTimeout,
 	})
