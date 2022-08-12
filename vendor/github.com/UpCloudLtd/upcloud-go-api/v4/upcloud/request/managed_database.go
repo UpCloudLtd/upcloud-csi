@@ -59,7 +59,7 @@ func (c CloneManagedDatabaseRequest) MarshalJSON() ([]byte, error) {
 	if !req.alias.CloneTime.IsZero() {
 		req.CloneTime = &req.alias.CloneTime
 	}
-	if c.Maintenance.Time != "" && c.Maintenance.DayOfWeek != "" {
+	if c.Maintenance.Time != "" || c.Maintenance.DayOfWeek != "" {
 		req.Maintenance = &c.Maintenance
 	}
 	return json.Marshal(&req)
@@ -88,7 +88,7 @@ func (c CreateManagedDatabaseRequest) MarshalJSON() ([]byte, error) {
 		alias
 		Maintenance *ManagedDatabaseMaintenanceTimeRequest `json:"maintenance,omitempty"`
 	}{alias: alias(c)}
-	if c.Maintenance.Time != "" && c.Maintenance.DayOfWeek != "" {
+	if c.Maintenance.Time != "" || c.Maintenance.DayOfWeek != "" {
 		req.Maintenance = &c.Maintenance
 	}
 	return json.Marshal(&req)
@@ -222,6 +222,24 @@ func (g *GetManagedDatabaseQueryStatisticsRequest) RequestURL() string {
 		qv.Set("offset", strconv.Itoa(g.Offset))
 	}
 	return fmt.Sprintf("/database/%s/query-statistics?%s", g.UUID, qv.Encode())
+}
+
+// GetManagedDatabaseServiceTypeRequest represents a request to get details of a database type
+type GetManagedDatabaseServiceTypeRequest struct {
+	Type string
+}
+
+// RequestURL implements the request.Request interface
+func (g *GetManagedDatabaseServiceTypeRequest) RequestURL() string {
+	return fmt.Sprintf("/database/service-types/%s", g.Type)
+}
+
+// GetManagedDatabaseServiceTypesRequest represents a request to get a map of available database types
+type GetManagedDatabaseServiceTypesRequest struct{}
+
+// RequestURL implements the request.Request interface
+func (g *GetManagedDatabaseServiceTypesRequest) RequestURL() string {
+	return "/database/service-types"
 }
 
 // ManagedDatabaseMaintenanceTimeRequest represents the set time of week when automatic maintenance operations are allowed
@@ -388,8 +406,7 @@ func (m ModifyManagedDatabaseRequest) MarshalJSON() ([]byte, error) {
 		alias
 		Maintenance *ManagedDatabaseMaintenanceTimeRequest `json:"maintenance,omitempty"`
 	}{alias: alias(m)}
-
-	if m.Maintenance.Time != "" && m.Maintenance.DayOfWeek != "" {
+	if m.Maintenance.Time != "" || m.Maintenance.DayOfWeek != "" {
 		req.Maintenance = &m.Maintenance
 	}
 	return json.Marshal(&req)

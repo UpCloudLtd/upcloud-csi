@@ -3,8 +3,6 @@ package driver
 import (
 	"context"
 	"fmt"
-	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/sirupsen/logrus"
 	"net"
 	"net/http"
 	"net/url"
@@ -13,6 +11,9 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/sirupsen/logrus"
 
 	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud"
 	upcloudclient "github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/client"
@@ -37,6 +38,10 @@ const (
 	StorageSizeThreshold = 10
 	// ClientTimeout helps to tune for timeout on requests to UpCloud API. Measurement: seconds
 	ClientTimeout = 30
+	// InitTimeout specifies a time limit for driver initialization in seconds
+	initTimeout = 30
+	// CheckStorageQuotaTimeout specifies a time limit for checking storage quota in seconds
+	checkStorageQuotaTimeout = 10
 )
 
 // Driver implements the following CSI interfaces:
@@ -57,7 +62,7 @@ type Driver struct {
 	mounter Mounter
 	log     *logrus.Entry
 
-	upcloudclient *upcloudservice.Service
+	upcloudclient *upcloudservice.ServiceContext
 	upclouddriver upcloudService
 
 	healthChecker *HealthChecker
@@ -91,6 +96,9 @@ type driverOptions struct {
 // interfaces to interact with Kubernetes over unix domain sockets for
 // managing Upcloud Block Storage
 func NewDriver(options ...func(*driverOptions)) (*Driver, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*initTimeout)
+	defer cancel()
+
 	driverOpts := &driverOptions{}
 
 	for _, option := range options {
@@ -102,21 +110,21 @@ func NewDriver(options ...func(*driverOptions)) (*Driver, error) {
 	}
 
 	// Authenticate by passing your account login credentials to the client
-	c := upcloudclient.New(driverOpts.username, driverOpts.password)
+	c := upcloudclient.NewWithContext(driverOpts.username, driverOpts.password)
 
 	// It is generally a good idea to override the default timeout of the underlying HTTP client since some requests block for longer periods of time
 	c.SetTimeout(time.Second * ClientTimeout)
 
 	// Create the service object
-	svc := upcloudservice.New(c)
-	acc, err := svc.GetAccount()
+	svc := upcloudservice.NewWithContext(c)
+	acc, err := svc.GetAccount(ctx)
 	if err != nil {
 		fmt.Printf("Failed to login in API: %s\n", err)
 		os.Exit(1)
 	}
 	fmt.Printf("%+v", acc)
 
-	serverDetails, err := determineServer(svc, driverOpts.nodeHost)
+	serverDetails, err := determineServer(ctx, svc, driverOpts.nodeHost)
 	if err != nil {
 		fmt.Printf("Unable to list servers: %s\n", err)
 		os.Exit(1)
@@ -142,15 +150,15 @@ func NewDriver(options ...func(*driverOptions)) (*Driver, error) {
 	}, nil
 }
 
-func determineServer(svc *upcloudservice.Service, nodeHost string) (*upcloud.ServerDetails, error) {
-	servers, err := svc.GetServers()
+func determineServer(ctx context.Context, svc *upcloudservice.ServiceContext, nodeHost string) (*upcloud.ServerDetails, error) {
+	servers, err := svc.GetServers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't fetch servers list")
 	}
 	for _, s := range servers.Servers {
 		if nodeHost == s.Hostname {
 			r := request.GetServerDetailsRequest{UUID: s.UUID}
-			serverdetails, err := svc.GetServerDetails(&r)
+			serverdetails, err := svc.GetServerDetails(ctx, &r)
 			if err != nil {
 				return nil, err
 			}
@@ -248,13 +256,15 @@ func (d *Driver) Run() error {
 }
 
 func (d *Driver) checkStorageQuota() (map[string]int, error) {
-	account, err := d.upcloudclient.GetAccount()
+	ctx, cancel := context.WithTimeout(context.Background(), checkStorageQuotaTimeout)
+	defer cancel()
+	account, err := d.upcloudclient.GetAccount(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve account details: %s", err)
 	}
 	ssdLimit := account.ResourceLimits.StorageSSD
 
-	storages, err := d.upcloudclient.GetStorages(&request.GetStoragesRequest{})
+	storages, err := d.upcloudclient.GetStorages(ctx, &request.GetStoragesRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve server's storage details: %s", err)
 	}
