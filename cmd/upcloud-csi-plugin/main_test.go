@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/UpCloudLtd/upcloud-csi/driver"
-	"github.com/spf13/pflag"
 	"log"
 	"os"
 	"testing"
+
+	"github.com/UpCloudLtd/upcloud-csi/driver"
+	"github.com/spf13/pflag"
 )
 
 func TestRun(t *testing.T) {
@@ -21,7 +22,7 @@ func TestRun(t *testing.T) {
 		os.Exit(0)
 	}
 
-	d := driver.NewMockDriver()
+	d := driver.NewMockDriver(nil)
 
 	if err := d.Run(); err != nil {
 		log.Fatalln(err)

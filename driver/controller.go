@@ -3,14 +3,15 @@ package driver
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud"
 	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/request"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"strconv"
-	"strings"
 )
 
 var supportedCapabilities = []csi.ControllerServiceCapability_RPC_Type{
@@ -20,6 +21,7 @@ var supportedCapabilities = []csi.ControllerServiceCapability_RPC_Type{
 	csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
 	csi.ControllerServiceCapability_RPC_LIST_SNAPSHOTS,
 	csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
+	csi.ControllerServiceCapability_RPC_CLONE_VOLUME,
 }
 
 // CreateVolume provisions storage via UpCloud Storage service
@@ -79,7 +81,7 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 		vol := volumes[0].Storage
 
 		if vol.Size*giB != int(storageSize) {
-			return nil, status.Errorf(codes.AlreadyExists, fmt.Sprintf("invalid storage size requested: %d", storageSize))
+			return nil, status.Errorf(codes.AlreadyExists, "invalid storage size requested: %d", storageSize)
 		}
 
 		log.Info("volume already exists")
@@ -93,18 +95,57 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 
 	tierMapper := map[string]string{"maxiops": upcloud.StorageTierMaxIOPS, "hdd": upcloud.StorageTierHDD}
 	tier := tierMapper[req.Parameters["tier"]]
-	volumeReq := &request.CreateStorageRequest{
-		Zone:  d.options.zone,
-		Title: volumeName,
-		Size:  int(storageSize / giB),
-		Tier:  tier,
-	}
+	var vol *upcloud.StorageDetails
+	storageSizeGB := int(storageSize / giB)
 
-	log.WithField("volume_req", volumeReq).Info("creating volume")
-	log.Debugf("volume request: %#v", *volumeReq)
-	vol, err := d.upclouddriver.createStorage(ctx, volumeReq)
-	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+	if volContentSrc := req.GetVolumeContentSource(); volContentSrc != nil {
+		switch volContentSrc.Type.(type) {
+		case *csi.VolumeContentSource_Snapshot:
+			return nil, status.Error(codes.Unimplemented, "volume snapshot content source is not supported")
+		case *csi.VolumeContentSource_Volume:
+			srcVol := volContentSrc.GetVolume()
+			if srcVol == nil {
+				return nil, status.Error(codes.Internal, "content source volume is not defined")
+			}
+			src, err := d.upclouddriver.getStorageByUUID(ctx, srcVol.GetVolumeId())
+			if err != nil {
+				return nil, fmt.Errorf("could not retrieve source volume by ID: %v", err)
+			}
+
+			volumeReq := &request.CloneStorageRequest{
+				UUID:  src.Storage.UUID,
+				Zone:  d.options.zone,
+				Tier:  tier,
+				Title: volumeName,
+			}
+			log.WithField("volume_req", volumeReq).Infof("creating volume by cloning storage ID %s", src.Storage.UUID)
+			vol, err = d.upclouddriver.cloneStorage(ctx, volumeReq)
+			if err != nil {
+				return nil, status.Error(codes.Internal, err.Error())
+			}
+			if storageSizeGB > vol.Storage.Size {
+				log.WithField("volume_req", volumeReq).Infof("resizing created volume %s from %dGB to %dGB", vol.Storage.UUID, vol.Storage.Size, storageSizeGB)
+				// resize cloned storage and delete backup taken during resize operation as this is newly created storage
+				if vol, err = d.upclouddriver.resizeStorage(ctx, vol.Storage.UUID, storageSizeGB, true); err != nil {
+					return nil, status.Error(codes.Internal, err.Error())
+				}
+			}
+		default:
+			return nil, status.Errorf(codes.InvalidArgument, "%v not a proper volume source", volContentSrc)
+		}
+	} else {
+		volumeReq := &request.CreateStorageRequest{
+			Zone:  d.options.zone,
+			Title: volumeName,
+			Size:  storageSizeGB,
+			Tier:  tier,
+		}
+
+		log.WithField("volume_req", volumeReq).Info("creating volume")
+		log.Debugf("volume request: %#v", *volumeReq)
+		if vol, err = d.upclouddriver.createStorage(ctx, volumeReq); err != nil {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
 	}
 
 	volResp := &csi.CreateVolumeResponse{
@@ -174,18 +215,12 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 	log.Info("controller publish volume called")
 
 	// check if volume exist before trying to attach it
-	volumes, err := d.upclouddriver.getStorageByUUID(ctx, req.VolumeId)
+	volume, err := d.upclouddriver.getStorageByUUID(ctx, req.VolumeId)
 	if err != nil {
-		d.log.Errorf("get storage by uuid error: %s, %#v", err, volumes)
+		d.log.Errorf("get storage by uuid error: %s", err)
 		return nil, err
 	}
 
-	if len(volumes) == 0 {
-		return nil, fmt.Errorf("volume doesn't exist")
-	} else if len(volumes) > 1 {
-		return nil, fmt.Errorf("too many volumes")
-	}
-	volume := volumes[0]
 	if volume.State == "maintenance" {
 		// TODO
 	}
@@ -419,17 +454,10 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 		return nil, status.Error(codes.InvalidArgument, "ControllerExpandVolume volume ID missing in request")
 	}
 
-	volumes, err := d.upclouddriver.getStorageByUUID(ctx, volumeId)
+	volume, err := d.upclouddriver.getStorageByUUID(ctx, volumeId)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "ControllerExpandVolume could not retrieve existing volumes: %v", err)
 	}
-
-	if len(volumes) == 0 {
-		return nil, fmt.Errorf("volume doesn't exist")
-	} else if len(volumes) > 1 {
-		return nil, fmt.Errorf("too many volumes")
-	}
-	volume := volumes[0]
 
 	resizeBytes, err := obtainSize(req.CapacityRange)
 	if err != nil {
@@ -442,7 +470,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 		"method":    "controller_expand_volume",
 	})
 
-	log.Infof("controller expand volume called: volume - %v", volumes)
+	log.Infof("controller expand volume called: volume - %v", volume)
 
 	if resizeGigaBytes <= int64(volume.Size) {
 		log.WithFields(logrus.Fields{
@@ -467,7 +495,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 		"node_id":   nodeId,
 	}).Info("volume detached")
 
-	_, err = d.upclouddriver.resizeStorage(ctx, volume.UUID, int(resizeGigaBytes))
+	_, err = d.upclouddriver.resizeStorage(ctx, volume.UUID, int(resizeGigaBytes), false)
 	if err != nil {
 		d.log.Errorf("cannot resizeStorage volume %s: %s", volumeId, err.Error())
 	}
