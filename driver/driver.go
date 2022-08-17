@@ -256,7 +256,7 @@ func (d *Driver) Run() error {
 }
 
 func (d *Driver) checkStorageQuota() (map[string]int, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), checkStorageQuotaTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*checkStorageQuotaTimeout)
 	defer cancel()
 	account, err := d.upcloudclient.GetAccount(ctx)
 	if err != nil {

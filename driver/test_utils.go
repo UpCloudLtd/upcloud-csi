@@ -3,14 +3,15 @@ package driver
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
 	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud"
 	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/request"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"os"
-	"path/filepath"
-	"strings"
 )
 
 var (
@@ -47,11 +48,16 @@ type MockDriver struct {
 }
 
 type mockUpCloudDriver struct {
-	volumeExists bool
+	volumeNameExists bool
+	volumeUUIDExists bool
+	cloneStorageSize int
+	storageSize      int
 }
 
-func NewMockDriver() *Driver {
-	upcloudDriver := mockUpCloudDriver{}
+func NewMockDriver(upcloudDriver upcloudService) *Driver {
+	if upcloudDriver == nil {
+		upcloudDriver = &mockUpCloudDriver{storageSize: 10, cloneStorageSize: 10, volumeUUIDExists: true}
+	}
 
 	socket := "/tmp/csi.sock"
 	endpoint := "unix://" + socket
@@ -65,16 +71,16 @@ func NewMockDriver() *Driver {
 			volumeName: "device",
 		},
 		mounter:       newMounter(log),
-		upclouddriver: &upcloudDriver,
+		upclouddriver: upcloudDriver,
 		log:           log,
 	}
 }
 
-func newMockStorage() *upcloud.Storage {
+func newMockStorage(size int) *upcloud.Storage {
 	id, _ := uuid.NewUUID()
 
 	return &upcloud.Storage{
-		Size: 10,
+		Size: size,
 		UUID: id.String(),
 	}
 }
@@ -84,19 +90,25 @@ func (m *mockUpCloudDriver) Run() error {
 	return nil
 }
 
-func (m *mockUpCloudDriver) getStorageByUUID(ctx context.Context, storageUUID string) ([]*upcloud.StorageDetails, error) {
+func (m *mockUpCloudDriver) getStorageByUUID(ctx context.Context, storageUUID string) (*upcloud.StorageDetails, error) {
+	if !m.volumeUUIDExists {
+		return nil, nil
+	}
 
-	return m.getStorageByName(ctx, storageUUID)
+	s := &upcloud.StorageDetails{
+		Storage: *newMockStorage(m.storageSize),
+	}
+	return s, nil
 }
 
 func (m *mockUpCloudDriver) getStorageByName(ctx context.Context, storageName string) ([]*upcloud.StorageDetails, error) {
-	if m.volumeExists {
+	if !m.volumeNameExists {
 		return nil, nil
 	}
 
 	s := []*upcloud.StorageDetails{
 		{
-			Storage: *newMockStorage(),
+			Storage: *newMockStorage(m.storageSize),
 		},
 	}
 	return s, nil
@@ -105,7 +117,17 @@ func (m *mockUpCloudDriver) getStorageByName(ctx context.Context, storageName st
 func (m *mockUpCloudDriver) createStorage(ctx context.Context, csr *request.CreateStorageRequest) (*upcloud.StorageDetails, error) {
 	id, _ := uuid.NewUUID()
 	s := &upcloud.StorageDetails{
-		Storage:     *newMockStorage(),
+		Storage:     *newMockStorage(m.storageSize),
+		ServerUUIDs: upcloud.ServerUUIDSlice{id.String()}, // TODO change UUID prefix
+	}
+
+	return s, nil
+}
+
+func (m *mockUpCloudDriver) cloneStorage(ctx context.Context, csr *request.CloneStorageRequest) (*upcloud.StorageDetails, error) {
+	id, _ := uuid.NewUUID()
+	s := &upcloud.StorageDetails{
+		Storage:     *newMockStorage(m.cloneStorageSize),
 		ServerUUIDs: upcloud.ServerUUIDSlice{id.String()}, // TODO change UUID prefix
 	}
 
@@ -126,8 +148,8 @@ func (m *mockUpCloudDriver) detachStorage(ctx context.Context, storageUUID, serv
 
 func (m *mockUpCloudDriver) listStorage(ctx context.Context, zone string) ([]*upcloud.Storage, error) {
 	return []*upcloud.Storage{
-		newMockStorage(),
-		newMockStorage(),
+		newMockStorage(m.storageSize),
+		newMockStorage(m.storageSize),
 	}, nil
 }
 
@@ -140,9 +162,9 @@ func (m *mockUpCloudDriver) getServerByHostname(ctx context.Context, hostname st
 	return &upcloud.Server{UUID: id.String()}, nil
 }
 
-func (m *mockUpCloudDriver) resizeStorage(ctx context.Context, uuid_ string, newSize int) (*upcloud.StorageDetails, error) {
+func (m *mockUpCloudDriver) resizeStorage(ctx context.Context, uuid_ string, newSize int, deleteBackup bool) (*upcloud.StorageDetails, error) {
 	id, _ := uuid.NewUUID()
-	return &upcloud.StorageDetails{Storage: upcloud.Storage{UUID: id.String()}}, nil
+	return &upcloud.StorageDetails{Storage: upcloud.Storage{UUID: id.String(), Size: newSize}}, nil
 }
 
 func (m *mockUpCloudDriver) startServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error) {
