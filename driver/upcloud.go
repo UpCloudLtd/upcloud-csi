@@ -16,7 +16,7 @@ import (
 const (
 	startServerTimeout  = 25
 	stopServerTimeout   = 15
-	storageStateTimeout = 300
+	storageStateTimeout = 3600 // 1h
 )
 
 var errUpCloudStorageNotFound = errors.New("upcloud: storage not found")
@@ -33,12 +33,16 @@ type upcloudService interface {
 	deleteStorage(context.Context, string) error
 	attachStorage(context.Context, string, string) error
 	detachStorage(context.Context, string, string) error
-	listStorage(context.Context, string) ([]*upcloud.Storage, error)
+	listStorage(context.Context, string) ([]upcloud.Storage, error)
 	getServer(context.Context, string) (*upcloud.ServerDetails, error)
 	getServerByHostname(context.Context, string) (*upcloud.Server, error)
 	resizeStorage(ctx context.Context, uuid string, newSize int, deleteBackup bool) (*upcloud.StorageDetails, error)
 	stopServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error)
 	startServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error)
+	getStorageBackupByName(context.Context, string) (*upcloud.Storage, error)
+	createStorageBackup(ctx context.Context, uuid, title string) (*upcloud.StorageDetails, error)
+	listStorageBackups(ctx context.Context, uuid string) ([]upcloud.Storage, error)
+	deleteStorageBackup(ctx context.Context, uuid string) error
 }
 
 func (u *upcloudClient) getStorageByUUID(ctx context.Context, storageUUID string) (*upcloud.StorageDetails, error) {
@@ -143,15 +147,15 @@ func (u *upcloudClient) detachStorage(ctx context.Context, storageUUID, serverUU
 	return fmt.Errorf("this shouldnt happen. serverUUID %s storageUUID %s context: %+v", serverUUID, storageUUID, sd)
 }
 
-func (u *upcloudClient) listStorage(ctx context.Context, zone string) ([]*upcloud.Storage, error) {
-	storages, err := u.svc.GetStorages(ctx, &request.GetStoragesRequest{Type: "normal", Access: "private"})
+func (u *upcloudClient) listStorage(ctx context.Context, zone string) ([]upcloud.Storage, error) {
+	storages, err := u.svc.GetStorages(ctx, &request.GetStoragesRequest{Access: upcloud.StorageAccessPrivate})
 	if err != nil {
 		return nil, err
 	}
-	zoneStorage := make([]*upcloud.Storage, 0)
+	zoneStorage := make([]upcloud.Storage, 0)
 	for _, s := range storages.Storages {
-		if s.Zone == zone {
-			zoneStorage = append(zoneStorage, &s)
+		if s.Zone == zone && s.Type == upcloud.StorageTypeNormal {
+			zoneStorage = append(zoneStorage, s)
 		}
 	}
 	return zoneStorage, nil
@@ -232,4 +236,57 @@ func (u *upcloudClient) startServer(ctx context.Context, uuid string) (*upcloud.
 		return nil, err
 	}
 	return server, nil
+}
+
+func (u *upcloudClient) createStorageBackup(ctx context.Context, uuid, title string) (*upcloud.StorageDetails, error) {
+	backup, err := u.svc.CreateBackup(ctx, &request.CreateBackupRequest{
+		UUID:  uuid,
+		Title: title,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return u.svc.WaitForStorageState(ctx, &request.WaitForStorageStateRequest{
+		UUID:         backup.UUID,
+		DesiredState: upcloud.StorageStateOnline,
+		Timeout:      storageStateTimeout * time.Second,
+	})
+}
+
+func (u *upcloudClient) listStorageBackups(ctx context.Context, uuid string) ([]upcloud.Storage, error) {
+	storages, err := u.svc.GetStorages(ctx, &request.GetStoragesRequest{Type: upcloud.StorageTypeBackup})
+	if err != nil {
+		return nil, err
+	}
+	backups := make([]upcloud.Storage, 0)
+	for _, b := range storages.Storages {
+		if b.Origin == uuid && b.State == upcloud.StorageStateOnline {
+			backups = append(backups, b)
+		}
+	}
+	return backups, nil
+}
+
+func (u *upcloudClient) deleteStorageBackup(ctx context.Context, uuid string) error {
+	s, err := u.svc.GetStorageDetails(ctx, &request.GetStorageDetailsRequest{UUID: uuid})
+	if err != nil {
+		return err
+	}
+	if s.Type != upcloud.StorageTypeBackup {
+		return fmt.Errorf("unable to delete storage backup '%s' (%s) has invalid type '%s'", s.Title, s.UUID, s.Type)
+	}
+	return u.svc.DeleteStorage(ctx, &request.DeleteStorageRequest{UUID: s.UUID})
+}
+
+func (u *upcloudClient) getStorageBackupByName(ctx context.Context, name string) (*upcloud.Storage, error) {
+	storages, err := u.svc.GetStorages(ctx, &request.GetStoragesRequest{Type: upcloud.StorageTypeBackup})
+	if err != nil {
+		return nil, err
+	}
+	for _, s := range storages.Storages {
+		if s.Title == name {
+			return &s, nil
+		}
+	}
+	return nil, errUpCloudStorageNotFound
 }
