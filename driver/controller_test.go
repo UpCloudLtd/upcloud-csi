@@ -87,6 +87,16 @@ func TestControllerService_ControllerPublishVolume(t *testing.T) {
 }
 
 func TestControllerService_CreateVolume(t *testing.T) {
+	caps := []*csi.VolumeCapability{
+		{
+			AccessType: &csi.VolumeCapability_Mount{
+				Mount: &csi.VolumeCapability_MountVolume{},
+			},
+			AccessMode: &csi.VolumeCapability_AccessMode{
+				Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+			},
+		},
+	}
 	type args struct {
 		ctx context.Context
 		req *csi.CreateVolumeRequest
@@ -104,17 +114,8 @@ func TestControllerService_CreateVolume(t *testing.T) {
 			args: args{
 				context.Background(),
 				&csi.CreateVolumeRequest{
-					Name: "testVolume",
-					VolumeCapabilities: []*csi.VolumeCapability{
-						{
-							AccessType: &csi.VolumeCapability_Mount{
-								Mount: &csi.VolumeCapability_MountVolume{},
-							},
-							AccessMode: &csi.VolumeCapability_AccessMode{
-								Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
-							},
-						},
-					},
+					Name:               "testVolume",
+					VolumeCapabilities: caps,
 					VolumeContentSource: &csi.VolumeContentSource{
 						Type: &csi.VolumeContentSource_Snapshot{
 							Snapshot: &csi.VolumeContentSource_SnapshotSource{
@@ -133,17 +134,8 @@ func TestControllerService_CreateVolume(t *testing.T) {
 			args: args{
 				context.Background(),
 				&csi.CreateVolumeRequest{
-					Name: "testCloneVolume",
-					VolumeCapabilities: []*csi.VolumeCapability{
-						{
-							AccessType: &csi.VolumeCapability_Mount{
-								Mount: &csi.VolumeCapability_MountVolume{},
-							},
-							AccessMode: &csi.VolumeCapability_AccessMode{
-								Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
-							},
-						},
-					},
+					Name:               "testCloneVolume",
+					VolumeCapabilities: caps,
 					VolumeContentSource: &csi.VolumeContentSource{
 						Type: &csi.VolumeContentSource_Volume{
 							Volume: &csi.VolumeContentSource_VolumeSource{
@@ -155,11 +147,34 @@ func TestControllerService_CreateVolume(t *testing.T) {
 			},
 			wantResp: &csi.CreateVolumeResponse{
 				Volume: &csi.Volume{
-					CapacityBytes:      10 * giB,
-					VolumeId:           "testCloneVolume",
-					VolumeContext:      map[string]string{},
-					ContentSource:      &csi.VolumeContentSource{},
-					AccessibleTopology: []*csi.Topology{},
+					CapacityBytes: 10 * giB,
+					VolumeId:      "testCloneVolume",
+				},
+			},
+			volumeNameExists: false,
+			volumeUUIDExists: true,
+			wantErr:          false,
+		},
+		{
+			name: "Test Clone Snapshot Volume Size",
+			args: args{
+				context.Background(),
+				&csi.CreateVolumeRequest{
+					Name:               "testCloneSnapshotVolume",
+					VolumeCapabilities: caps,
+					VolumeContentSource: &csi.VolumeContentSource{
+						Type: &csi.VolumeContentSource_Snapshot{
+							Snapshot: &csi.VolumeContentSource_SnapshotSource{
+								SnapshotId: "snapshotID",
+							},
+						},
+					},
+				},
+			},
+			wantResp: &csi.CreateVolumeResponse{
+				Volume: &csi.Volume{
+					CapacityBytes: 10 * giB,
+					VolumeId:      "testCloneSnapshotVolume",
 				},
 			},
 			volumeNameExists: false,
@@ -185,10 +200,13 @@ func TestControllerService_CreateVolume(t *testing.T) {
 				return
 			}
 			if tt.wantResp != nil {
-				if tt.wantResp.Volume.CapacityBytes > 0 && gotResp.Volume.CapacityBytes != tt.wantResp.Volume.CapacityBytes {
-					t.Errorf("volume capacity mismatch want %d got %d", tt.wantResp.Volume.CapacityBytes, gotResp.Volume.CapacityBytes)
-					return
+				if vol := tt.wantResp.GetVolume(); vol != nil {
+					if vol.CapacityBytes != gotResp.Volume.CapacityBytes {
+						t.Errorf("volume capacity mismatch want %d got %d", vol.CapacityBytes, gotResp.Volume.CapacityBytes)
+						return
+					}
 				}
+
 			}
 		})
 	}

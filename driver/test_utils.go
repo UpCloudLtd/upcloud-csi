@@ -85,6 +85,13 @@ func newMockStorage(size int) *upcloud.Storage {
 	}
 }
 
+func newMockBackupStorage(s *upcloud.Storage) *upcloud.Storage {
+	b := newMockStorage(s.Size)
+	b.Type = upcloud.StorageTypeBackup
+	b.Origin = s.UUID
+	return b
+}
+
 func (m *mockUpCloudDriver) Run() error {
 	fmt.Println("sup")
 	return nil
@@ -146,10 +153,10 @@ func (m *mockUpCloudDriver) detachStorage(ctx context.Context, storageUUID, serv
 	return nil
 }
 
-func (m *mockUpCloudDriver) listStorage(ctx context.Context, zone string) ([]*upcloud.Storage, error) {
-	return []*upcloud.Storage{
-		newMockStorage(m.storageSize),
-		newMockStorage(m.storageSize),
+func (m *mockUpCloudDriver) listStorage(ctx context.Context, zone string) ([]upcloud.Storage, error) {
+	return []upcloud.Storage{
+		*newMockStorage(m.storageSize),
+		*newMockStorage(m.storageSize),
 	}, nil
 }
 
@@ -189,4 +196,30 @@ func (m *mockUpCloudDriver) getDiskSource(volumeID string) string {
 	source := "/dev" + strings.TrimPrefix(link, "../..")
 
 	return source
+}
+
+func (m *mockUpCloudDriver) createStorageBackup(ctx context.Context, uuid, title string) (*upcloud.StorageDetails, error) {
+	s := newMockStorage(m.storageSize)
+	s.UUID = uuid
+	s = newMockBackupStorage(s)
+	s.Title = title
+	return &upcloud.StorageDetails{Storage: *s}, nil
+}
+
+func (m *mockUpCloudDriver) listStorageBackups(ctx context.Context, uuid string) ([]upcloud.Storage, error) {
+	s := newMockStorage(m.storageSize)
+	return []upcloud.Storage{
+		*newMockBackupStorage(s),
+		*newMockBackupStorage(s),
+	}, nil
+}
+
+func (m *mockUpCloudDriver) deleteStorageBackup(ctx context.Context, uuid string) error {
+	return nil
+}
+
+func (m *mockUpCloudDriver) getStorageBackupByName(ctx context.Context, name string) (*upcloud.Storage, error) {
+	s := newMockBackupStorage(newMockStorage(m.storageSize))
+	s.Title = name
+	return s, nil
 }
