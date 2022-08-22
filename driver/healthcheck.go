@@ -45,7 +45,7 @@ func (c *HealthChecker) Check(ctx context.Context) error {
 var upcloudHealthTimeout = 15 * time.Second
 
 type upcloudHealthChecker struct {
-	account func() (*upcloud.Account, error)
+	account func(cxt context.Context) (*upcloud.Account, error)
 }
 
 func (c *upcloudHealthChecker) Name() string {
@@ -55,7 +55,7 @@ func (c *upcloudHealthChecker) Name() string {
 func (c *upcloudHealthChecker) Check(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, upcloudHealthTimeout)
 	defer cancel()
-	_, err := c.account()
+	_, err := c.account(ctx)
 	if err != nil {
 		return fmt.Errorf("checking health: %w", err)
 	}
