@@ -90,6 +90,7 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 			Volume: &csi.Volume{
 				VolumeId:      vol.UUID,
 				CapacityBytes: int64(vol.Size) * giB,
+				ContentSource: req.GetVolumeContentSource(),
 			},
 		}, nil
 	}
@@ -166,6 +167,7 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 					},
 				},
 			},
+			ContentSource: req.GetVolumeContentSource(),
 		},
 	}
 
