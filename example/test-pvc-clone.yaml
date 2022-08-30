@@ -1,0 +1,16 @@
+# Example requires existing PVC named `csi-pvc`.
+# Create source PVC if needed with: kubectl apply -f test-pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: csi-pvc-clone
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: upcloud-block-storage-maxiops
+  dataSource:
+    kind: PersistentVolumeClaim
+    name: csi-pvc

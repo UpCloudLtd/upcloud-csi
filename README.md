@@ -53,11 +53,15 @@ upcloud          Opaque                                2         18h
 
 ### Deploy CSI Driver
 
-The following command will deploy the CSI driver with the related Kubernetes volume attachment, driver registration, and
+The following commands will deploy the CSI driver with the related Kubernetes custom resources, volume attachment, driver registration, and
 provisioning sidecars:
 
 ```sh
-kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/deploy/kubernetes/driver.yaml
+kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/deploy/kubernetes/crd/snapshot.storage.k8s.io_volumesnapshotclasses.yaml
+kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/deploy/kubernetes/crd/snapshot.storage.k8s.io_volumesnapshotcontents.yaml
+kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/deploy/kubernetes/crd/snapshot.storage.k8s.io_volumesnapshots.yaml
+kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/deploy/kubernetes/rbac-upcloud-csi.yaml
+kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/deploy/kubernetes/setup-upcloud-csi.yaml
 ```
 
 ### Choose storage disk type
