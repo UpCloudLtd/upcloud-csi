@@ -191,6 +191,14 @@ spec:
           imagePullPolicy: IfNotPresent
 
 ---
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: upcloud-csi-snapshotclass
+driver: storage.csi.upcloud.com
+deletionPolicy: Delete
+
+---
 #######################
 # Node plugin
 #######################
