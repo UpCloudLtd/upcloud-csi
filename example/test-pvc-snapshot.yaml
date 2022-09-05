@@ -1,0 +1,10 @@
+# Example requires existing PVC named `csi-pvc`.
+# Create source PVC if needed with: kubectl apply -f test-pvc.yaml
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: csi-pvc-snapshot-test
+spec:
+  volumeSnapshotClassName: upcloud-csi-snapshotclass
+  source:
+    persistentVolumeClaimName: csi-pvc

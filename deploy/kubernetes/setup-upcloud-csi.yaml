@@ -1,3 +1,6 @@
+#######################
+# Driver 
+#######################
 apiVersion: storage.k8s.io/v1
 kind: CSIDriver
 metadata:
@@ -8,6 +11,9 @@ spec:
   fsGroupPolicy: File
 
 ---
+#######################
+# Storage classes 
+#######################
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
@@ -36,12 +42,9 @@ allowVolumeExpansion: true
 reclaimPolicy: Retain
 
 ---
-##############################################
-###########                       ############
-###########   Controller plugin   ############
-###########                       ############
-##############################################
-
+#######################
+# Controller plugin
+#######################
 kind: StatefulSet
 apiVersion: apps/v1
 metadata:
@@ -102,6 +105,20 @@ spec:
           volumeMounts:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
+        - name: csi-snapshotter
+          image: k8s.gcr.io/sig-storage/csi-snapshotter:v4.2.1 
+          args:
+            - "--csi-address=$(ADDRESS)"
+            - "--v=5"
+            - "--timeout=60s"
+            - "--leader-election=false"
+          env:
+            - name: ADDRESS
+              value: /var/lib/csi/sockets/pluginproxy/csi.sock
+          imagePullPolicy: "Always"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: csi-upcloud-plugin
           image: ghcr.io/upcloudltd/upcloud-csi:main
           args:
@@ -135,189 +152,56 @@ spec:
       volumes:
         - name: socket-dir
           emptyDir: { }
+
 ---
-kind: ServiceAccount
-apiVersion: v1
+#######################
+# Snapshot Controller
+#######################
+kind: Deployment
+apiVersion: apps/v1
 metadata:
-  name: csi-upcloud-controller-sa
+  name: csi-upcloud-snapshot-controller
   namespace: kube-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: csi-upcloud-snapshot-controller
+  # the snapshot controller won't be marked as ready if the v1 CRDs are unavailable
+  # in #504 the snapshot-controller will exit after around 7.5 seconds if it
+  # can't find the v1 CRDs so this value should be greater than that
+  minReadySeconds: 15
+  strategy:
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: csi-upcloud-snapshot-controller
+    spec:
+      serviceAccount: csi-upcloud-controller-sa
+      containers:
+        - name: snapshot-controller
+          image: k8s.gcr.io/sig-storage/snapshot-controller:v4.2.1
+          args:
+            - "--v=5"
+            - "--leader-election=true"
+          imagePullPolicy: IfNotPresent
 
 ---
-kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
 metadata:
-  name: csi-upcloud-provisioner-role
-rules:
-  - apiGroups: [ "" ]
-    resources: [ "secrets" ]
-    verbs: [ "get", "list" ]
-  - apiGroups: [ "" ]
-    resources: [ "persistentvolumes" ]
-    verbs: [ "get", "list", "watch", "create", "delete" ]
-  - apiGroups: [ "" ]
-    resources: [ "persistentvolumeclaims" ]
-    verbs: [ "get", "list", "watch", "update" ]
-  - apiGroups: [ "storage.k8s.io" ]
-    resources: [ "storageclasses" ]
-    verbs: [ "get", "list", "watch" ]
-  - apiGroups: [ "storage.k8s.io" ]
-    resources: [ "csinodes" ]
-    verbs: [ "get", "list", "watch" ]
-  - apiGroups: [ "" ]
-    resources: [ "events" ]
-    verbs: [ "list", "watch", "create", "update", "patch" ]
-  - apiGroups: [ "snapshot.storage.k8s.io" ]
-    resources: [ "volumesnapshots" ]
-    verbs: [ "get", "list" ]
-  - apiGroups: [ "snapshot.storage.k8s.io" ]
-    resources: [ "volumesnapshotcontents" ]
-    verbs: [ "get", "list" ]
-  - apiGroups: [ "" ]
-    resources: [ "nodes" ]
-    verbs: [ "get", "list", "watch" ]
+  name: upcloud-csi-snapshotclass
+driver: storage.csi.upcloud.com
+deletionPolicy: Delete
 
 ---
-kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: csi-upcloud-provisioner-binding
-subjects:
-  - kind: ServiceAccount
-    name: csi-upcloud-controller-sa
-    namespace: kube-system
-roleRef:
-  kind: ClusterRole
-  name: csi-upcloud-provisioner-role
-  apiGroup: rbac.authorization.k8s.io
-
----
-# Attacher must be able to work with PVs, nodes and VolumeAttachments
-kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: csi-upcloud-attacher-role
-rules:
-  - apiGroups: [ "" ]
-    resources: [ "persistentvolumes" ]
-    verbs: [ "get", "list", "watch", "update", "patch" ]
-  - apiGroups: [ "" ]
-    resources: [ "nodes" ]
-    verbs: [ "get", "list", "watch" ]
-  - apiGroups: [ "storage.k8s.io" ]
-    resources: [ "csinodes" ]
-    verbs: [ "get", "list", "watch" ]
-  - apiGroups: [ "storage.k8s.io" ]
-    resources: [ "volumeattachments" ]
-    verbs: [ "get", "list", "watch", "update", "patch" ]
-  - apiGroups: [ "storage.k8s.io" ]
-    resources: [ "volumeattachments/status" ]
-    verbs: [ "get", "list", "watch", "update", "patch" ]
-
----
-kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: csi-upcloud-attacher-binding
-subjects:
-  - kind: ServiceAccount
-    name: csi-upcloud-controller-sa
-    namespace: kube-system
-roleRef:
-  kind: ClusterRole
-  name: csi-upcloud-attacher-role
-  apiGroup: rbac.authorization.k8s.io
-
----
-kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: csi-upcloud-snapshotter-role
-rules:
-  - apiGroups: [ "" ]
-    resources: [ "persistentvolumes" ]
-    verbs: [ "get", "list", "watch" ]
-  - apiGroups: [ "" ]
-    resources: [ "persistentvolumeclaims" ]
-    verbs: [ "get", "list", "watch" ]
-  - apiGroups: [ "storage.k8s.io" ]
-    resources: [ "storageclasses" ]
-    verbs: [ "get", "list", "watch" ]
-  - apiGroups: [ "" ]
-    resources: [ "events" ]
-    verbs: [ "list", "watch", "create", "update", "patch" ]
-  - apiGroups: [ "" ]
-    resources: [ "secrets" ]
-    verbs: [ "get", "list" ]
-  - apiGroups: [ "snapshot.storage.k8s.io" ]
-    resources: [ "volumesnapshotclasses" ]
-    verbs: [ "get", "list", "watch" ]
-  - apiGroups: [ "snapshot.storage.k8s.io" ]
-    resources: [ "volumesnapshotcontents" ]
-    verbs: [ "create", "get", "list", "watch", "update", "delete" ]
-  - apiGroups: [ "snapshot.storage.k8s.io" ]
-    resources: [ "volumesnapshots" ]
-    verbs: [ "get", "list", "watch", "update" ]
-  - apiGroups: [ "apiextensions.k8s.io" ]
-    resources: [ "customresourcedefinitions" ]
-    verbs: [ "create", "list", "watch", "delete" ]
-
----
-kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: csi-upcloud-snapshotter-binding
-subjects:
-  - kind: ServiceAccount
-    name: csi-upcloud-controller-sa
-    namespace: kube-system
-roleRef:
-  kind: ClusterRole
-  name: csi-upcloud-snapshotter-role
-  apiGroup: rbac.authorization.k8s.io
----
-# Resizer must be able to work with PVCs, PVs, SCs.
-kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: csi-upcloud-resizer-role
-rules:
-  - apiGroups: [ "" ]
-    resources: [ "persistentvolumes" ]
-    verbs: [ "get", "list", "watch", "update", "patch" ]
-  - apiGroups: [ "" ]
-    resources: [ "persistentvolumeclaims" ]
-    verbs: [ "get", "list", "watch" ]
-  - apiGroups: [ "" ]
-    resources: [ "persistentvolumeclaims/status" ]
-    verbs: [ "update", "patch" ]
-  - apiGroups: [ "" ]
-    resources: [ "events" ]
-    verbs: [ "list", "watch", "create", "update", "patch" ]
-  - apiGroups: [ "" ]
-    resources: [ "pods" ]
-    verbs: [ "watch", "list" ]
-
----
-kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: csi-upcloud-resizer-binding
-subjects:
-  - kind: ServiceAccount
-    name: csi-upcloud-controller-sa
-    namespace: kube-system
-roleRef:
-  kind: ClusterRole
-  name: csi-upcloud-resizer-role
-  apiGroup: rbac.authorization.k8s.io
-
----
-########################################
-###########                 ############
-###########   Node plugin   ############
-###########                 ############
-########################################
-
+#######################
+# Node plugin
+#######################
 kind: DaemonSet
 apiVersion: apps/v1
 metadata:
@@ -424,34 +308,3 @@ spec:
         - name: device-dir
           hostPath:
             path: /dev
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: csi-upcloud-node-sa
-  namespace: kube-system
-
----
-kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: csi-upcloud-node-driver-registrar-role
-  namespace: kube-system
-rules:
-  - apiGroups: [ "" ]
-    resources: [ "events" ]
-    verbs: [ "get", "list", "watch", "create", "update", "patch" ]
-
----
-kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: csi-upcloud-node-driver-registrar-binding
-subjects:
-  - kind: ServiceAccount
-    name: csi-upcloud-node-sa
-    namespace: kube-system
-roleRef:
-  kind: ClusterRole
-  name: csi-upcloud-node-driver-registrar-role
-  apiGroup: rbac.authorization.k8s.io
