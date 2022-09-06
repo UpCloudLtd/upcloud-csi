@@ -63,12 +63,14 @@ kubectl apply -fhttps://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/main/de
 
 #### Deploy snapshot validation webhook (optional)
 The snapshot validating webhook is service that provides tightened validation on snapshot objects. 
-Service is optional but recommended if volume snapshots are created and used in cluster.  
-Validation service requires proper CA certificate, server certificate and certificate key for authentication.  
+Service is optional but recommended if volume snapshots are used in cluster.  
+Validation service requires proper CA certificate, x509 certificate and matching private key for secure communication.  
 More information can be found from official snapshot [webhook example](https://github.com/kubernetes-csi/external-snapshotter/tree/master/deploy/kubernetes/webhook-example) along with example how to deploy certificates.
 
-Manifest `snapshot-webhook-upcloud-csi.yaml` can be used to deploy webhook service. Manifest assumes that secret named `snapshot-validation-secret` exists and populated with valid certificate (cert.pem) and key (key.pem).  
-If custom CA is used (e.g. when using self-signed certificate) `caBundle` needs to be uncommented and set with CA data as value.
+Manifest `snapshot-webhook-upcloud-csi.yaml` can be used to deploy webhook service.  
+Manifest assumes that secret named `snapshot-validation-secret` exists and is populated with valid x509 certificate `cert.pem` (CA cert, if any, concatenated after server cert) and matching private key `key.pem`.
+If custom CA is used (e.g. when using self-signed certificate) `caBundle` field needs to be set with CA data as value.
+
 ```sh
 kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/main/deploy/kubernetes/snapshot-webhook-upcloud-csi.yaml
 ```
