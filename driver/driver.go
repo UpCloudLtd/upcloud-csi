@@ -37,11 +37,11 @@ const (
 	// additional volumes
 	StorageSizeThreshold = 10
 	// ClientTimeout helps to tune for timeout on requests to UpCloud API. Measurement: seconds
-	ClientTimeout = 30
+	ClientTimeout = 120
 	// InitTimeout specifies a time limit for driver initialization in seconds
 	initTimeout = 30
 	// CheckStorageQuotaTimeout specifies a time limit for checking storage quota in seconds
-	checkStorageQuotaTimeout = 10
+	checkStorageQuotaTimeout = 30
 )
 
 // Driver implements the following CSI interfaces:

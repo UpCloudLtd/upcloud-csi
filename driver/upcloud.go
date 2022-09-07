@@ -14,8 +14,8 @@ import (
 // TODO sort out naming conventions
 
 const (
-	startServerTimeout  = 25
-	stopServerTimeout   = 15
+	startServerTimeout  = 30
+	stopServerTimeout   = 30
 	storageStateTimeout = 3600 // 1h
 )
 
@@ -81,7 +81,11 @@ func (u *upcloudClient) createStorage(ctx context.Context, csr *request.CreateSt
 		fmt.Println(err)
 		return nil, err
 	}
-	return s, nil
+	return u.svc.WaitForStorageState(ctx, &request.WaitForStorageStateRequest{
+		UUID:         s.Storage.UUID,
+		DesiredState: upcloud.StorageStateOnline,
+		Timeout:      storageStateTimeout * time.Second,
+	})
 }
 
 func (u *upcloudClient) cloneStorage(ctx context.Context, r *request.CloneStorageRequest) (*upcloud.StorageDetails, error) {

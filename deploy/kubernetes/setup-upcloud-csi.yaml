@@ -1,5 +1,5 @@
 #######################
-# Driver 
+# Driver
 #######################
 apiVersion: storage.k8s.io/v1
 kind: CSIDriver
@@ -12,7 +12,7 @@ spec:
 
 ---
 #######################
-# Storage classes 
+# Storage classes
 #######################
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
@@ -70,7 +70,7 @@ spec:
           args:
             - "--csi-address=$(ADDRESS)"
             - "--v=5"
-            - "--timeout=60s"
+            - "--timeout=600s"
           env:
             - name: ADDRESS
               value: /var/lib/csi/sockets/pluginproxy/csi.sock
@@ -83,7 +83,7 @@ spec:
           args:
             - "--v=5"
             - "--csi-address=$(ADDRESS)"
-            - "--timeout=30s"
+            - "--timeout=120s"
           env:
             - name: ADDRESS
               value: /var/lib/csi/sockets/pluginproxy/csi.sock
@@ -95,7 +95,7 @@ spec:
           image: k8s.gcr.io/sig-storage/csi-resizer:v1.4.0
           args:
             - "--v=5"
-            - "--timeout=45s"
+            - "--timeout=120s"
             - "--csi-address=$(ADDRESS)"
             - "--handle-volume-inuse-error=true"
           env:
@@ -106,11 +106,11 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: csi-snapshotter
-          image: k8s.gcr.io/sig-storage/csi-snapshotter:v4.2.1 
+          image: k8s.gcr.io/sig-storage/csi-snapshotter:v4.2.1
           args:
             - "--csi-address=$(ADDRESS)"
             - "--v=5"
-            - "--timeout=60s"
+            - "--timeout=120s"
             - "--leader-election=false"
           env:
             - name: ADDRESS
@@ -151,7 +151,7 @@ spec:
         - name: regcred
       volumes:
         - name: socket-dir
-          emptyDir: { }
+          emptyDir: {}
 
 ---
 #######################
@@ -232,9 +232,9 @@ spec:
               exec:
                 command:
                   [
-                      "/bin/sh",
-                      "-c",
-                      "rm -rf /registration/storage.csi.upcloud.com /registration/storage.csi.upcloud.com-reg.sock",
+                    "/bin/sh",
+                    "-c",
+                    "rm -rf /registration/storage.csi.upcloud.com /registration/storage.csi.upcloud.com-reg.sock",
                   ]
           env:
             - name: ADDRESS
@@ -278,7 +278,7 @@ spec:
           securityContext:
             privileged: true
             capabilities:
-              add: [ "SYS_ADMIN" ]
+              add: ["SYS_ADMIN"]
             allowPrivilegeEscalation: true
           volumeMounts:
             - name: plugin-dir
