@@ -216,6 +216,11 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 		return nil, status.Error(codes.AlreadyExists, "read only Volumes are not supported")
 	}
 
+	server, err := d.upclouddriver.getServerByHostname(ctx, req.NodeId)
+	if err != nil {
+		return nil, err
+	}
+
 	log := d.log.WithFields(logrus.Fields{
 		"volume_id": req.VolumeId,
 		"node_id":   req.NodeId,
@@ -237,7 +242,7 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 	attachedID := ""
 	for _, id := range volume.ServerUUIDs {
 		attachedID = id
-		if id == req.NodeId {
+		if id == server.UUID {
 			log.Info("volume is already attached")
 			return &csi.ControllerPublishVolumeResponse{
 				PublishContext: map[string]string{
@@ -252,12 +257,6 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 		return nil, status.Errorf(codes.FailedPrecondition,
 			"volume %q is attached to the wrong node (%s), detach the volume to fix it",
 			req.VolumeId, attachedID)
-	}
-
-	// attach the volume to the correct node
-	server, err := d.upclouddriver.getServerByHostname(ctx, req.NodeId)
-	if err != nil {
-		return nil, err
 	}
 
 	err = d.upclouddriver.attachStorage(ctx, req.VolumeId, server.UUID)
@@ -305,6 +304,14 @@ func (d *Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.Control
 
 	log.Info("volume was detached")
 	return &csi.ControllerUnpublishVolumeResponse{}, nil
+}
+
+func (d *Driver) ControllerGetVolume(ctx context.Context, req *csi.ControllerGetVolumeRequest) (*csi.ControllerGetVolumeResponse, error) {
+	// ALPHA FEATURE
+	// This optional RPC MAY be called by the CO to fetch current information about a volume.
+	// A Controller Plugin MUST implement this ControllerGetVolume RPC call if it has GET_VOLUME capability.
+	// When implemented add csi.ControllerServiceCapability_RPC_GET_VOLUME to supportedCapabilities.
+	return nil, status.Errorf(codes.Unimplemented, "method ControllerGetVolume not implemented")
 }
 
 // ValidateVolumeCapabilities checks if the volume capabilities are valid
