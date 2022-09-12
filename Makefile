@@ -13,7 +13,7 @@ compile:
 .PHONY: docker-build
 docker-build:
 	# TODO add versions and tags -t $(DOCKER_REPO):$(VERSION)
-	docker build --platform linux/x86_64 -t ghcr.io/mescudi21/upcloud-csi:test cmd/upcloud-csi-plugin -f cmd/upcloud-csi-plugin/Dockerfile
+	docker build --platform linux/x86_64 -t ghcr.io/upcloudltd/upcloud-csi:main cmd/upcloud-csi-plugin -f cmd/upcloud-csi-plugin/Dockerfile
 
 .PHONY: deploy-csi
 deploy-csi:
