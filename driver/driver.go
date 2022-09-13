@@ -53,9 +53,6 @@ const (
 type Driver struct {
 	options *driverOptions
 
-	// TODO: remove this struct composition after finishing all controller capabilities
-	csi.ControllerServer
-
 	srv     *grpc.Server
 	httpSrv http.Server
 
