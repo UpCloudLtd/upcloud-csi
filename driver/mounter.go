@@ -1,16 +1,16 @@
 package driver
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"k8s.io/mount-utils"
 	"os"
 	"os/exec"
 	"strings"
 	"syscall"
+
+	"k8s.io/mount-utils"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
@@ -91,16 +91,17 @@ func (m *mounter) Format(source, fsType string, mkfsArgs []string) error {
 		return errors.New("source is not specified for formatting the volume")
 	}
 
-	m.log.Infof("source: %s", source)
-
-	m.log.Info("create partition called")
-	err := createPartition(source)
+	m.log.WithFields(logrus.Fields{"source": source}).Info("create partition called")
+	err := m.createPartition(source)
 	if err != nil {
 		return err
 	}
 
-	m.log.Info("get last partition called")
-	lastPartition := getLastPartition()
+	m.log.WithFields(logrus.Fields{"source": source}).Info("get last partition called")
+	lastPartition, err := getLastPartition(source)
+	if err != nil {
+		return err
+	}
 
 	if fsType == "ext4" || fsType == "ext3" {
 		mkfsArgs = append(mkfsArgs, "-F", lastPartition)
@@ -117,8 +118,9 @@ func (m *mounter) Format(source, fsType string, mkfsArgs []string) error {
 	}
 
 	m.log.WithFields(logrus.Fields{
-		"cmd":  mkfsCmd,
-		"args": mkfsArgs,
+		"cmd":       mkfsCmd,
+		"args":      mkfsArgs,
+		"partition": lastPartition,
 	}).Info("executing format command")
 
 	out, err := exec.Command(mkfsCmd, mkfsArgs...).CombinedOutput()
@@ -176,11 +178,16 @@ func (m *mounter) Mount(source, target, fsType string, opts ...string) error {
 }
 
 func (m *mounter) Unmount(target string) error {
-	umountCmd := "umount"
 	if target == "" {
 		return errors.New("target is not specified for unmounting the volume")
 	}
 
+	if _, err := os.Stat(target); os.IsNotExist(err) {
+		m.log.WithFields(logrus.Fields{"target": target}).Info("target does not exist")
+		return nil
+	}
+
+	umountCmd := "umount"
 	umountArgs := []string{target}
 
 	m.log.WithFields(logrus.Fields{
@@ -311,7 +318,7 @@ func (m *mounter) IsMounted(target string) (bool, error) {
 	m.log.WithFields(logrus.Fields{
 		"cmd":  findmntCmd,
 		"args": findmntArgs,
-	}).Info("checking if target is mounted")
+	}).Info("	")
 
 	out, err := exec.Command(findmntCmd, findmntArgs...).CombinedOutput()
 	if err != nil {
@@ -377,75 +384,49 @@ func (m *mounter) GetDeviceName(mounter mount.Interface, mountPath string) (stri
 	return devicePath, err
 }
 
-func getLastPartition() string {
-	sfdisk := exec.Command("sfdisk", "-q", "--list")
-	awk := exec.Command("awk", "NR>1{print $1}")
+func (m *mounter) createPartition(device string) error {
 
-	r, w := io.Pipe()
-	sfdisk.Stdout = w
-	awk.Stdin = r
+	partedMklabel := exec.Command("parted", device, "mklabel", "gpt")
+	partedMklabelOut, err := partedMklabel.CombinedOutput()
+	if err != nil {
+		return err
+	}
+	m.log.WithFields(logrus.Fields{
+		"cmd":    partedMklabel.String(),
+		"output": string(partedMklabelOut)},
+	).Info("created new disklabel")
 
-	var buf bytes.Buffer
-	awk.Stdout = &buf
+	partedCreatePartition := exec.Command("parted", "-a", "opt", device, "mkpart", "primary", "2048s", "100%")
+	partedCreatePartitionOut, err := partedCreatePartition.CombinedOutput()
+	if err != nil {
+		return err
+	}
 
-	sfdisk.Start()
-	awk.Start()
-	sfdisk.Wait()
-	w.Close()
-	awk.Wait()
+	m.log.WithFields(logrus.Fields{
+		"cmd":    partedCreatePartition.String(),
+		"output": string(partedCreatePartitionOut)},
+	).Info("created new primary partition")
 
-	out := buf.String()
-	partitions := strings.Split(out, "\n")
+	return nil
+}
 
+func getLastPartition(source string) (string, error) {
+	sfdisk, err := exec.Command("sfdisk", "-q", "--list", "-o", "device", source).CombinedOutput()
+	if err != nil {
+		return "", err
+	}
+	return sfdiskOutputGetLastPartition(source, string(sfdisk))
+}
+
+func sfdiskOutputGetLastPartition(source, sfdiskOutput string) (string, error) {
+	outLines := strings.Split(sfdiskOutput, "\n")
 	var lastPartition string
-	for i := len(partitions) - 1; i > 0; i-- {
-		if !strings.HasPrefix(partitions[i], "/dev") {
-			continue
-		} else {
-			lastPartition = partitions[i]
+	for i := len(outLines) - 1; i >= 0; i-- {
+		partition := strings.TrimSpace(outLines[i])
+		if strings.HasPrefix(partition, source) {
+			lastPartition = partition
 			break
 		}
 	}
-
-	return lastPartition
-}
-
-func getLastDevice() string {
-	lsblk := exec.Command("lsblk", "-dp")
-	awk := exec.Command("awk", "NR>1{print $1}")
-
-	r, w := io.Pipe()
-	lsblk.Stdout = w
-	awk.Stdin = r
-
-	var buf bytes.Buffer
-	awk.Stdout = &buf
-
-	lsblk.Start()
-	awk.Start()
-	lsblk.Wait()
-	w.Close()
-	awk.Wait()
-
-	out := buf.String()
-	disks := strings.Split(out, "\n")
-	lastDevice := disks[len(disks)-1]
-
-	return lastDevice
-}
-
-func createPartition(device string) error {
-	partedMklabelOut, err := exec.Command("parted", device, "mklabel", "gpt").CombinedOutput()
-	if err != nil {
-		return err
-	}
-	fmt.Printf("parted mklabel output: %s\n", partedMklabelOut)
-
-	partedCreatePartitionOut, err := exec.Command("parted", "-a", "opt", device, "mkpart", "primary", "2048s", "100%").CombinedOutput()
-	if err != nil {
-		return err
-	}
-	fmt.Printf("mkpart output: %s\n", partedCreatePartitionOut)
-
-	return nil
+	return lastPartition, nil
 }
