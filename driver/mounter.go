@@ -183,7 +183,7 @@ func (m *mounter) Unmount(target string) error {
 	}
 
 	if _, err := os.Stat(target); os.IsNotExist(err) {
-		m.log.WithFields(logrus.Fields{"target": target}).Info("target does not exist")
+		m.log.WithFields(logrus.Fields{"target": target}).Info("unmount target does not exist")
 		return nil
 	}
 
