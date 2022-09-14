@@ -318,7 +318,7 @@ func (m *mounter) IsMounted(target string) (bool, error) {
 	m.log.WithFields(logrus.Fields{
 		"cmd":  findmntCmd,
 		"args": findmntArgs,
-	}).Info("	")
+	}).Info("checking if target is mounted")
 
 	out, err := exec.Command(findmntCmd, findmntArgs...).CombinedOutput()
 	if err != nil {
