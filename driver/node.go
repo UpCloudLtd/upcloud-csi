@@ -133,15 +133,19 @@ func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRe
 	}
 
 	if !mounted {
-		source = getLastPartition()
+		partition, err := getLastPartition(source)
+		if err != nil {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
 		stageMountedLog := d.log.WithFields(logrus.Fields{
-			"source":  source,
-			"target":  target,
-			"fsType":  fsType,
-			"options": options,
+			"source":    source,
+			"partition": partition,
+			"target":    target,
+			"fsType":    fsType,
+			"options":   options,
 		})
 		stageMountedLog.Info("mount options")
-		if err := d.mounter.Mount(source, target, fsType, options...); err != nil {
+		if err := d.mounter.Mount(partition, target, fsType, options...); err != nil {
 			return nil, status.Error(codes.Internal, err.Error())
 		}
 	} else {
@@ -289,21 +293,21 @@ func (d *Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublish
 // NodeGetCapabilities returns the supported capabilities of the node server
 func (d *Driver) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
 	nscaps := []*csi.NodeServiceCapability{
-		&csi.NodeServiceCapability{
+		{
 			Type: &csi.NodeServiceCapability_Rpc{
 				Rpc: &csi.NodeServiceCapability_RPC{
 					Type: csi.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME,
 				},
 			},
 		},
-		&csi.NodeServiceCapability{
+		{
 			Type: &csi.NodeServiceCapability_Rpc{
 				Rpc: &csi.NodeServiceCapability_RPC{
 					Type: csi.NodeServiceCapability_RPC_EXPAND_VOLUME,
 				},
 			},
 		},
-		&csi.NodeServiceCapability{
+		{
 			Type: &csi.NodeServiceCapability_Rpc{
 				Rpc: &csi.NodeServiceCapability_RPC{
 					Type: csi.NodeServiceCapability_RPC_GET_VOLUME_STATS,
@@ -377,13 +381,13 @@ func (d *Driver) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeS
 
 	return &csi.NodeGetVolumeStatsResponse{
 		Usage: []*csi.VolumeUsage{
-			&csi.VolumeUsage{
+			{
 				Available: stats.availableBytes,
 				Total:     stats.totalBytes,
 				Used:      stats.usedBytes,
 				Unit:      csi.VolumeUsage_BYTES,
 			},
-			&csi.VolumeUsage{
+			{
 				Available: stats.availableInodes,
 				Total:     stats.totalInodes,
 				Used:      stats.usedInodes,
@@ -399,6 +403,7 @@ func (d *Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolume
 		return nil, status.Error(codes.InvalidArgument, "NodeExpandVolume volume ID not provided")
 	}
 
+	source := d.getDiskSource(req.VolumeId)
 	volumePath := req.GetVolumePath()
 	if len(volumePath) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "NodeExpandVolume volume path not provided")
@@ -413,6 +418,7 @@ func (d *Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolume
 		"volume_id":   req.VolumeId,
 		"volume_path": req.VolumePath,
 		"method":      "node_expand_volume",
+		"source":      source,
 	})
 	log.Info("node expand volume called")
 
@@ -427,7 +433,12 @@ func (d *Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolume
 		return nil, err
 	}
 
-	if err = d.mounter.Mount(getLastPartition(), stagingPath, "ext4"); err != nil {
+	lastPartition, err := getLastPartition(source)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = d.mounter.Mount(lastPartition, stagingPath, "ext4"); err != nil {
 		return nil, err
 	}
 
@@ -442,17 +453,33 @@ func (d *Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolume
 
 // getDiskSource returns the absolute path of the attached volume for the given volumeID
 func (d *Driver) getDiskSource(volumeID string) string {
-	fullId := strings.Join(strings.Split(volumeID, "-"), "")
-	if len(fullId) <= 20 {
+	diskID := volumeIDToDiskID(volumeID)
+	if diskID == "" {
 		return ""
 	}
+	return getDiskByID(diskID, "")
+}
 
-	link, err := os.Readlink(filepath.Join(diskIDPath, diskPrefix+fullId[:20]))
+func getDiskByID(diskID, basePath string) string {
+	if basePath == "" {
+		basePath = diskIDPath
+	}
+	link, err := os.Readlink(filepath.Join(basePath, diskPrefix+diskID))
 	if err != nil {
 		fmt.Println(fmt.Errorf("failed to get the link to source"))
 		return ""
 	}
-	source := "/dev" + strings.TrimPrefix(link, "../..")
+	if filepath.IsAbs(link) {
+		return link
+	}
 
-	return source
+	return filepath.Join(basePath, link)
+}
+
+func volumeIDToDiskID(volumeID string) string {
+	fullId := strings.Join(strings.Split(volumeID, "-"), "")
+	if len(fullId) <= 20 {
+		return ""
+	}
+	return fullId[:20]
 }
