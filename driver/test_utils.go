@@ -3,37 +3,22 @@ package driver
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud"
 	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/request"
-	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
 
-var (
-	volCap = &csi.VolumeCapability{
-		AccessType: &csi.VolumeCapability_Mount{
-			Mount: &csi.VolumeCapability_MountVolume{},
-		},
-		AccessMode: &csi.VolumeCapability_AccessMode{
-			Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
-		},
-	}
-)
-
 type MockDriver struct {
 	Driver
-	options *driverOptions
+	//options *driverOptions
 	//
 	//srv     *grpc.Server
 	//httpSrv http.Server
 	//
-	mounter Mounter
-	log     *logrus.Entry
+	//mounter Mounter
+	//log     *logrus.Entry
 	//
 	//upcloudclient *upcloudservice.Service
 	//upclouddriver upcloudService
@@ -182,22 +167,6 @@ func (m *mockUpCloudDriver) stopServer(ctx context.Context, uuid string) (*upclo
 	return nil, nil
 }
 
-func (m *mockUpCloudDriver) getDiskSource(volumeID string) string {
-	fullId := strings.Join(strings.Split(volumeID, "-"), "")
-	if len(fullId) <= 20 {
-		return ""
-	}
-
-	link, err := os.Readlink(filepath.Join(diskIDPath, diskPrefix+fullId[:20]))
-	if err != nil {
-		fmt.Println(fmt.Errorf("failed to get the link to source"))
-		return ""
-	}
-	source := "/dev" + strings.TrimPrefix(link, "../..")
-
-	return source
-}
-
 func (m *mockUpCloudDriver) createStorageBackup(ctx context.Context, uuid, title string) (*upcloud.StorageDetails, error) {
 	s := newMockStorage(m.storageSize)
 	s.UUID = uuid
@@ -222,4 +191,9 @@ func (m *mockUpCloudDriver) getStorageBackupByName(ctx context.Context, name str
 	s := newMockBackupStorage(newMockStorage(m.storageSize))
 	s.Title = name
 	return s, nil
+}
+
+func (m *mockUpCloudDriver) waitForStorageState(ctx context.Context, uuid, state string) (*upcloud.StorageDetails, error) {
+	return &upcloud.StorageDetails{
+		Storage: *newMockStorage(m.storageSize)}, nil
 }

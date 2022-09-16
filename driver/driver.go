@@ -64,7 +64,6 @@ type Driver struct {
 
 	healthChecker *HealthChecker
 
-	storage upcloud.Storage
 	// ready defines whether the driver is ready to function. This value will
 	// be used by the `Identity` service via the `Probe()` method.
 	readyMu sync.Mutex // protects ready
@@ -85,7 +84,6 @@ type driverOptions struct {
 	nodeHost     string
 	nodeId       string
 	zone         string
-	upcloudTag   string
 	isController bool
 }
 

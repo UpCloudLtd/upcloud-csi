@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -20,16 +19,14 @@ const (
 	maxVolumesPerNode = 7
 )
 
-var (
-	annsNoFormatVolume = []string{
-		"storage.csi.upcloud.com/noformat",
-	}
-)
+var annsNoFormatVolume = []string{
+	"storage.csi.upcloud.com/noformat",
+}
 
 // NodeStageVolume mounts the volume to a staging path on the node. This is
 // called by the CO before NodePublishVolume and is used to temporary mount the
 // volume to a staging path. Once mounted, NodePublishVolume will make sure to
-// mount it to the appropriate path
+// mount it to the appropriate path.
 func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
 	d.log.Info("node stage volume called")
 	if req.VolumeId == "" {
@@ -156,7 +153,7 @@ func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRe
 	return &csi.NodeStageVolumeResponse{}, nil
 }
 
-// NodeUnstageVolume unstages the volume from the staging path
+// NodeUnstageVolume unstages the volume from the staging path.
 func (d *Driver) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "NodeUnstageVolume Volume ID must be provided")
@@ -192,7 +189,7 @@ func (d *Driver) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolu
 	return &csi.NodeUnstageVolumeResponse{}, nil
 }
 
-// NodePublishVolume mounts the volume mounted to the staging path to the target path
+// NodePublishVolume mounts the volume mounted to the staging path to the target path.
 func (d *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
 	d.log.Info("node publish volume called")
 	if req.VolumeId == "" {
@@ -254,7 +251,7 @@ func (d *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolu
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 
-// NodeUnpublishVolume unmounts the volume from the target path
+// NodeUnpublishVolume unmounts the volume from the target path.
 func (d *Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "NodeUnpublishVolume Volume ID must be provided")
@@ -290,20 +287,13 @@ func (d *Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublish
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
-// NodeGetCapabilities returns the supported capabilities of the node server
+// NodeGetCapabilities returns the supported capabilities of the node server.
 func (d *Driver) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
 	nscaps := []*csi.NodeServiceCapability{
 		{
 			Type: &csi.NodeServiceCapability_Rpc{
 				Rpc: &csi.NodeServiceCapability_RPC{
 					Type: csi.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME,
-				},
-			},
-		},
-		{
-			Type: &csi.NodeServiceCapability_Rpc{
-				Rpc: &csi.NodeServiceCapability_RPC{
-					Type: csi.NodeServiceCapability_RPC_EXPAND_VOLUME,
 				},
 			},
 		},
@@ -398,60 +388,10 @@ func (d *Driver) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeS
 }
 
 func (d *Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
-	volumeID := req.GetVolumeId()
-	if len(volumeID) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "NodeExpandVolume volume ID not provided")
-	}
-
-	source := d.getDiskSource(req.VolumeId)
-	volumePath := req.GetVolumePath()
-	if len(volumePath) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "NodeExpandVolume volume path not provided")
-	}
-
-	expr, err := regexp.Compile("pvc-.+/")
-	if err != nil {
-		return nil, fmt.Errorf("unable to find pattern of pvc in volume path")
-	}
-
-	log := d.log.WithFields(logrus.Fields{
-		"volume_id":   req.VolumeId,
-		"volume_path": req.VolumePath,
-		"method":      "node_expand_volume",
-		"source":      source,
-	})
-	log.Info("node expand volume called")
-
-	stagingPath := fmt.Sprintf("/var/lib/kubelet/plugins/kubernetes.io/csi/pv/%sglobalmount", expr.FindString(volumePath))
-
-	// unmount pod volume path
-	if err = d.mounter.Unmount(volumePath); err != nil {
-		return nil, err
-	}
-
-	if err = d.mounter.Unmount(stagingPath); err != nil {
-		return nil, err
-	}
-
-	lastPartition, err := getLastPartition(source)
-	if err != nil {
-		return nil, err
-	}
-
-	if err = d.mounter.Mount(lastPartition, stagingPath, "ext4"); err != nil {
-		return nil, err
-	}
-
-	if err = d.mounter.Mount(stagingPath, volumePath, "ext4", "bind"); err != nil {
-		return nil, err
-	}
-
-	log.Info("volume is expanded")
-
-	return &csi.NodeExpandVolumeResponse{}, nil
+	return nil, status.Errorf(codes.Unimplemented, "method NodeExpandVolume not implemented")
 }
 
-// getDiskSource returns the absolute path of the attached volume for the given volumeID
+// getDiskSource returns the absolute path of the attached volume for the given volumeID.
 func (d *Driver) getDiskSource(volumeID string) string {
 	diskID := volumeIDToDiskID(volumeID)
 	if diskID == "" {
