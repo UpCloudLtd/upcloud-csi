@@ -94,13 +94,17 @@ func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRe
 			nodeStageLog.Infof("formatting %s volume for staging with partial uuid %s", newDevice, partialUUID)
 			if err := d.mounter.Format(newDevice, fsType, []string{"-L", partialUUID}); err != nil {
 				nodeStageLog.Infof("error, wiping device %s", newDevice)
-				d.mounter.wipeDevice(newDevice)
+				if err := d.mounter.wipeDevice(newDevice); err != nil {
+					d.log.WithFields(logrus.Fields{"device": newDevice}).Infof("wiping device failed: %s", err.Error())
+				}
 				return nil, status.Error(codes.Internal, err.Error())
 			}
 			nodeStageLog.Infof("changing filesystem uuid to %s", req.VolumeId)
 			if err := d.mounter.setUUID(newDevice, req.VolumeId); err != nil {
 				nodeStageLog.Infof("error, wiping device %s", newDevice)
-				d.mounter.wipeDevice(newDevice)
+				if err := d.mounter.wipeDevice(newDevice); err != nil {
+					d.log.WithFields(logrus.Fields{"device": newDevice}).Infof("wiping device failed: %s", err.Error())
+				}
 				return nil, status.Error(codes.Internal, err.Error())
 			}
 			nodeStageLog.Info("done preparing volume")
