@@ -43,6 +43,7 @@ type upcloudService interface {
 	createStorageBackup(ctx context.Context, uuid, title string) (*upcloud.StorageDetails, error)
 	listStorageBackups(ctx context.Context, uuid string) ([]upcloud.Storage, error)
 	deleteStorageBackup(ctx context.Context, uuid string) error
+	waitForStorageState(ctx context.Context, uuid, state string) (*upcloud.StorageDetails, error)
 }
 
 func (u *upcloudClient) getStorageByUUID(ctx context.Context, storageUUID string) (*upcloud.StorageDetails, error) {
@@ -293,4 +294,12 @@ func (u *upcloudClient) getStorageBackupByName(ctx context.Context, name string)
 		}
 	}
 	return nil, errUpCloudStorageNotFound
+}
+
+func (u *upcloudClient) waitForStorageState(ctx context.Context, uuid, state string) (*upcloud.StorageDetails, error) {
+	return u.svc.WaitForStorageState(ctx, &request.WaitForStorageStateRequest{
+		UUID:         uuid,
+		DesiredState: state,
+		Timeout:      storageStateTimeout * time.Second,
+	})
 }

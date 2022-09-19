@@ -366,3 +366,23 @@ func TestControllerService_ValidateVolumeCapabilities(t *testing.T) {
 		})
 	}
 }
+
+func TestControllerExpandVolume(t *testing.T) {
+	d := NewMockDriver(nil)
+	wantBytes := int64(30 * giB)
+	r, err := d.ControllerExpandVolume(context.Background(), &csi.ControllerExpandVolumeRequest{
+		VolumeId: "test-vol",
+		CapacityRange: &csi.CapacityRange{
+			RequiredBytes: wantBytes,
+			LimitBytes:    0,
+		},
+		//VolumeCapability:     &csi.VolumeCapability{},
+	})
+	if err != nil {
+		t.Errorf("ControllerExpandVolume error = %v", err)
+		return
+	}
+	if r.CapacityBytes != wantBytes {
+		t.Errorf("CapacityBytes failed want %d got %d", wantBytes, r.CapacityBytes)
+	}
+}

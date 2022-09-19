@@ -1,6 +1,7 @@
 package driver
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -72,4 +73,11 @@ func createTempFile(dir, pattern string) (string, error) {
 		return "", err
 	}
 	return f.Name(), f.Close()
+}
+
+func TestNodeExpandVolume(t *testing.T) {
+	d := NewMockDriver(nil)
+	if _, err := d.NodeExpandVolume(context.TODO(), nil); err == nil {
+		t.Error("NodeExpandVolume should return error. Only offline volume expansion is supported and it's handled by controller.")
+	}
 }

@@ -26,3 +26,5 @@ clean-tests:
 	KUBECONFIG=$(KUBECONFIG) kubectl delete all --all
 	KUBECONFIG=$(KUBECONFIG) kubectl delete persistentvolumeclaims --all
 
+test-driver:
+	go test -v github.com/UpCloudLtd/upcloud-csi/driver
