@@ -16,5 +16,5 @@ jobs:
 
       - uses: actions/setup-go@v3
 
-      - name: Run
-        run: make test-driver
+      - name: Test Driver
+        run: sudo make test-driver

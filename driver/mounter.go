@@ -102,14 +102,17 @@ func (m *mounter) Format(source, fsType string, mkfsArgs []string) error {
 	if err != nil {
 		return err
 	}
+	return m.format(lastPartition, fsType, mkfsArgs)
+}
 
+func (m *mounter) format(partition, fsType string, mkfsArgs []string) error {
 	if fsType == "ext4" || fsType == "ext3" {
-		mkfsArgs = append(mkfsArgs, "-F", lastPartition)
+		mkfsArgs = append(mkfsArgs, "-F", partition)
 	}
 
 	mkfsCmd := fmt.Sprintf("mkfs.%s", fsType)
 
-	_, err = exec.LookPath(mkfsCmd)
+	_, err := exec.LookPath(mkfsCmd)
 	if err != nil {
 		if err == exec.ErrNotFound {
 			return fmt.Errorf("%q executable not found in $PATH", mkfsCmd)
@@ -120,7 +123,7 @@ func (m *mounter) Format(source, fsType string, mkfsArgs []string) error {
 	m.log.WithFields(logrus.Fields{
 		"cmd":       mkfsCmd,
 		"args":      mkfsArgs,
-		"partition": lastPartition,
+		"partition": partition,
 	}).Info("executing format command")
 
 	out, err := exec.Command(mkfsCmd, mkfsArgs...).CombinedOutput()
@@ -260,7 +263,7 @@ func (m *mounter) isPrepared(source string) (string, error) {
 }
 
 func (m *mounter) wipeDevice(deviceId string) error {
-	_, err := exec.Command("wipefs", "-a", deviceId).CombinedOutput()
+	_, err := exec.Command("wipefs", "-a", "-f", deviceId).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("error wiping device %s", deviceId)
 	}
@@ -365,7 +368,6 @@ func (m *mounter) GetStatistics(volumePath string) (volumeStatistics, error) {
 	if err != nil {
 		return volumeStatistics{}, err
 	}
-
 	volStats := volumeStatistics{
 		availableBytes: int64(statfs.Bavail) * int64(statfs.Bsize),
 		totalBytes:     int64(statfs.Blocks) * int64(statfs.Bsize),

@@ -3,7 +3,6 @@ package driver
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,7 +21,7 @@ func TestVolumeIDToDiskID(t *testing.T) {
 }
 
 func TestGetDiskByID(t *testing.T) {
-	tempDir, err := ioutil.TempDir(os.TempDir(), fmt.Sprintf("test-%s-*", DefaultDriverName))
+	tempDir, err := os.MkdirTemp(os.TempDir(), fmt.Sprintf("test-%s-*", DefaultDriverName))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +67,7 @@ func TestGetDiskByID(t *testing.T) {
 }
 
 func createTempFile(dir, pattern string) (string, error) {
-	f, err := ioutil.TempFile(dir, pattern)
+	f, err := os.CreateTemp(dir, pattern)
 	if err != nil {
 		return "", err
 	}
