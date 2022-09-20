@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -139,10 +140,6 @@ func (m *mounter) Mount(source, target, fsType string, opts ...string) error {
 	mountCmd := "mount"
 	mountArgs := []string{}
 
-	if fsType == "" {
-		return errors.New("fs type is not specified for mounting the volume")
-	}
-
 	if source == "" {
 		return errors.New("source is not specified for mounting the volume")
 	}
@@ -151,7 +148,29 @@ func (m *mounter) Mount(source, target, fsType string, opts ...string) error {
 		return errors.New("target is not specified for mounting the volume")
 	}
 
-	mountArgs = append(mountArgs, "-t", fsType)
+	// block device requires that target is file instead of directory
+	if fsType == "" {
+		err := os.MkdirAll(filepath.Dir(target), 0750)
+		if err != nil {
+			return err
+		}
+		f, err := os.OpenFile(target, os.O_CREATE, 0660)
+		if err != nil {
+			return err
+		}
+		if err := f.Close(); err != nil {
+			return err
+		}
+		m.log.WithFields(logrus.Fields{"source": source, "target": target}).Info("mounting raw block device")
+	} else {
+		mountArgs = append(mountArgs, "-t", fsType)
+		// create target, os.Mkdirall is noop if it exists
+		err := os.MkdirAll(target, 0750)
+		if err != nil {
+			return err
+		}
+		m.log.WithFields(logrus.Fields{"source": source, "target": target}).Info("mounting filesystem")
+	}
 
 	if len(opts) > 0 {
 		mountArgs = append(mountArgs, "-o", strings.Join(opts, ","))
@@ -159,12 +178,6 @@ func (m *mounter) Mount(source, target, fsType string, opts ...string) error {
 
 	mountArgs = append(mountArgs, source)
 	mountArgs = append(mountArgs, target)
-
-	// create target, os.Mkdirall is noop if it exists
-	err := os.MkdirAll(target, 0750)
-	if err != nil {
-		return err
-	}
 
 	m.log.WithFields(logrus.Fields{
 		"cmd":  mountCmd,
@@ -287,8 +300,12 @@ func (m *mounter) setUUID(source, newUUID string) error {
 	if err = cmd.Start(); err != nil {
 		return err
 	}
-	io.WriteString(stdin, "y\n")
-	cmd.Wait()
+	if _, err := io.WriteString(stdin, "y\n"); err != nil {
+		return err
+	}
+	if err := cmd.Wait(); err != nil {
+		return err
+	}
 	if err != nil {
 		if exitError, ok := err.(*exec.ExitError); ok {
 			return exitError

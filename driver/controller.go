@@ -544,17 +544,23 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 		return nil, status.Error(codes.FailedPrecondition, "volume is currently published on a node")
 	}
 
-	/*
-		TODO: if this is block device do only storage modification and skip filesystem/part resize
-		if req.GetVolumeCapability() != nil {
-			if _, ok := req.VolumeCapability.AccessType.(*csi.VolumeCapability_Block); ok {
-				// block device
-			}
+	isBlockDevice := false
+	if req.GetVolumeCapability() != nil {
+		if _, ok := req.VolumeCapability.AccessType.(*csi.VolumeCapability_Block); ok {
+			isBlockDevice = true
 		}
-	*/
-	_, err = d.upclouddriver.resizeStorage(ctx, volume.UUID, int(resizeGigaBytes), false)
-	if err != nil {
-		d.log.Errorf("cannot resizeStorage volume %s: %s", volumeId, err.Error())
+	}
+
+	if isBlockDevice {
+		_, err = d.upclouddriver.resizeBlockDevice(ctx, volume.UUID, int(resizeGigaBytes))
+		if err != nil {
+			d.log.Errorf("cannot resizeBlockDevice volume %s: %s", volumeId, err.Error())
+		}
+	} else {
+		_, err = d.upclouddriver.resizeStorage(ctx, volume.UUID, int(resizeGigaBytes), false)
+		if err != nil {
+			d.log.Errorf("cannot resizeStorage volume %s: %s", volumeId, err.Error())
+		}
 	}
 
 	d.log.WithFields(logrus.Fields{

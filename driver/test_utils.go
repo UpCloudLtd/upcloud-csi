@@ -159,6 +159,11 @@ func (m *mockUpCloudDriver) resizeStorage(ctx context.Context, uuid_ string, new
 	return &upcloud.StorageDetails{Storage: upcloud.Storage{UUID: id.String(), Size: newSize}}, nil
 }
 
+func (m *mockUpCloudDriver) resizeBlockDevice(ctx context.Context, uuid_ string, newSize int) (*upcloud.StorageDetails, error) {
+	id, _ := uuid.NewUUID()
+	return &upcloud.StorageDetails{Storage: upcloud.Storage{UUID: id.String(), Size: newSize}}, nil
+}
+
 func (m *mockUpCloudDriver) startServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error) {
 	return nil, nil
 }

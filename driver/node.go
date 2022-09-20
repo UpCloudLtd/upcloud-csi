@@ -41,15 +41,22 @@ func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRe
 		return nil, status.Error(codes.InvalidArgument, "NodeStageVolume Volume Capability must be provided")
 	}
 
+	source := d.getDiskSource(req.VolumeId)
+	target := req.StagingTargetPath
+
+	// No need to stage raw block device.
+	switch req.VolumeCapability.GetAccessType().(type) {
+	case *csi.VolumeCapability_Block:
+		d.log.WithFields(logrus.Fields{"source": source, "target": target}).Info("NodeStageVolume Raw block device requested")
+		return &csi.NodeStageVolumeResponse{}, nil
+	}
+
 	volumeName := ""
 	if volName, ok := req.GetPublishContext()[d.options.volumeName]; !ok {
 		return nil, status.Error(codes.InvalidArgument, "Could not find the volume by driverName")
 	} else {
 		volumeName = volName
 	}
-
-	source := d.getDiskSource(req.VolumeId)
-	target := req.StagingTargetPath
 
 	mnt := req.VolumeCapability.GetMount()
 	options := mnt.MountFlags
@@ -212,20 +219,28 @@ func (d *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolu
 		return nil, status.Error(codes.InvalidArgument, "NodePublishVolume Volume Capability must be provided")
 	}
 
-	source := req.StagingTargetPath
-	target := req.TargetPath
+	source := req.GetStagingTargetPath()
+	target := req.GetTargetPath()
 
-	mnt := req.VolumeCapability.GetMount()
-	options := mnt.MountFlags
-
-	options = append(options, "bind")
-	if req.Readonly {
+	options := []string{"bind"}
+	if req.GetReadonly() {
 		options = append(options, "ro")
 	}
-
-	fsType := "ext4"
-	if mnt.FsType != "" {
-		fsType = mnt.FsType
+	fsType := ""
+	switch req.GetVolumeCapability().GetAccessType().(type) {
+	case *csi.VolumeCapability_Block:
+		// raw block device requested, ignore filesystem and mount flags
+		source = d.getDiskSource(req.GetVolumeId())
+	case *csi.VolumeCapability_Mount:
+		if mnt := req.VolumeCapability.GetMount(); mnt != nil {
+			options = append(options, mnt.GetMountFlags()...)
+			fsType = mnt.GetFsType()
+		}
+		if fsType == "" {
+			fsType = "ext4"
+		}
+	default:
+		return nil, status.Error(codes.InvalidArgument, "NodePublishVolume Unknown volume access type")
 	}
 
 	nodePublishVolumeLog := d.log.WithFields(logrus.Fields{
