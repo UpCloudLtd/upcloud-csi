@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: debug
+  namespace: kube-system
+spec:
+  nodeName: cp-node-ffn6j
+  containers:
+    - image: quay.io/giantswarm/debug:latest
+      command:
+        - sh
+      args:
+        - "-c"
+        - "sleep 100000000s"
+      imagePullPolicy: IfNotPresent
+      name: debug
+  hostAliases:
+    - hostnames:
+        - kubernetes
+      ip: 127.0.0.1
+  hostNetwork: false
+  tolerations:
+    - effect: NoSchedule
+      operator: Exists
+    - effect: NoExecute
+      operator: Exists
+    - effect: PreferNoSchedule
+      operator: Exists
