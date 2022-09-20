@@ -45,6 +45,16 @@ reclaimPolicy: Retain
 #######################
 # Controller plugin
 #######################
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: upcloud
+  namespace: kube-system
+data:
+  username: ${UPCLOUD_CSI_USERNAME_B64}
+  password: ${UPCLOUD_CSI_PASSWORD_B64}
+---
 kind: StatefulSet
 apiVersion: apps/v1
 metadata:
@@ -120,7 +130,7 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: csi-upcloud-plugin
-          image: ghcr.io/upcloudltd/upcloud-csi:main
+          image: ghcr.io/upcloudltd/upcloud-csi:${UPCLOUD_CSI_VERSION}
           args:
             - "--endpoint=$(CSI_ENDPOINT)"
             - "--nodehost=$(NODE_ID)"
@@ -242,7 +252,7 @@ spec:
             - name: registration-dir
               mountPath: /registration/
         - name: csi-upcloud-plugin
-          image: ghcr.io/upcloudltd/upcloud-csi:main
+          image: ghcr.io/upcloudltd/upcloud-csi:${UPCLOUD_CSI_VERSION}
           args:
             - "--endpoint=$(CSI_ENDPOINT)"
             - "--nodehost=$(NODE_ID)"

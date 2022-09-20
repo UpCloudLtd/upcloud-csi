@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: csi-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: upcloud-block-storage
+---
+kind: Pod
+apiVersion: v1
+metadata:
+  name: csi-app
+  labels:
+    app: csi-app
+spec:
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 2000
+    fsGroup: 2000
+  containers:
+    - name: upcloud-test-pod
+      image: busybox
+      volumeMounts:
+        - mountPath: "/data"
+          name: upcloud-volume
+        - name: sec-ctx-vol
+          mountPath: "/empty-dir"
+      command: [ "sleep", "100000000s" ]
+  volumes:
+    - name: upcloud-volume
+      persistentVolumeClaim:
+        claimName: csi-pvc
+    - name: sec-ctx-vol
+      emptyDir: {}
