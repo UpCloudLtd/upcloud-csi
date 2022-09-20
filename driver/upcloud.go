@@ -37,6 +37,7 @@ type upcloudService interface {
 	getServer(context.Context, string) (*upcloud.ServerDetails, error)
 	getServerByHostname(context.Context, string) (*upcloud.Server, error)
 	resizeStorage(ctx context.Context, uuid string, newSize int, deleteBackup bool) (*upcloud.StorageDetails, error)
+	resizeBlockDevice(ctx context.Context, uuid string, newSize int) (*upcloud.StorageDetails, error)
 	stopServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error)
 	startServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error)
 	getStorageBackupByName(context.Context, string) (*upcloud.Storage, error)
@@ -214,6 +215,21 @@ func (u *upcloudClient) resizeStorage(ctx context.Context, uuid string, newSize 
 		}
 	}
 
+	return u.svc.WaitForStorageState(ctx, &request.WaitForStorageStateRequest{
+		UUID:         storage.Storage.UUID,
+		DesiredState: upcloud.StorageStateOnline,
+		Timeout:      storageStateTimeout * time.Second,
+	})
+}
+
+func (u *upcloudClient) resizeBlockDevice(ctx context.Context, uuid string, newSize int) (*upcloud.StorageDetails, error) {
+	storage, err := u.svc.ModifyStorage(ctx, &request.ModifyStorageRequest{
+		UUID: uuid,
+		Size: newSize,
+	})
+	if err != nil {
+		return nil, err
+	}
 	return u.svc.WaitForStorageState(ctx, &request.WaitForStorageStateRequest{
 		UUID:         storage.Storage.UUID,
 		DesiredState: upcloud.StorageStateOnline,

@@ -1,11 +1,14 @@
 package driver
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -75,36 +78,63 @@ func TestMounterFilesystem(t *testing.T) {
 	}
 
 	if canMount() {
-		mountPath, err := os.MkdirTemp(os.TempDir(), fmt.Sprintf("%s-mount-path-*", DefaultDriverName))
-		if err != nil {
+		if err := testMounterMountFilesystem(m, part, t); err != nil {
 			t.Error(err)
 			return
 		}
-		defer os.RemoveAll(mountPath)
-
-		if err := m.Mount(part, mountPath, "ext4"); err != nil {
-			t.Errorf("Mount failed with error: %s", err.Error())
+		if err := testMounterMountBlockDevice(m, part, t); err != nil {
+			t.Error(err)
 			return
 		}
-		isMounted, err := m.IsMounted(mountPath)
-		if err != nil {
-			t.Errorf("IsMounted failed with error: %s", err.Error())
-			return
-		}
-		if !isMounted {
-			t.Errorf("IsMounted returned false")
-			return
-		}
-
-		t.Logf("mounted %s to %s", part, mountPath)
-		if err := m.Unmount(mountPath); err != nil {
-			t.Errorf("Unmount failed with error: %s", err.Error())
-			return
-		}
-		t.Logf("unmounted %s", mountPath)
 	} else {
 		t.Log("skipped mount testing")
 	}
+}
+
+func testMounterMountFilesystem(m *mounter, partition string, t *testing.T) error {
+	mountPath := filepath.Join(os.TempDir(), fmt.Sprintf("%s-mount-path-%d", DefaultDriverName, time.Now().Unix()))
+	defer os.RemoveAll(mountPath)
+
+	if err := m.Mount(partition, mountPath, "ext4"); err != nil {
+		return fmt.Errorf("Mount failed with error: %s", err.Error())
+	}
+	isMounted, err := m.IsMounted(mountPath)
+	if err != nil {
+		return fmt.Errorf("IsMounted failed with error: %s", err.Error())
+	}
+	if !isMounted {
+		return errors.New("IsMounted returned false")
+	}
+
+	t.Logf("mounted %s to %s", partition, mountPath)
+	if err := m.Unmount(mountPath); err != nil {
+		return fmt.Errorf("Unmount failed with error: %s", err.Error())
+	}
+	t.Logf("unmounted %s", mountPath)
+	return nil
+}
+
+func testMounterMountBlockDevice(m *mounter, partition string, t *testing.T) error {
+	mountPath := filepath.Join(os.TempDir(), fmt.Sprintf("%s-mount-path-%d", DefaultDriverName, time.Now().Unix()))
+	defer os.RemoveAll(mountPath)
+
+	if err := m.Mount(partition, mountPath, "", "bind"); err != nil {
+		return fmt.Errorf("Mount failed with error: %s", err.Error())
+	}
+	isMounted, err := m.IsMounted(mountPath)
+	if err != nil {
+		return fmt.Errorf("IsMounted failed with error: %s", err.Error())
+	}
+	if !isMounted {
+		return errors.New("IsMounted returned false")
+	}
+
+	t.Logf("mounted %s to %s", partition, mountPath)
+	if err := m.Unmount(mountPath); err != nil {
+		return fmt.Errorf("Unmount failed with error: %s", err.Error())
+	}
+	t.Logf("unmounted %s", mountPath)
+	return nil
 }
 
 func TestMounterDisk(t *testing.T) {
