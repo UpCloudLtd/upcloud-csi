@@ -28,3 +28,8 @@ clean-tests:
 
 test-driver:
 	go test -v github.com/UpCloudLtd/upcloud-csi/driver
+
+test-objgen:
+	go test -v github.com/UpCloudLtd/upcloud-csi/driver/objgen
+
+test: test-driver test-objgen
