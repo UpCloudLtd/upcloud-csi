@@ -6,6 +6,8 @@ on:
   pull_request:
     paths:
       - driver/**
+      - vendor/**
+      - go.*
 
 jobs:
   build:
@@ -17,4 +19,4 @@ jobs:
       - uses: actions/setup-go@v3
 
       - name: Test Driver
-        run: sudo make test-driver
+        run: sudo make test
