@@ -2,6 +2,7 @@ cmd/upcloud-csi-plugin/upcloud-csi-plugin
 /go.work
 /go.work.sum
 .vscode
-.idea
 temp/ 
+.idea/
 .DS_Store
+vendor/.DS_Store
