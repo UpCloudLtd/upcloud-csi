@@ -5,4 +5,4 @@ cmd/upcloud-csi-plugin/upcloud-csi-plugin
 temp/ 
 .idea/
 .DS_Store
-vendor/.DS_Store
+vendor/
