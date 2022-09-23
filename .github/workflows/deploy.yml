@@ -2,8 +2,8 @@ name: build
 
 on:
   push:
-    branches: [ 'main', 'alpha', 'beta' ]
-    tags: [ 'v*' ]
+    branches: ["main", "alpha", "beta"]
+    tags: ["v*"]
 
 env:
   REGISTRY: ghcr.io
@@ -43,7 +43,7 @@ jobs:
           go-version: 1.17.0
 
       - name: Build Go binary
-        run: GOOS=${{ env.GOOS }} GOARCH=${{ env.GOARCH }} CGO_ENABLED=0 go build -mod=vendor -ldflags "-w -s" -o cmd/upcloud-csi-plugin/${{ env.NAME }} ${{ env.PKG }}
+        run: GOOS=${{ env.GOOS }} GOARCH=${{ env.GOARCH }} CGO_ENABLED=0 go build -ldflags "-w -s" -o cmd/upcloud-csi-plugin/${{ env.NAME }} ${{ env.PKG }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v2.9.0
