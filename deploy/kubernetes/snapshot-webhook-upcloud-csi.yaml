@@ -20,7 +20,7 @@ webhooks:
         name: snapshot-validation-service
         path: "/volumesnapshot"
       # NOTE: Uncomment and update CA bundle field if custom CA is used to verify the TLS connection
-      #caBundle: ${CA_BUNDLE}
+      #caBundle: $CA_BUNDLE
     admissionReviewVersions: ["v1", "v1beta1"]
     sideEffects: None
     failurePolicy: Ignore # We recommend switching to Fail only after successful installation of the webhook server and webhook.

@@ -1,7 +1,9 @@
 package objgen
 
 import (
+	"errors"
 	"fmt"
+
 	. "github.com/UpCloudLtd/upcloud-csi/deploy/kubernetes"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -21,6 +23,13 @@ type Output struct {
 }
 
 func Get(vars map[string]string) (*Output, error) {
+	return GetTemplate(vars, SecretsTemplate, CRDTemplate, RbacTemplate, CSITemplate)
+}
+
+func GetTemplate(vars map[string]string, template ...string) (*Output, error) {
+	if len(template) == 0 {
+		return nil, errors.New("template(s) missing")
+	}
 	var (
 		rawYaml []byte
 		err     error
@@ -44,7 +53,7 @@ func Get(vars map[string]string) (*Output, error) {
 			return nil, fmt.Errorf("can't parse variable list from template: %w", err)
 		}
 
-		for key, _ := range crdVars {
+		for key := range crdVars {
 			if _, exist := vars[key]; !exist {
 				return nil, fmt.Errorf("variable %s is not defined in input variables", key)
 			}
@@ -55,34 +64,22 @@ func Get(vars map[string]string) (*Output, error) {
 			return nil, fmt.Errorf("can't substitute variables in cluster template: %w", err)
 		}
 
-		processedTemplate = append(processedTemplate, []byte("---")...)
+		processedTemplate = append(processedTemplate, []byte("---\n")...)
 
 		return processedTemplate, nil
 
 	}
 
 	output := &Output{}
-	rawYaml, err = processTemplate(CRDTemplate)
-	if err != nil {
-		return nil, fmt.Errorf("can't parse CRDTemplate: %w", err)
+
+	for i, t := range template {
+		rawYaml, err = processTemplate(t)
+		if err != nil {
+			return nil, fmt.Errorf("can't parse template #%d: %w", i, err)
+		}
+
+		output.RawYaml = append(output.RawYaml, rawYaml...)
 	}
-
-	output.RawYaml = append(output.RawYaml, rawYaml...)
-
-	rawYaml, err = processTemplate(RbacTemplate)
-	if err != nil {
-		return nil, fmt.Errorf("can't parse RbacTemplate: %w", err)
-	}
-
-	output.RawYaml = append(output.RawYaml, rawYaml...)
-
-	rawYaml, err = processTemplate(CSITemplate)
-	if err != nil {
-		return nil, fmt.Errorf("can't parse CSITemplate: %w", err)
-	}
-
-	output.RawYaml = append(output.RawYaml, rawYaml...)
-
 	//for {
 	//	u := &unstructured.Unstructured{}
 	//	_, gvk, err := decoder.Decode(nil, u)
