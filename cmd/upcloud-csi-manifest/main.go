@@ -16,6 +16,7 @@ func main() {
 	flagSet := pflag.NewFlagSet("default", pflag.ContinueOnError)
 
 	var (
+		output                  = flagSet.String("output", "", "Output to file. Defaults to STDOUT.")
 		secretsManifest         = flagSet.Bool("secrets", false, "Include secrets manifest.")
 		setupManifest           = flagSet.Bool("setup", true, "Include setup manifest.")
 		rbacManifest            = flagSet.Bool("rbac", true, "Include RBAC manifest.")
@@ -64,7 +65,17 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fmt.Println(string(manifest.RawYaml))
+	if err := writeOutput(*output, manifest.RawYaml); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func writeOutput(file string, data []byte) error {
+	if file != "" {
+		return os.WriteFile(file, data, 0640)
+	}
+	_, err := fmt.Println(string(data))
+	return err
 }
 
 func secretsUsername(username *string) string {
