@@ -48,12 +48,12 @@ func GetTemplate(vars map[string]string, template ...string) (*Output, error) {
 	}
 
 	processTemplate := func(template string) ([]byte, error) {
-		crdVars, err := processor.GetVariableMap([]byte(template))
+		vars, err := processor.GetVariableMap([]byte(template))
 		if err != nil {
 			return nil, fmt.Errorf("can't parse variable list from template: %w", err)
 		}
 
-		for key := range crdVars {
+		for key := range vars {
 			if _, exist := vars[key]; !exist {
 				return nil, fmt.Errorf("variable %s is not defined in input variables", key)
 			}
