@@ -7,6 +7,7 @@ import (
 	"os"
 
 	. "github.com/UpCloudLtd/upcloud-csi/deploy/kubernetes"
+	"github.com/UpCloudLtd/upcloud-csi/driver"
 	"github.com/UpCloudLtd/upcloud-csi/driver/objgen"
 	"github.com/spf13/pflag"
 )
@@ -16,6 +17,7 @@ func main() {
 	flagSet := pflag.NewFlagSet("default", pflag.ContinueOnError)
 
 	var (
+		version                 = flagSet.Bool("version", false, "Print the version and exit.")
 		output                  = flagSet.String("output", "", "Output to file. Defaults to STDOUT.")
 		secretsManifest         = flagSet.Bool("secrets", false, "Include secrets manifest.")
 		setupManifest           = flagSet.Bool("setup", true, "Include setup manifest.")
@@ -33,6 +35,11 @@ func main() {
 			os.Exit(0)
 		}
 		log.Fatalln(err)
+	}
+
+	if *version {
+		fmt.Printf("%s - %s (%s)\n", driver.GetVersion(), driver.GetCommit(), driver.GetTreeState())
+		os.Exit(0)
 	}
 
 	vars := map[string]string{}
