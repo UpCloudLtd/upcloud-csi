@@ -66,13 +66,16 @@ func main() {
 		log.Fatal("select atleast one manifest")
 	}
 
-	manifest, err := objgen.GetTemplate(vars, templates...)
+	manifest, err := objgen.Get(vars, templates...)
 
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	if err := writeOutput(*output, manifest.RawYaml); err != nil {
+	data, err := manifest.MarshalYAML()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := writeOutput(*output, data); err != nil {
 		log.Fatal(err)
 	}
 }
