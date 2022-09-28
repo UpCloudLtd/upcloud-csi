@@ -1,12 +1,51 @@
 project_name: upcloud-csi
+before:
+  hooks:
+    - make build-manifest && mkdir -p ./temp
+    - ./cmd/upcloud-csi-manifest/upcloud-csi-manifest --output=./temp/{{ .ProjectName }}-deploy.yaml --driver-version={{ if .IsSnapshot }}main{{ else }}v{{ .Version }}{{ end }}
+    - ./cmd/upcloud-csi-manifest/upcloud-csi-manifest --crd=true --rbac=false --setup=false --output=./temp/{{ .ProjectName }}-crd.yaml --driver-version={{ if .IsSnapshot }}main{{ else }}v{{ .Version }}{{ end }}
+    - ./cmd/upcloud-csi-manifest/upcloud-csi-manifest --crd=false --rbac=true --setup=false  --output=./temp/{{ .ProjectName }}-rbac.yaml --driver-version={{ if .IsSnapshot }}main{{ else }}v{{ .Version }}{{ end }}
+    - ./cmd/upcloud-csi-manifest/upcloud-csi-manifest --crd=false --rbac=false --setup=true --output=./temp/{{ .ProjectName }}-setup.yaml --driver-version={{ if .IsSnapshot }}main{{ else }}v{{ .Version }}{{ end }}
 builds:
-  - env:
+  - id: upcloud-csi-plugin
+    env:
       - CGO_ENABLED=0
     dir: .
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/UpCloudLtd/upcloud-csi/driver.version={{ if .IsSnapshot }}main{{ else }}{{ .Version }}{{ end }}
+      - -X github.com/UpCloudLtd/upcloud-csi/driver.commit={{ .ShortCommit }}
+      - -X github.com/UpCloudLtd/upcloud-csi/driver.gitTreeState={{ if .IsSnapshot }}dirty{{ else }}clean{{ end }}
     main: ./cmd/upcloud-csi-plugin
+    binary: "upcloud-csi-plugin_v{{ .Version }}"
     goos:
       - linux
       - darwin
     goarch:
       - amd64
       - arm64
+  - id: upcloud-csi-manifest
+    env:
+      - CGO_ENABLED=0
+    dir: .
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/UpCloudLtd/upcloud-csi/driver.version={{ if .IsSnapshot }}main{{ else }}{{ .Version }}{{ end }}
+      - -X github.com/UpCloudLtd/upcloud-csi/driver.commit={{ .ShortCommit }}
+      - -X github.com/UpCloudLtd/upcloud-csi/driver.gitTreeState={{ if .IsSnapshot }}dirty{{ else }}clean{{ end }}
+    main: ./cmd/upcloud-csi-manifest
+    binary: "upcloud-csi-manifest_v{{ .Version }}"
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+release:
+  draft: true
+  extra_files:
+    - glob: ./temp/{{ .ProjectName }}-*.yaml
