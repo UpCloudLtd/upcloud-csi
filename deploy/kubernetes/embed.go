@@ -2,6 +2,9 @@ package kubernetes
 
 import _ "embed"
 
+//go:embed secrets-upcloud-csi.yaml
+var SecretsTemplate string
+
 //go:embed crd-upcloud-csi.yaml
 var CRDTemplate string
 

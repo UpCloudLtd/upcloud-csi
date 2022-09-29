@@ -1,6 +1,8 @@
-NAME=upcloud-csi-plugin
+PLUGIN_NAME=upcloud-csi-plugin
+PLUGIN_PKG ?= github.com/UpCloudLtd/upcloud-csi/cmd/upcloud-csi-plugin
+MANIFEST_NAME=upcloud-csi-manifest
+MANIFEST_PKG ?= github.com/UpCloudLtd/upcloud-csi/cmd/upcloud-csi-manifest
 OS ?= linux
-PKG ?= github.com/UpCloudLtd/upcloud-csi/cmd/upcloud-csi-plugin
 GO_VERSION := 1.17.6
 ARCH := amd64
 CGO_ENABLED := 1
@@ -8,7 +10,10 @@ CGO_ENABLED := 1
 .PHONY: compile
 compile:
 	@echo "==> Building the project"
-	@docker run --rm -e CGO_ENABLED=${CGO_ENABLED} -e GOOS=${OS} -e GOARCH=${ARCH} -v ${PWD}/:/app -w /app golang:${GO_VERSION}-alpine sh -c 'apk add git && go build -ldflags "-w -s" -o cmd/upcloud-csi-plugin/${NAME} ${PKG}'
+	@docker run --rm -e CGO_ENABLED=${CGO_ENABLED} -e GOOS=${OS} -e GOARCH=${ARCH} -v ${PWD}/:/app -w /app golang:${GO_VERSION}-alpine sh -c \
+		'apk add git && \
+		go build -ldflags "-w -s" -o cmd/upcloud-csi-plugin/${PLUGIN_NAME} ${PLUGIN_PKG} && \
+		go build -ldflags "-w -s" -o cmd/upcloud-csi-manifest/${MANIFEST_NAME} ${MANIFEST_PKG}'
 
 
 .PHONY: docker-build
@@ -33,3 +38,13 @@ test-objgen:
 	go test -v github.com/UpCloudLtd/upcloud-csi/driver/objgen
 
 test: test-driver test-objgen
+
+build-plugin:
+	CGO_ENABLED=0 go build -ldflags "-w -s" -o cmd/upcloud-csi-plugin/${PLUGIN_NAME} ${PLUGIN_PKG}
+
+build-manifest:
+	CGO_ENABLED=0 go build -ldflags "-w -s" -o cmd/upcloud-csi-manifest/${MANIFEST_NAME} ${MANIFEST_PKG}
+
+.PHONY: build
+build: build-plugin build-manifest
+
