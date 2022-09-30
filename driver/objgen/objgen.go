@@ -65,7 +65,6 @@ func (o *Output) UnmarshalYAML(data []byte) error {
 
 		var obj runtime.Object
 		switch gvk.Kind {
-
 		case "DaemonSet":
 			obj = &appsv1.DaemonSet{}
 		case "StatefulSet":

@@ -46,10 +46,9 @@ const (
 
 // Driver implements the following CSI interfaces:
 //
-//   csi.IdentityServer
-//   csi.ControllerServer
-//   csi.NodeServer
-//
+//	csi.IdentityServer
+//	csi.ControllerServer
+//	csi.NodeServer
 type Driver struct {
 	options *driverOptions
 
@@ -77,6 +76,8 @@ type driverOptions struct {
 	driverName string
 	// volumeName is used to pass the volume from
 	// `ControllerPublishVolume` to `NodeStageVolume or `NodePublishVolume`
+	//
+	// TODO: This field is passed using context but is it actually used somehow?
 	volumeName string
 
 	endpoint     string
@@ -90,7 +91,7 @@ type driverOptions struct {
 // NewDriver returns a CSI plugin that contains the necessary gRPC
 // interfaces to interact with Kubernetes over unix domain sockets for
 // managing Upcloud Block Storage
-func NewDriver(options ...func(*driverOptions)) (*Driver, error) {
+func NewDriver(logger *logrus.Logger, options ...func(*driverOptions)) (*Driver, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*initTimeout)
 	defer cancel()
 
@@ -117,7 +118,6 @@ func NewDriver(options ...func(*driverOptions)) (*Driver, error) {
 		fmt.Printf("Failed to login in API: %s\n", err)
 		os.Exit(1)
 	}
-	fmt.Printf("%+v", acc)
 
 	serverDetails, err := determineServer(ctx, svc, driverOpts.nodeHost)
 	if err != nil {
@@ -129,11 +129,16 @@ func NewDriver(options ...func(*driverOptions)) (*Driver, error) {
 	driverOpts.nodeId = serverDetails.Server.UUID
 
 	healthChecker := NewHealthChecker(&upcloudHealthChecker{account: svc.GetAccount})
-	log := logrus.New().WithFields(logrus.Fields{
-		"region":  driverOpts.zone,
-		"node_id": driverOpts.nodeHost,
+	hostname, err := os.Hostname()
+	if err != nil {
+		hostname = "localhost"
+	}
+	log := logger.WithFields(logrus.Fields{
+		"region":   driverOpts.zone,
+		"node_id":  driverOpts.nodeHost,
+		"hostname": hostname,
 	})
-
+	log.WithField("username", acc.UserName).Info("init driver")
 	return &Driver{
 		options: driverOpts,
 		mounter: newMounter(log),
@@ -193,25 +198,16 @@ func (d *Driver) Run() error {
 		return fmt.Errorf("failed to listen: %v", err)
 	}
 
-	// log response errors for better observability
-	errHandler := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		resp, err := handler(ctx, req)
-		if err != nil {
-			d.log.WithField("method", info.FullMethod).Errorf("method failed: %s", err)
-		}
-		return resp, err
-	}
-
 	if d.options.isController {
 		quotaDetails, err := d.checkStorageQuota()
 		if err != nil && quotaDetails != nil {
-			d.log.WithFields(logrus.Fields{"details": quotaDetails}).Warn(err)
+			d.log.WithError(err).WithField("details", quotaDetails).Warn(err)
 		} else if err != nil {
-			d.log.Errorf("Quota request error: %s", err)
+			d.log.WithError(err).Error("quota request failed")
 		}
 	}
 
-	d.srv = grpc.NewServer(grpc.UnaryInterceptor(errHandler))
+	d.srv = grpc.NewServer(grpc.UnaryInterceptor(serverLogMiddleware(d.log)))
 	csi.RegisterIdentityServer(d.srv, d)
 	csi.RegisterControllerServer(d.srv, d)
 	csi.RegisterNodeServer(d.srv, d)

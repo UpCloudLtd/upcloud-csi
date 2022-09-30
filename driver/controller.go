@@ -27,6 +27,8 @@ var supportedCapabilities = []csi.ControllerServiceCapability_RPC_Type{
 
 // CreateVolume provisions storage via UpCloud Storage service.
 func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (resp *csi.CreateVolumeResponse, err error) {
+	log := logWithServerContext(d.log, ctx).WithField(logVolumeNameKey, req.GetName())
+
 	if req.Name == "" {
 		return nil, status.Error(codes.InvalidArgument, "CreateVolume Name cannot be empty")
 	}
@@ -61,14 +63,6 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 
 	volumeName := req.Name
 
-	log := d.log.WithFields(logrus.Fields{
-		"volume_name":             volumeName,
-		"storage_size_giga_bytes": storageSize / giB,
-		"method":                  "create_volume",
-		"volume_capabilities":     req.VolumeCapabilities,
-	})
-	log.Info("create volume called")
-
 	// get volume first, and skip if exists
 	volumes, err := d.upclouddriver.getStorageByName(ctx, volumeName)
 	if err != nil {
@@ -85,7 +79,7 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 			return nil, status.Errorf(codes.AlreadyExists, "invalid storage size requested: %d", storageSize)
 		}
 
-		log.Info("volume already exists")
+		log.WithField(logVolumeIDKey, vol.UUID).Info("volume already exists")
 		return &csi.CreateVolumeResponse{
 			Volume: &csi.Volume{
 				VolumeId:      vol.UUID,
@@ -118,6 +112,7 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 		default:
 			return nil, status.Errorf(codes.InvalidArgument, "%v not a proper volume source", volContentSrc)
 		}
+		log := log.WithField("source_id", sourceID)
 		src, err := d.upclouddriver.getStorageByUUID(ctx, sourceID)
 		if err != nil {
 			return nil, fmt.Errorf("could not retrieve source volume by ID: %v", err)
@@ -129,13 +124,15 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 			Tier:  tier,
 			Title: volumeName,
 		}
-		log.WithField("volume_req", volumeReq).Infof("creating volume by cloning storage ID %s", src.Storage.UUID)
+		logWithServiceRequest(log, volumeReq).Info("cloning volume")
 		vol, err = d.upclouddriver.cloneStorage(ctx, volumeReq)
 		if err != nil {
 			return nil, status.Error(codes.Internal, err.Error())
 		}
+
+		log = log.WithField(logVolumeIDKey, vol.Storage.UUID).WithField("size", vol.Storage.Size)
 		if storageSizeGB > vol.Storage.Size {
-			log.WithField("volume_req", volumeReq).Infof("resizing created volume %s from %dGB to %dGB", vol.Storage.UUID, vol.Storage.Size, storageSizeGB)
+			log.WithField("new_size", storageSizeGB).Info("resizing volume")
 			// resize cloned storage and delete backup taken during resize operation as this is newly created storage
 			if vol, err = d.upclouddriver.resizeStorage(ctx, vol.Storage.UUID, storageSizeGB, true); err != nil {
 				return nil, status.Error(codes.Internal, err.Error())
@@ -149,8 +146,7 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 			Tier:  tier,
 		}
 
-		log.WithField("volume_req", volumeReq).Info("creating volume")
-		log.Debugf("volume request: %#v", *volumeReq)
+		logWithServiceRequest(log, volumeReq).Info("creating volume")
 		if vol, err = d.upclouddriver.createStorage(ctx, volumeReq); err != nil {
 			return nil, status.Error(codes.Internal, err.Error())
 		}
@@ -171,8 +167,6 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 		},
 	}
 
-	log.WithField("response", resp).Info("volume created")
-
 	return volResp, nil
 }
 
@@ -182,36 +176,26 @@ func (d *Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest)
 		return nil, status.Error(codes.InvalidArgument, "DeleteVolume Volume ID must be provided")
 	}
 
-	log := d.log.WithFields(logrus.Fields{
-		"volume_id": req.VolumeId,
-		"method":    "delete_volume",
-	})
-	log.Info("delete volume called")
-
-	err := d.upclouddriver.deleteStorage(ctx, req.VolumeId)
-	if err != nil {
-		return nil, err
-	}
-
-	log.Info("volume was deleted")
-
-	return &csi.DeleteVolumeResponse{}, nil
+	logWithServerContext(d.log, ctx).WithField(logVolumeIDKey, req.GetVolumeId()).Info("deleting volume")
+	return &csi.DeleteVolumeResponse{},
+		d.upclouddriver.deleteStorage(ctx, req.VolumeId)
 }
 
 // ControllerPublishVolume attaches storage to a node via UpCloud Storage service.
 func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.ControllerPublishVolumeRequest) (*csi.ControllerPublishVolumeResponse, error) {
 	if req.VolumeId == "" {
-		return nil, status.Error(codes.InvalidArgument, "ControllerPublishVolume Volume ID must be provided")
+		return nil, status.Error(codes.InvalidArgument, "volume ID must be provided")
 	}
+	log := logWithServerContext(d.log, ctx).WithField(logVolumeIDKey, req.GetVolumeId())
 
 	if req.NodeId == "" {
-		return nil, status.Error(codes.InvalidArgument, "ControllerPublishVolume Node ID must be provided")
+		return nil, status.Error(codes.InvalidArgument, "node ID must be provided")
 	}
+	log = log.WithField(logNodeIDKey, req.GetNodeId())
 
 	if req.VolumeCapability == nil {
-		return nil, status.Error(codes.InvalidArgument, "ControllerPublishVolume Volume capability must be provided")
+		return nil, status.Error(codes.InvalidArgument, "volume capability must be provided")
 	}
-
 	if req.Readonly {
 		return nil, status.Error(codes.AlreadyExists, "read only Volumes are not supported")
 	}
@@ -221,24 +205,18 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 		return nil, err
 	}
 
-	log := d.log.WithFields(logrus.Fields{
-		"volume_id": req.VolumeId,
-		"node_id":   req.NodeId,
-		"method":    "controller_publish_volume",
-	})
-	log.Info("controller publish volume called")
-
 	// check if volume exist before trying to attach it
+	log.Info("getting storage by uuid")
 	volume, err := d.upclouddriver.getStorageByUUID(ctx, req.VolumeId)
 	if err != nil {
-		d.log.Errorf("get storage by uuid error: %s", err)
 		return nil, err
 	}
 
 	if volume.State != upcloud.StorageStateOnline {
+		log.Info("waiting storage to become online")
 		volume, err = d.upclouddriver.waitForStorageState(ctx, volume.UUID, upcloud.StorageStateOnline)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "ControllerPublishVolume failed with: %s", err.Error())
+			return nil, err
 		}
 	}
 
@@ -249,7 +227,8 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 			log.Info("volume is already attached")
 			return &csi.ControllerPublishVolumeResponse{
 				PublishContext: map[string]string{
-					d.options.volumeName: volume.Title,
+					d.options.volumeName:        volume.Title,
+					string(ctxCorrelationIDKey): contextCorrelationID(ctx),
 				},
 			}, nil
 		}
@@ -262,16 +241,17 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 			req.VolumeId, attachedID)
 	}
 
+	log.Info("attaching storage to node")
 	err = d.upclouddriver.attachStorage(ctx, req.VolumeId, server.UUID)
 	if err != nil {
 		// already attached to the node
 		return nil, err
 	}
 
-	log.Info("volume was attached")
 	return &csi.ControllerPublishVolumeResponse{
 		PublishContext: map[string]string{
-			d.options.volumeName: volume.Title,
+			d.options.volumeName:        volume.Title,
+			string(ctxCorrelationIDKey): contextCorrelationID(ctx),
 		},
 	}, nil
 }
@@ -279,33 +259,34 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 // ControllerUnpublishVolume detaches storage from a node via UpCloud Storage service.
 func (d *Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest) (*csi.ControllerUnpublishVolumeResponse, error) {
 	if req.VolumeId == "" {
-		return nil, status.Error(codes.InvalidArgument, "ControllerUnpublishVolume Volume ID must be provided")
+		return nil, status.Error(codes.InvalidArgument, "volume ID must be provided")
 	}
+	log := logWithServerContext(d.log, ctx).WithField(logVolumeIDKey, req.GetVolumeId())
 
-	log := d.log.WithFields(logrus.Fields{
-		"volume_id": req.VolumeId,
-		"node_id":   req.NodeId,
-		"method":    "controller_unpublish_volume",
-	})
-	log.Info("controller unpublish volume called")
+	if req.NodeId == "" {
+		return nil, status.Error(codes.InvalidArgument, "node ID must be provided")
+	}
+	log = log.WithField(logNodeIDKey, req.GetNodeId())
 
+	log.Info("getting storage by uuid")
 	// check if volume exist before trying to detach it
-	_, err := d.upclouddriver.getStorageByUUID(ctx, req.VolumeId)
+	_, err := d.upclouddriver.getStorageByUUID(ctx, req.GetVolumeId())
 	if err != nil {
 		return nil, err
 	}
 
-	server, err := d.upclouddriver.getServerByHostname(ctx, req.NodeId)
+	log.Info("getting server by hostname")
+	server, err := d.upclouddriver.getServerByHostname(ctx, req.GetNodeId())
 	if err != nil {
 		return nil, err
 	}
 
+	log.Info("detaching volume")
 	err = d.upclouddriver.detachStorage(ctx, req.VolumeId, server.UUID)
 	if err != nil {
 		return nil, err
 	}
 
-	log.Info("volume was detached")
 	return &csi.ControllerUnpublishVolumeResponse{}, nil
 }
 
@@ -322,22 +303,15 @@ func (d *Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Valida
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "ValidateVolumeCapabilities Volume ID must be provided")
 	}
+	log := logWithServerContext(d.log, ctx).WithField(logVolumeIDKey, req.GetVolumeId())
 
 	if req.VolumeCapabilities == nil {
 		return nil, status.Error(codes.InvalidArgument, "ValidateVolumeCapabilities Volume Capabilities must be provided")
 	}
 
-	log := d.log.WithFields(logrus.Fields{
-		"volume_id":              req.VolumeId,
-		"volume_capabilities":    req.VolumeCapabilities,
-		"supported_capabilities": supportedAccessMode,
-		"method":                 "validate_volume_capabilities",
-	})
-	log.Info("validate volume capabilities called")
-
+	log.Info("getting storage by uuid")
 	// check if volume exist before trying to validate it
-	_, err := d.upclouddriver.getStorageByUUID(ctx, req.VolumeId)
-	if err != nil {
+	if _, err := d.upclouddriver.getStorageByUUID(ctx, req.VolumeId); err != nil {
 		return nil, err
 	}
 
@@ -357,24 +331,13 @@ func (d *Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Valida
 }
 
 // ListVolumes returns a list of all requested volumes.
+// TODO OPTIONAL: implement starting token / pagination
 func (d *Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
-	log := d.log.WithFields(logrus.Fields{
-		"max_entries":        req.MaxEntries,
-		"req_starting_token": req.StartingToken,
-		"method":             "list_volumes",
+	log := logWithServerContext(d.log, ctx).WithFields(logrus.Fields{
+		"starting_token": req.GetStartingToken(),
+		"max_entries":    req.GetMaxEntries(),
 	})
-	log.Info("list volumes called")
-
-	// TODO OPTIONAL: implement starting token / pagination
-	//var startingToken int32
-	//if req.StartingToken != "" {
-	//	parsedToken, err := strconv.ParseInt(req.StartingToken, 10, 32)
-	//	if err != nil {
-	//		return nil, status.Errorf(codes.Aborted, "ListVolumes starting token %q is not valid: %s", req.StartingToken, err)
-	//	}
-	//	startingToken = int32(parsedToken)
-	//}
-
+	log.Info("getting list of storages")
 	volumes, err := d.upclouddriver.listStorage(ctx, d.options.zone)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "listvolumes failed with: %s", err.Error())
@@ -390,27 +353,12 @@ func (d *Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (
 		})
 	}
 
-	resp := &csi.ListVolumesResponse{
-		Entries: entries,
-	}
-
-	// TODO start token
-	//if nextToken > 0 {
-	//	resp.NextToken = strconv.FormatInt(int64(nextToken), 10)
-	//}
-
-	log.WithField("response", resp).Info("volumes listed")
-	return resp, nil
+	log.Infof("found %d storages", len(entries))
+	return &csi.ListVolumesResponse{Entries: entries}, nil
 }
 
 // GetCapacity returns the capacity of the storage pool.
 func (d *Driver) GetCapacity(ctx context.Context, req *csi.GetCapacityRequest) (*csi.GetCapacityResponse, error) {
-	// TODO
-	d.log.WithFields(logrus.Fields{
-		"params": req.Parameters,
-		"method": "get_capacity",
-	}).Warn("get capacity is not implemented")
-
 	return nil, status.Error(codes.Unimplemented, "")
 }
 
@@ -431,27 +379,24 @@ func (d *Driver) ControllerGetCapabilities(ctx context.Context, req *csi.Control
 		caps = append(caps, newCap(capability))
 	}
 
-	resp := &csi.ControllerGetCapabilitiesResponse{
+	logWithServerContext(d.log, ctx).WithField("caps", caps).Info("reporting capabilities")
+	return &csi.ControllerGetCapabilitiesResponse{
 		Capabilities: caps,
-	}
-
-	d.log.WithFields(logrus.Fields{
-		"response": resp,
-		"method":   "controller_get_capabilities",
-	}).Info("controller get capabilities called")
-
-	return resp, nil
+	}, nil
 }
 
 // CreateSnapshot will be called by the CO to create a new snapshot from a
 // source volume on behalf of a user.
 func (d *Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
+	log := logWithServerContext(d.log, ctx)
+	log.Info("getting storage backup by name")
 	s, err := d.upclouddriver.getStorageBackupByName(ctx, req.GetName())
 	if err != nil && err != errUpCloudStorageNotFound {
 		return nil, status.Errorf(codes.Internal, "createsnapshot failed with: %s", err.Error())
 	}
 
 	if s == nil {
+		log.Info("creating strorage backup")
 		sd, err := d.upclouddriver.createStorageBackup(ctx, req.GetSourceVolumeId(), req.GetName())
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "createsnapshot failed with: %s", err.Error())
@@ -473,7 +418,7 @@ func (d *Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequ
 // DeleteSnapshot will be called by the CO to delete a snapshot.
 func (d *Driver) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
 	if err := d.upclouddriver.deleteStorageBackup(ctx, req.GetSnapshotId()); err != nil {
-		return nil, status.Errorf(codes.Internal, "deletesnapshot failed with: %s", err.Error())
+		return nil, status.Errorf(codes.Internal, err.Error())
 	}
 
 	return &csi.DeleteSnapshotResponse{}, nil
@@ -483,7 +428,14 @@ func (d *Driver) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotRequ
 // system within the given parameters regardless of how they were created.
 // ListSnapshots should not list a snapshot that is being created but has not
 // been cut successfully yet.
+//
+// TODO OPTIONAL: implement starting token / pagination
 func (d *Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest) (*csi.ListSnapshotsResponse, error) {
+	log := logWithServerContext(d.log, ctx).WithFields(logrus.Fields{
+		"starting_token": req.GetStartingToken(),
+		"max_entries":    req.GetMaxEntries(),
+	})
+	log.Info("getting list of storage snapshots")
 	backups, err := d.upclouddriver.listStorageBackups(ctx, req.GetSourceVolumeId())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "listsnapshots failed with: %s", err.Error())
@@ -500,7 +452,7 @@ func (d *Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsReques
 			},
 		})
 	}
-	// TODO OPTIONAL: implement starting token / pagination
+	log.Infof("found %d snapshots", len(entries))
 	return &csi.ListSnapshotsResponse{
 		Entries: entries,
 	}, nil
@@ -508,35 +460,32 @@ func (d *Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsReques
 
 // ControllerExpandVolume is called from the resizer to increase the volume size.
 func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
-	volumeId := req.VolumeId
+	volumeId := req.GetVolumeId()
 
-	if len(volumeId) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "ControllerExpandVolume volume ID missing in request")
+	if volumeId == "" {
+		return nil, status.Error(codes.InvalidArgument, "volume ID missing in request")
 	}
+	log := logWithServerContext(d.log, ctx).WithField(logVolumeIDKey, req.GetVolumeId())
 
+	log.Info("getting storage by uuid")
 	volume, err := d.upclouddriver.getStorageByUUID(ctx, volumeId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "ControllerExpandVolume could not retrieve existing volumes: %v", err)
+		return nil, status.Errorf(codes.Internal, "could not retrieve existing volumes: %v", err)
 	}
 
 	resizeBytes, err := obtainSize(req.CapacityRange)
 	if err != nil {
-		return nil, status.Errorf(codes.OutOfRange, "ControllerExpandVolume invalid capacity range: %v", err)
+		return nil, status.Errorf(codes.OutOfRange, "invalid capacity range: %v", err)
 	}
 	resizeGigaBytes := resizeBytes / giB
 
-	log := d.log.WithFields(logrus.Fields{
-		"volume_id": volumeId,
-		"method":    "controller_expand_volume",
+	log = log.WithFields(logrus.Fields{
+		"size":     volume.Size,
+		"new_size": resizeGigaBytes,
 	})
 
-	log.Infof("controller expand volume called: volume - %v", volume)
-
 	if resizeGigaBytes <= int64(volume.Size) {
-		log.WithFields(logrus.Fields{
-			"current_volume_size":   volume.Size,
-			"requested_volume_size": resizeGigaBytes,
-		}).Info("skipping volume resizeStorage because current volume size exceeds requested volume size")
+		log.Info("skipping volume resizeStorage because current volume size exceeds requested volume size")
 		return &csi.ControllerExpandVolumeResponse{CapacityBytes: int64(volume.Size * giB), NodeExpansionRequired: true}, nil
 	}
 
@@ -552,21 +501,18 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 	}
 
 	if isBlockDevice {
+		log.Info("resizing block device")
 		_, err = d.upclouddriver.resizeBlockDevice(ctx, volume.UUID, int(resizeGigaBytes))
 		if err != nil {
 			d.log.Errorf("cannot resizeBlockDevice volume %s: %s", volumeId, err.Error())
 		}
 	} else {
+		log.Info("resizing volume")
 		_, err = d.upclouddriver.resizeStorage(ctx, volume.UUID, int(resizeGigaBytes), false)
 		if err != nil {
 			d.log.Errorf("cannot resizeStorage volume %s: %s", volumeId, err.Error())
 		}
 	}
-
-	d.log.WithFields(logrus.Fields{
-		"old_volume_size": volume.Size,
-		"new_volume_size": resizeGigaBytes,
-	}).Info("volume was resized")
 
 	return &csi.ControllerExpandVolumeResponse{
 		CapacityBytes:         resizeGigaBytes * giB,

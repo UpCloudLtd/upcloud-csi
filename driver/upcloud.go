@@ -150,6 +150,7 @@ func (u *upcloudClient) detachStorage(ctx context.Context, storageUUID, serverUU
 			return nil
 		}
 	}
+	// TODO: review error - Might this happen if ControllerUnpublishVolume is called twice on same storage UUID?
 	return fmt.Errorf("this shouldnt happen. serverUUID %s storageUUID %s context: %+v", serverUUID, storageUUID, sd)
 }
 

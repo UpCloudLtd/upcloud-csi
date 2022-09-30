@@ -1,6 +1,7 @@
 package driver
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -61,12 +62,12 @@ func TestMounterFilesystem(t *testing.T) {
 
 	m := newTestMounter()
 
-	if err := m.format(part, "ext4", nil); err != nil {
+	if err := m.format(context.Background(), part, "ext4", nil); err != nil {
 		t.Errorf("Format failed with error: %s", err.Error())
 		return
 	}
 	t.Logf("formated %s", part)
-	s, err := m.GetStatistics(os.TempDir())
+	s, err := m.GetStatistics(context.Background(), os.TempDir())
 	if err != nil {
 		t.Errorf("GetStatistics failed with error: %s", err.Error())
 		return
@@ -95,10 +96,10 @@ func testMounterMountFilesystem(m *mounter, partition string, t *testing.T) erro
 	mountPath := filepath.Join(os.TempDir(), fmt.Sprintf("%s-mount-path-%d", DefaultDriverName, time.Now().Unix()))
 	defer os.RemoveAll(mountPath)
 
-	if err := m.Mount(partition, mountPath, "ext4"); err != nil {
+	if err := m.Mount(context.Background(), partition, mountPath, "ext4"); err != nil {
 		return fmt.Errorf("Mount failed with error: %s", err.Error())
 	}
-	isMounted, err := m.IsMounted(mountPath)
+	isMounted, err := m.IsMounted(context.Background(), mountPath)
 	if err != nil {
 		return fmt.Errorf("IsMounted failed with error: %s", err.Error())
 	}
@@ -107,7 +108,7 @@ func testMounterMountFilesystem(m *mounter, partition string, t *testing.T) erro
 	}
 
 	t.Logf("mounted %s to %s", partition, mountPath)
-	if err := m.Unmount(mountPath); err != nil {
+	if err := m.Unmount(context.Background(), mountPath); err != nil {
 		return fmt.Errorf("Unmount failed with error: %s", err.Error())
 	}
 	t.Logf("unmounted %s", mountPath)
@@ -118,10 +119,10 @@ func testMounterMountBlockDevice(m *mounter, partition string, t *testing.T) err
 	mountPath := filepath.Join(os.TempDir(), fmt.Sprintf("%s-mount-path-%d", DefaultDriverName, time.Now().Unix()))
 	defer os.RemoveAll(mountPath)
 
-	if err := m.Mount(partition, mountPath, "", "bind"); err != nil {
+	if err := m.Mount(context.Background(), partition, mountPath, "", "bind"); err != nil {
 		return fmt.Errorf("Mount failed with error: %s", err.Error())
 	}
-	isMounted, err := m.IsMounted(mountPath)
+	isMounted, err := m.IsMounted(context.Background(), mountPath)
 	if err != nil {
 		return fmt.Errorf("IsMounted failed with error: %s", err.Error())
 	}
@@ -130,7 +131,7 @@ func testMounterMountBlockDevice(m *mounter, partition string, t *testing.T) err
 	}
 
 	t.Logf("mounted %s to %s", partition, mountPath)
-	if err := m.Unmount(mountPath); err != nil {
+	if err := m.Unmount(context.Background(), mountPath); err != nil {
 		return fmt.Errorf("Unmount failed with error: %s", err.Error())
 	}
 	t.Logf("unmounted %s", mountPath)
@@ -152,13 +153,13 @@ func TestMounterDisk(t *testing.T) {
 	m := newTestMounter()
 
 	// Create partition equivalent to creating /dev/sda1 to device /dev/sda
-	if err := m.createPartition(disk); err != nil {
+	if err := m.createPartition(context.Background(), disk); err != nil {
 		t.Errorf("createPartition failed with error: %s", err.Error())
 		return
 	}
 
 	// check if partition table exists
-	gotFormated, err := m.IsFormatted(disk)
+	gotFormated, err := m.IsFormatted(context.Background(), disk)
 	if err != nil {
 		t.Errorf("IsFormatted failed with error: %s", err.Error())
 		return
@@ -170,7 +171,7 @@ func TestMounterDisk(t *testing.T) {
 
 	// check last partition
 	wantPartition := disk + "p1"
-	gotPartition, err := getLastPartition(disk)
+	gotPartition, err := getLastPartition(context.Background(), disk)
 	if err != nil {
 		t.Errorf("getLastPartition failed with error: %s", err.Error())
 		return
@@ -182,13 +183,13 @@ func TestMounterDisk(t *testing.T) {
 	t.Logf("created new partition %s", wantPartition)
 
 	// Wipe signatures from a device.
-	if err := m.wipeDevice(disk); err != nil {
+	if err := m.wipeDevice(context.Background(), disk); err != nil {
 		t.Errorf("wipeDevice failed with error: %s", err.Error())
 		return
 	}
 	t.Logf("wiped signatures from a device %s", disk)
 	wantPartition = ""
-	gotPartition, err = getLastPartition(disk)
+	gotPartition, err = getLastPartition(context.Background(), disk)
 	if err != nil {
 		t.Errorf("getLastPartition after wipe failed with error: %s", err.Error())
 		return
