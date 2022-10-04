@@ -30,7 +30,6 @@ const (
 	logMountTargetKey    string = "target"
 	logCommandKey        string = "cmd"
 	logCommandArgsKey    string = "cmd_args"
-	logCommandOutputKey  string = "cmd_output"
 
 	ctxCorrelationIDKey contextKey = "ctx_correlation_id"
 	ctxCalledMethodKey  contextKey = "ctx_called_method"
