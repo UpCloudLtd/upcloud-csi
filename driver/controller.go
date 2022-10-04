@@ -263,11 +263,6 @@ func (d *Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.Control
 	}
 	log := logWithServerContext(d.log, ctx).WithField(logVolumeIDKey, req.GetVolumeId())
 
-	if req.NodeId == "" {
-		return nil, status.Error(codes.InvalidArgument, "node ID must be provided")
-	}
-	log = log.WithField(logNodeIDKey, req.GetNodeId())
-
 	log.Info("getting storage by uuid")
 	// check if volume exist before trying to detach it
 	_, err := d.upclouddriver.getStorageByUUID(ctx, req.GetVolumeId())
@@ -275,6 +270,7 @@ func (d *Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.Control
 		return nil, err
 	}
 
+	// TODO:  If node ID is not set, the SP MUST unpublish the volume from all nodes it is published to.
 	log.Info("getting server by hostname")
 	server, err := d.upclouddriver.getServerByHostname(ctx, req.GetNodeId())
 	if err != nil {
