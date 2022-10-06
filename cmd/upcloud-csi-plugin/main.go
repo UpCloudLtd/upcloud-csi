@@ -2,10 +2,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/UpCloudLtd/upcloud-csi/driver"
-	"github.com/spf13/pflag"
 	"log"
 	"os"
+
+	"github.com/UpCloudLtd/upcloud-csi/driver"
+	"github.com/sirupsen/logrus"
+	"github.com/spf13/pflag"
 )
 
 func main() {
@@ -21,6 +23,7 @@ func main() {
 		volumeName   = flagSet.String("volume_name", "", "Name for the volume being provisioned by driver")
 		version      = flagSet.Bool("version", false, "Print the version and exit.")
 		isController = flagSet.Bool("is_controller", true, "Run driver with controller included")
+		logLevel     = flagSet.String("log-level", "warning", "Loggin level: panic, fatal, error, warn, warning, info, debug or trace")
 	)
 
 	err := flagSet.Parse(os.Args[1:])
@@ -37,7 +40,13 @@ func main() {
 		log.Fatalln("nodehost missing")
 	}
 
+	logger, err := newLogger(*logLevel)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	drv, err := driver.NewDriver(
+		logger,
 		driver.WithDriverName(*driverName),
 		driver.WithVolumeName(*volumeName),
 		driver.WithEndpoint(*endpoint),
@@ -54,4 +63,17 @@ func main() {
 	if err := drv.Run(); err != nil {
 		log.Fatalln(err)
 	}
+}
+
+func newLogger(logLevel string) (*logrus.Logger, error) {
+	lv, err := logrus.ParseLevel(logLevel)
+	if err != nil {
+		return nil, err
+	}
+	logger := logrus.New()
+	logger.SetLevel(lv)
+	if logger.GetLevel() > logrus.InfoLevel {
+		logger.WithField("level", logger.GetLevel().String()).Warn("using log level higher than INFO is not recommended in production")
+	}
+	return logger, nil
 }

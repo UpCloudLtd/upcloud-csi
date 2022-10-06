@@ -28,56 +28,39 @@ var annsNoFormatVolume = []string{
 // volume to a staging path. Once mounted, NodePublishVolume will make sure to
 // mount it to the appropriate path.
 func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
-	d.log.Info("node stage volume called")
 	if req.VolumeId == "" {
-		return nil, status.Error(codes.InvalidArgument, "NodeStageVolume Volume ID must be provided")
+		return nil, status.Error(codes.InvalidArgument, "volume ID must be provided")
 	}
+	log := logWithServerContext(d.log, ctx).WithField(logVolumeIDKey, req.GetVolumeId())
 
 	if req.StagingTargetPath == "" {
-		return nil, status.Error(codes.InvalidArgument, "NodeStageVolume Staging Target Path must be provided")
+		return nil, status.Error(codes.InvalidArgument, "staging target path must be provided")
 	}
-
 	if req.VolumeCapability == nil {
-		return nil, status.Error(codes.InvalidArgument, "NodeStageVolume Volume Capability must be provided")
+		return nil, status.Error(codes.InvalidArgument, "volume vapability must be provided")
 	}
 
 	source := d.getDiskSource(req.VolumeId)
-	target := req.StagingTargetPath
-
+	target := req.GetStagingTargetPath()
+	log = log.WithFields(logrus.Fields{logMountSourceKey: source, logMountTargetKey: target})
 	// No need to stage raw block device.
 	switch req.VolumeCapability.GetAccessType().(type) {
 	case *csi.VolumeCapability_Block:
-		d.log.WithFields(logrus.Fields{"source": source, "target": target}).Info("NodeStageVolume Raw block device requested")
+		log.Info("raw block device requested")
 		return &csi.NodeStageVolumeResponse{}, nil
 	}
 
-	volumeName := ""
-	if volName, ok := req.GetPublishContext()[d.options.volumeName]; !ok {
-		return nil, status.Error(codes.InvalidArgument, "Could not find the volume by driverName")
-	} else {
-		volumeName = volName
-	}
-
 	mnt := req.VolumeCapability.GetMount()
-	options := mnt.MountFlags
+	options := mnt.GetMountFlags()
 
 	fsType := "ext4"
 	if mnt.FsType != "" {
 		fsType = mnt.FsType
 	}
 
-	nodeStageLog := d.log.WithFields(logrus.Fields{
-		"volume_id":           req.VolumeId,
-		"volume_name":         volumeName,
-		"volume_context":      req.VolumeContext,
-		"publish_context":     req.PublishContext,
-		"staging_target_path": target,
-		"source":              source,
-		"fsType":              fsType,
-		"mount_options":       options,
-		"method":              "node_stage_volume",
-	})
+	log = log.WithFields(logrus.Fields{"fs_type": fsType, "mount_options": options})
 
+	// TODO: review format feature - is this needed/supported ?
 	var noFormat bool
 	for _, ann := range annsNoFormatVolume {
 		_, noFormat = req.VolumeContext[ann]
@@ -86,141 +69,129 @@ func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRe
 		}
 	}
 	if noFormat {
-		nodeStageLog.Info("skipping formatting the source device")
+		log.Info("skipping formatting the source device")
 	} else {
-		nodeStageLog.Infof("expected source device location: %s", source)
+		log.Infof("expected source device location: %s", source)
 		_, err := os.Stat(source)
+		// TODO: review source-does-not-exist - is this correct way to handle this ?
 		if os.IsNotExist(err) {
-			nodeStageLog.Info("expected source device location not found. checking whether device present and identifiable")
-			newDevice, err := d.mounter.isPrepared(source)
+			log.Info("expected source device location not found. checking whether device present and identifiable")
+			newDevice, err := d.mounter.isPrepared(ctx, source)
 			if err != nil {
 				return nil, err
 			}
-			nodeStageLog.Infof("found anonymous and unformatted device at location %s", newDevice)
+			log.Infof("found anonymous and unformatted device at location %s", newDevice)
 			partialUUID := strings.Split(req.VolumeId, "-")[0]
-			nodeStageLog.Infof("formatting %s volume for staging with partial uuid %s", newDevice, partialUUID)
-			if err := d.mounter.Format(newDevice, fsType, []string{"-L", partialUUID}); err != nil {
-				nodeStageLog.Infof("error, wiping device %s", newDevice)
-				if err := d.mounter.wipeDevice(newDevice); err != nil {
+			log.Infof("formatting %s volume for staging with partial uuid %s", newDevice, partialUUID)
+			if err := d.mounter.Format(ctx, newDevice, fsType, []string{"-L", partialUUID}); err != nil {
+				log.Infof("error, wiping device %s", newDevice)
+				if err := d.mounter.wipeDevice(ctx, newDevice); err != nil {
 					d.log.WithFields(logrus.Fields{"device": newDevice}).Infof("wiping device failed: %s", err.Error())
 				}
 				return nil, status.Error(codes.Internal, err.Error())
 			}
-			nodeStageLog.Infof("changing filesystem uuid to %s", req.VolumeId)
-			if err := d.mounter.setUUID(newDevice, req.VolumeId); err != nil {
-				nodeStageLog.Infof("error, wiping device %s", newDevice)
-				if err := d.mounter.wipeDevice(newDevice); err != nil {
+			log.Infof("changing filesystem uuid to %s", req.VolumeId)
+			if err := d.mounter.setUUID(ctx, newDevice, req.VolumeId); err != nil {
+				log.Infof("error, wiping device %s", newDevice)
+				if err := d.mounter.wipeDevice(ctx, newDevice); err != nil {
 					d.log.WithFields(logrus.Fields{"device": newDevice}).Infof("wiping device failed: %s", err.Error())
 				}
 				return nil, status.Error(codes.Internal, err.Error())
 			}
-			nodeStageLog.Info("done preparing volume")
+			log.Info("done preparing volume")
 		} else {
-			nodeStageLog.Info("expected source device location found")
-			nodeStageLog.Infof("checking whether volume %s is formatted", source)
-			formatted, err := d.mounter.IsFormatted(source)
+			log.Info("checking whether source if formatted")
+			formatted, err := d.mounter.IsFormatted(ctx, source)
 			if err != nil {
 				return nil, err
 			}
 			if !formatted {
-				nodeStageLog.Info("formatting the volume for staging")
-				if err := d.mounter.Format(source, fsType, []string{}); err != nil {
+				log.Info("formatting the source volume for staging")
+				if err := d.mounter.Format(ctx, source, fsType, []string{}); err != nil {
 					return nil, status.Error(codes.Internal, err.Error())
 				}
 			} else {
-				nodeStageLog.Info("source device is already formatted")
+				log.Info("source device is already formatted")
 			}
 		}
 	}
 
-	nodeStageLog.Info("mounting the volume for staging")
-
-	mounted, err := d.mounter.IsMounted(target)
+	log.Info("check if target is already mounted")
+	mounted, err := d.mounter.IsMounted(ctx, target)
 	if err != nil {
 		return nil, err
 	}
 
 	if !mounted {
-		partition, err := getLastPartition(source)
+		partition, err := getLastPartition(ctx, source)
 		if err != nil {
 			return nil, status.Error(codes.Internal, err.Error())
 		}
-		stageMountedLog := d.log.WithFields(logrus.Fields{
-			"source":    source,
-			"partition": partition,
-			"target":    target,
-			"fsType":    fsType,
-			"options":   options,
-		})
-		stageMountedLog.Info("mount options")
-		if err := d.mounter.Mount(partition, target, fsType, options...); err != nil {
+		log.WithField("partition", partition).Info("mounting partition for staging")
+		if err := d.mounter.Mount(ctx, partition, target, fsType, options...); err != nil {
 			return nil, status.Error(codes.Internal, err.Error())
 		}
 	} else {
-		nodeStageLog.Info("source device is already mounted to the target path")
+		log.Info("source device is already mounted to the target path")
 	}
 
-	nodeStageLog.Info("formatting and mounting stage volume is finished")
 	return &csi.NodeStageVolumeResponse{}, nil
 }
 
 // NodeUnstageVolume unstages the volume from the staging path.
 func (d *Driver) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
 	if req.VolumeId == "" {
-		return nil, status.Error(codes.InvalidArgument, "NodeUnstageVolume Volume ID must be provided")
+		return nil, status.Error(codes.InvalidArgument, "volume ID must be provided")
 	}
+	log := logWithServerContext(d.log, ctx).WithField(logVolumeIDKey, req.GetVolumeId())
 
 	if req.StagingTargetPath == "" {
-		return nil, status.Error(codes.InvalidArgument, "NodeUnstageVolume Staging Target Path must be provided")
+		return nil, status.Error(codes.InvalidArgument, "staging target path must be provided")
 	}
 
-	nodeUnstageLog := d.log.WithFields(logrus.Fields{
-		"volume_id":           req.VolumeId,
-		"staging_target_path": req.StagingTargetPath,
-		"method":              "node_unstage_volume",
-	})
-	nodeUnstageLog.Info("node unstage volume called")
+	log = log.WithField(logMountTargetKey, req.GetStagingTargetPath())
 
-	mounted, err := d.mounter.IsMounted(req.StagingTargetPath)
+	log.Info("check if target is already mounted")
+	mounted, err := d.mounter.IsMounted(ctx, req.StagingTargetPath)
 	if err != nil {
 		return nil, err
 	}
 
 	if mounted {
-		nodeUnstageLog.Info("unmounting the staging target path")
-		err := d.mounter.Unmount(req.StagingTargetPath)
+		log.Info("unmounting the staging target path")
+		err := d.mounter.Unmount(ctx, req.StagingTargetPath)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		nodeUnstageLog.Info("staging target path is already unmounted")
+		log.Info("staging target path is already unmounted")
 	}
 
-	nodeUnstageLog.Info("unmounting stage volume is finished")
 	return &csi.NodeUnstageVolumeResponse{}, nil
 }
 
 // NodePublishVolume mounts the volume mounted to the staging path to the target path.
 func (d *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
-	d.log.Info("node publish volume called")
 	if req.VolumeId == "" {
-		return nil, status.Error(codes.InvalidArgument, "NodePublishVolume Volume ID must be provided")
+		return nil, status.Error(codes.InvalidArgument, "volume ID must be provided")
 	}
+	log := logWithServerContext(d.log, ctx).WithField(logVolumeIDKey, req.GetVolumeId())
 
 	if req.StagingTargetPath == "" {
-		return nil, status.Error(codes.InvalidArgument, "NodePublishVolume Staging Target Path must be provided")
+		return nil, status.Error(codes.InvalidArgument, "staging target path must be provided")
 	}
 
 	if req.TargetPath == "" {
-		return nil, status.Error(codes.InvalidArgument, "NodePublishVolume Target Path must be provided")
+		return nil, status.Error(codes.InvalidArgument, "target path must be provided")
 	}
 
 	if req.VolumeCapability == nil {
-		return nil, status.Error(codes.InvalidArgument, "NodePublishVolume Volume Capability must be provided")
+		return nil, status.Error(codes.InvalidArgument, "volume capability must be provided")
 	}
 
 	source := req.GetStagingTargetPath()
 	target := req.GetTargetPath()
+	log = log.WithFields(logrus.Fields{logMountSourceKey: source, logMountTargetKey: target})
 
 	options := []string{"bind"}
 	if req.GetReadonly() {
@@ -240,75 +211,65 @@ func (d *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolu
 			fsType = "ext4"
 		}
 	default:
-		return nil, status.Error(codes.InvalidArgument, "NodePublishVolume Unknown volume access type")
+		return nil, status.Error(codes.InvalidArgument, "unknown volume access type")
 	}
 
-	nodePublishVolumeLog := d.log.WithFields(logrus.Fields{
-		"volume_id":     req.VolumeId,
-		"source":        source,
-		"target":        target,
-		"fsType":        fsType,
-		"mount_options": options,
-		"method":        "node_publish_volume",
-	})
+	log = log.WithFields(logrus.Fields{logFilesystemTypeKey: fsType, logMountOptionsKey: options})
 
-	mounted, err := d.mounter.IsMounted(target)
+	log.Info("check if target is already mounted")
+	mounted, err := d.mounter.IsMounted(ctx, target)
 	if err != nil {
 		return nil, err
 	}
 
 	if !mounted {
-		nodePublishVolumeLog.Info("mounting the volume")
-		if err := d.mounter.Mount(source, target, fsType, options...); err != nil {
+		log.Info("mounting the volume")
+		if err := d.mounter.Mount(ctx, source, target, fsType, options...); err != nil {
 			return nil, status.Error(codes.Internal, err.Error())
 		}
 	} else {
-		nodePublishVolumeLog.Info("volume is already mounted")
+		log.Info("volume is already mounted")
 	}
 
-	nodePublishVolumeLog.Info("bind mounting the volume is finished")
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 
 // NodeUnpublishVolume unmounts the volume from the target path.
 func (d *Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
 	if req.VolumeId == "" {
-		return nil, status.Error(codes.InvalidArgument, "NodeUnpublishVolume Volume ID must be provided")
+		return nil, status.Error(codes.InvalidArgument, "volume ID must be provided")
 	}
+	log := logWithServerContext(d.log, ctx).WithField(logVolumeIDKey, req.GetVolumeId())
 
 	if req.TargetPath == "" {
-		return nil, status.Error(codes.InvalidArgument, "NodeUnpublishVolume Target Path must be provided")
+		return nil, status.Error(codes.InvalidArgument, "target Path must be provided")
 	}
+	log = log.WithField(logMountTargetKey, req.GetTargetPath())
 
-	nodeUnpublishVolumeLog := d.log.WithFields(logrus.Fields{
-		"volume_id":   req.VolumeId,
-		"target_path": req.TargetPath,
-		"method":      "node_unpublish_volume",
-	})
-	nodeUnpublishVolumeLog.Info("node unpublish volume called")
-
-	mounted, err := d.mounter.IsMounted(req.TargetPath)
+	log.Info("check if target is already mounted")
+	mounted, err := d.mounter.IsMounted(ctx, req.TargetPath)
 	if err != nil {
 		return nil, err
 	}
 
 	if mounted {
-		nodeUnpublishVolumeLog.Info("unmounting the target path")
-		err := d.mounter.Unmount(req.TargetPath)
+		log.Info("unmounting the target path")
+		err := d.mounter.Unmount(ctx, req.TargetPath)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		nodeUnpublishVolumeLog.Info("target path is already unmounted")
+		log.Info("target path is already unmounted")
 	}
 
-	nodeUnpublishVolumeLog.Info("unmounting volume is finished")
+	log.Info("unmounting volume is finished")
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
 // NodeGetCapabilities returns the supported capabilities of the node server.
 func (d *Driver) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
-	nscaps := []*csi.NodeServiceCapability{
+	log := logWithServerContext(d.log, ctx)
+	caps := []*csi.NodeServiceCapability{
 		{
 			Type: &csi.NodeServiceCapability_Rpc{
 				Rpc: &csi.NodeServiceCapability_RPC{
@@ -325,18 +286,14 @@ func (d *Driver) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabi
 		},
 	}
 
-	d.log.WithFields(logrus.Fields{
-		"node_capabilities": nscaps,
-		"method":            "node_get_capabilities",
-	}).Info("node get capabilities called")
+	log.WithField("capabilities", caps).Info("supported capabilities")
 	return &csi.NodeGetCapabilitiesResponse{
-		Capabilities: nscaps,
+		Capabilities: caps,
 	}, nil
 }
 
 // NodeGetInfo returns the supported capabilities of the node server.
 func (d *Driver) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
-	d.log.WithField("method", "node_get_info").Info("node get info called")
 	return &csi.NodeGetInfoResponse{
 		NodeId:            d.options.nodeHost,
 		MaxVolumesPerNode: maxVolumesPerNode,
@@ -353,40 +310,33 @@ func (d *Driver) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoRequest) (
 // NodeGetVolumeStats returns the volume capacity statistics available for
 // the given volume.
 func (d *Driver) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
-	nodeGetVolumeStatsLog := d.log.WithField("method", "node_get_volume_stats")
-	nodeGetVolumeStatsLog.Info("node get volume stats called")
-
 	if req.VolumeId == "" {
-		return nil, status.Error(codes.InvalidArgument, "NodeGetVolumeStats Volume ID must be provided")
+		return nil, status.Error(codes.InvalidArgument, "volume ID must be provided")
 	}
 
-	volumePath := req.VolumePath
+	volumePath := req.GetVolumePath()
 	if volumePath == "" {
-		return nil, status.Error(codes.InvalidArgument, "NodeGetVolumeStats Volume Path must be provided")
+		return nil, status.Error(codes.InvalidArgument, "volume path must be provided")
 	}
+	log := logWithServerContext(d.log, ctx).WithField(logVolumeIDKey, req.GetVolumeId()).WithField("volume_path", volumePath)
 
-	mounted, err := d.mounter.IsMounted(volumePath)
+	log.Info("check if volume path is already mounted")
+	mounted, err := d.mounter.IsMounted(ctx, volumePath)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to check if volume path %q is mounted: %s", volumePath, err)
 	}
 
 	if !mounted {
-		return nil, status.Errorf(codes.NotFound, "volume path %q is not mounted", volumePath)
+		return nil, status.Errorf(codes.NotFound, "volume path %s is not mounted", volumePath)
 	}
 
-	stats, err := d.mounter.GetStatistics(volumePath)
+	log.Info("getting volume path statistics")
+	stats, err := d.mounter.GetStatistics(ctx, volumePath)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to retrieve capacity statistics for volume path %q: %s", volumePath, err)
 	}
 
-	nodeGetVolumeStatsLog.WithFields(logrus.Fields{
-		"bytes_available":  stats.availableBytes,
-		"bytes_total":      stats.totalBytes,
-		"bytes_used":       stats.usedBytes,
-		"inodes_available": stats.availableInodes,
-		"inodes_total":     stats.totalInodes,
-		"inodes_used":      stats.usedInodes,
-	}).Info("node capacity statistics retrieved")
+	log.WithField("stats", stats).Info("node capacity statistics retrieved")
 
 	return &csi.NodeGetVolumeStatsResponse{
 		Usage: []*csi.VolumeUsage{
