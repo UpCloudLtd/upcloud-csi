@@ -15,21 +15,25 @@ import (
 type contextKey string
 
 const (
-	logNodeIDKey         string = "node_id"
-	logVolumeIDKey       string = "volume_id"
-	logVolumeNameKey     string = "volume_name"
-	logRequestKey        string = "request"
-	logResponseKey       string = "response"
-	logServiceURLKey     string = "service_url"
-	logServicePayloadKey string = "service_payload"
-	logCorrelationIDKey  string = "correlation_id"
-	logMethodKey         string = "method"
-	logFilesystemTypeKey string = "fsType"
-	logMountOptionsKey   string = "mount_options"
-	logMountSourceKey    string = "source"
-	logMountTargetKey    string = "target"
-	logCommandKey        string = "cmd"
-	logCommandArgsKey    string = "cmd_args"
+	logNodeIDKey            string = "node_id"
+	logVolumeIDKey          string = "volume_id"
+	logVolumeNameKey        string = "volume_name"
+	logRequestKey           string = "request"
+	logResponseKey          string = "response"
+	logServiceURLKey        string = "service_url"
+	logServicePayloadKey    string = "service_payload"
+	logCorrelationIDKey     string = "correlation_id"
+	logMethodKey            string = "method"
+	logFilesystemTypeKey    string = "fs_type"
+	logMountOptionsKey      string = "mount_options"
+	logMountSourceKey       string = "source"
+	logMountTargetKey       string = "target"
+	logCommandKey           string = "cmd"
+	logCommandArgsKey       string = "cmd_args"
+	logVolumeSourceKey      string = "source_id"
+	logSnapshotIDKey        string = "snapshot_id"
+	logListStartingTokenKey string = "starting_token"
+	logListMaxEntriesKey    string = "max_entries"
 
 	ctxCorrelationIDKey contextKey = "ctx_correlation_id"
 	ctxCalledMethodKey  contextKey = "ctx_called_method"
@@ -90,13 +94,13 @@ func serverLogMiddleware(log *logrus.Entry) grpc.UnaryServerInterceptor {
 		log = log.WithField("execution_time_ms", time.Since(now).Milliseconds())
 
 		if err != nil {
-			if s, ok := req.(fmt.Stringer); ok && log.Level >= logrus.DebugLevel {
+			if s, ok := req.(fmt.Stringer); ok && log.Logger.GetLevel() >= logrus.DebugLevel {
 				// log request object only if we are debugging
 				log = logWithRequest(log, s)
 			}
 			log.WithError(err).Error("method failed")
 		} else {
-			if s, ok := resp.(fmt.Stringer); ok && log.Level >= logrus.DebugLevel {
+			if s, ok := resp.(fmt.Stringer); ok && log.Logger.GetLevel() >= logrus.DebugLevel {
 				// log response object only if we are debugging
 				log = logWithResponse(log, s)
 			}

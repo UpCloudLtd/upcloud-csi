@@ -198,7 +198,6 @@ func (m *mockUpCloudDriver) getStorageBackupByName(ctx context.Context, name str
 	return s, nil
 }
 
-func (m *mockUpCloudDriver) waitForStorageState(ctx context.Context, uuid, state string) (*upcloud.StorageDetails, error) {
-	return &upcloud.StorageDetails{
-		Storage: *newMockStorage(m.storageSize)}, nil
+func (m *mockUpCloudDriver) requireStorageOnline(ctx context.Context, s *upcloud.Storage) error {
+	return nil
 }

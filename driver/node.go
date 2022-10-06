@@ -234,7 +234,7 @@ func (d *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolu
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 
-// NodeUnpublishVolume unmounts the volume from the target path.
+// NodeUnpublishVolume unmounts the volume from the target path and deletes the directory.
 func (d *Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume ID must be provided")
@@ -242,7 +242,7 @@ func (d *Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublish
 	log := logWithServerContext(d.log, ctx).WithField(logVolumeIDKey, req.GetVolumeId())
 
 	if req.TargetPath == "" {
-		return nil, status.Error(codes.InvalidArgument, "target Path must be provided")
+		return nil, status.Error(codes.InvalidArgument, "target path must be provided")
 	}
 	log = log.WithField(logMountTargetKey, req.GetTargetPath())
 
@@ -258,11 +258,14 @@ func (d *Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublish
 		if err != nil {
 			return nil, err
 		}
-	} else {
-		log.Info("target path is already unmounted")
 	}
-
-	log.Info("unmounting volume is finished")
+	targetInfo, err := os.Stat(req.GetTargetPath())
+	if err == nil && targetInfo.IsDir() {
+		log.Info("removing target path")
+		if err := os.Remove(req.GetTargetPath()); err != nil {
+			return nil, status.Errorf(codes.Internal, err.Error())
+		}
+	}
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
