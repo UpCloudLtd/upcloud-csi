@@ -51,9 +51,8 @@ func NewMockDriver(upcloudDriver upcloudService) *Driver {
 
 	return &Driver{
 		options: &driverOptions{
-			zone:       "demoRegion",
-			endpoint:   endpoint,
-			volumeName: "device",
+			zone:     "demoRegion",
+			endpoint: endpoint,
 		},
 		mounter:       newMounter(log),
 		upclouddriver: upcloudDriver,

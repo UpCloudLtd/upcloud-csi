@@ -73,13 +73,7 @@ type driverOptions struct {
 	username string
 	password string
 
-	driverName string
-	// volumeName is used to pass the volume from
-	// `ControllerPublishVolume` to `NodeStageVolume or `NodePublishVolume`
-	//
-	// TODO: This field is passed using context but is it actually used somehow?
-	volumeName string
-
+	driverName   string
 	endpoint     string
 	address      string
 	nodeHost     string
@@ -297,12 +291,6 @@ func WithEndpoint(endpoint string) func(*driverOptions) {
 func WithDriverName(driverName string) func(options *driverOptions) {
 	return func(o *driverOptions) {
 		o.driverName = driverName
-	}
-}
-
-func WithVolumeName(volumeName string) func(options *driverOptions) {
-	return func(o *driverOptions) {
-		o.volumeName = volumeName
 	}
 }
 
