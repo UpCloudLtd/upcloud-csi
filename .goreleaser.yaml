@@ -1,7 +1,8 @@
 project_name: upcloud-csi
 before:
   hooks:
-    - make build-manifest && mkdir -p ./temp
+    - make build-manifest
+    - mkdir -p ./temp
     - ./cmd/upcloud-csi-manifest/upcloud-csi-manifest --crd=true --rbac=false --setup=false --output=./temp/{{ .ProjectName }}-crd.yaml --driver-version={{ if .IsSnapshot }}main{{ else }}v{{ .Version }}{{ end }}
     - ./cmd/upcloud-csi-manifest/upcloud-csi-manifest --crd=false --rbac=true --setup=true  --output=./temp/{{ .ProjectName }}-setup.yaml --driver-version={{ if .IsSnapshot }}main{{ else }}v{{ .Version }}{{ end }}
 builds:
