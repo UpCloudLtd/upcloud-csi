@@ -20,7 +20,6 @@ func main() {
 		password     = flagSet.String("password", "", "UpCloud password")
 		driverName   = flagSet.String("driver-name", driver.DefaultDriverName, "Name for the driver")
 		address      = flagSet.String("address", driver.DefaultAddress, "Address to serve on")
-		volumeName   = flagSet.String("volume_name", "", "Name for the volume being provisioned by driver")
 		version      = flagSet.Bool("version", false, "Print the version and exit.")
 		isController = flagSet.Bool("is_controller", true, "Run driver with controller included")
 		logLevel     = flagSet.String("log-level", "warning", "Loggin level: panic, fatal, error, warn, warning, info, debug or trace")
@@ -48,7 +47,6 @@ func main() {
 	drv, err := driver.NewDriver(
 		logger,
 		driver.WithDriverName(*driverName),
-		driver.WithVolumeName(*volumeName),
 		driver.WithEndpoint(*endpoint),
 		driver.WithUsername(*username),
 		driver.WithPassword(*password),

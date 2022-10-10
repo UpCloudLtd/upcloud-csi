@@ -243,7 +243,6 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 			log.Info("volume is already attached")
 			return &csi.ControllerPublishVolumeResponse{
 				PublishContext: map[string]string{
-					d.options.volumeName:        volume.Title,
 					string(ctxCorrelationIDKey): contextCorrelationID(ctx),
 				},
 			}, nil
@@ -266,7 +265,6 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 
 	return &csi.ControllerPublishVolumeResponse{
 		PublishContext: map[string]string{
-			d.options.volumeName:        volume.Title,
 			string(ctxCorrelationIDKey): contextCorrelationID(ctx),
 		},
 	}, nil
