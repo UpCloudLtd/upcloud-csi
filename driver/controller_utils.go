@@ -2,9 +2,10 @@ package driver
 
 import (
 	"fmt"
-	"github.com/container-storage-interface/spec/lib/go/csi"
 	"strconv"
 	"strings"
+
+	"github.com/container-storage-interface/spec/lib/go/csi"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 )
@@ -15,9 +16,7 @@ const (
 	miB
 	giB
 	tiB
-)
 
-const (
 	// minimumVolumeSizeInBytes is used to validate that the user is not trying
 	// to create a volume that is smaller than what we support
 	minimumVolumeSizeInBytes int64 = 10 * giB
@@ -31,15 +30,9 @@ const (
 	defaultVolumeSize = 10 * giB
 )
 
-var (
-	// TODO lots of rewording
-	// DO currently only support a single node to be attached to a single node
-	// in read/write mode. This corresponds to `accessModes.ReadWriteOnce` in a
-	// PVC resource on Kubernetes
-	supportedAccessMode = &csi.VolumeCapability_AccessMode{
-		Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
-	}
-)
+var supportedAccessMode = &csi.VolumeCapability_AccessMode{
+	Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+}
 
 type storageRange struct {
 	requiredBytes int64

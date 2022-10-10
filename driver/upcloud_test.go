@@ -11,6 +11,7 @@ import (
 	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud"
 	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/client"
 	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/service"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestUpcloudClient_listStorage(t *testing.T) {
@@ -101,7 +102,8 @@ func TestUpcloudClient_listStorageBackups(t *testing.T) {
 						"state" : "online",
 						"type" : "backup",
 						"uuid" : "id1",
-						"zone" : "fi-hel2"
+						"zone" : "fi-hel2",
+						"origin": "id3"
 					},
 					{
 						"access" : "private",
@@ -137,9 +139,7 @@ func TestUpcloudClient_listStorageBackups(t *testing.T) {
 
 	c := upcloudClient{service.NewWithContext(client.NewWithContext("", ""))}
 	storages, err := c.listStorageBackups(context.Background(), "id1")
-	if err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, err)
 	want := []*upcloud.Storage{
 		{
 			State:  "online",
@@ -156,10 +156,7 @@ func TestUpcloudClient_listStorageBackups(t *testing.T) {
 			Origin: "id1",
 		},
 	}
-	if len(want) != len(storages) {
-		t.Errorf("storages len mismatch want %d got %d", len(want), len(storages))
-		return
-	}
+	assert.Len(t, storages, len(want))
 	for i, s := range storages {
 		w := want[i]
 		if s.State != w.State {
@@ -169,4 +166,8 @@ func TestUpcloudClient_listStorageBackups(t *testing.T) {
 			t.Errorf("storages[%d] invalid UUID want %s got %s", i, w.UUID, s.UUID)
 		}
 	}
+
+	storages, err = c.listStorageBackups(context.Background(), "")
+	assert.NoError(t, err)
+	assert.Len(t, storages, 3)
 }

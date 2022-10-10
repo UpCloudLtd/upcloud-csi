@@ -19,7 +19,10 @@ const (
 	storageStateTimeout = 3600 // 1h
 )
 
-var errUpCloudStorageNotFound = errors.New("upcloud: storage not found")
+var (
+	errUpCloudStorageNotFound = errors.New("upcloud: storage not found")
+	errUpCloudServerNotFound  = errors.New("upcloud: server not found")
+)
 
 type upcloudClient struct {
 	svc *service.ServiceContext
@@ -44,7 +47,7 @@ type upcloudService interface {
 	createStorageBackup(ctx context.Context, uuid, title string) (*upcloud.StorageDetails, error)
 	listStorageBackups(ctx context.Context, uuid string) ([]upcloud.Storage, error)
 	deleteStorageBackup(ctx context.Context, uuid string) error
-	waitForStorageState(ctx context.Context, uuid, state string) (*upcloud.StorageDetails, error)
+	requireStorageOnline(ctx context.Context, s *upcloud.Storage) error
 }
 
 func (u *upcloudClient) getStorageByUUID(ctx context.Context, storageUUID string) (*upcloud.StorageDetails, error) {
@@ -191,7 +194,7 @@ func (u *upcloudClient) getServerByHostname(ctx context.Context, hostname string
 		}
 	}
 
-	return nil, fmt.Errorf("server with such hostname does not exist")
+	return nil, errUpCloudServerNotFound
 }
 
 func (u *upcloudClient) resizeStorage(ctx context.Context, uuid string, newSize int, deleteBackup bool) (*upcloud.StorageDetails, error) {
@@ -275,14 +278,15 @@ func (u *upcloudClient) createStorageBackup(ctx context.Context, uuid, title str
 	})
 }
 
-func (u *upcloudClient) listStorageBackups(ctx context.Context, uuid string) ([]upcloud.Storage, error) {
+// listStorageBackups lists strage backups. If `originUUID` is empty all backups are retured
+func (u *upcloudClient) listStorageBackups(ctx context.Context, originUUID string) ([]upcloud.Storage, error) {
 	storages, err := u.svc.GetStorages(ctx, &request.GetStoragesRequest{Type: upcloud.StorageTypeBackup})
 	if err != nil {
 		return nil, err
 	}
 	backups := make([]upcloud.Storage, 0)
 	for _, b := range storages.Storages {
-		if b.Origin == uuid && b.State == upcloud.StorageStateOnline {
+		if originUUID == "" && b.Origin != "" || originUUID != "" && b.Origin == originUUID {
 			backups = append(backups, b)
 		}
 	}
@@ -311,6 +315,15 @@ func (u *upcloudClient) getStorageBackupByName(ctx context.Context, name string)
 		}
 	}
 	return nil, errUpCloudStorageNotFound
+}
+
+func (u *upcloudClient) requireStorageOnline(ctx context.Context, s *upcloud.Storage) error {
+	if s.State != upcloud.StorageStateOnline {
+		if _, err := u.waitForStorageState(ctx, s.UUID, upcloud.StorageStateOnline); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (u *upcloudClient) waitForStorageState(ctx context.Context, uuid, state string) (*upcloud.StorageDetails, error) {
