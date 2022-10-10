@@ -22,7 +22,7 @@ func main() {
 		secretsManifest         = flagSet.Bool("secrets", false, "Include secrets manifest.")
 		setupManifest           = flagSet.Bool("setup", true, "Include setup manifest.")
 		rbacManifest            = flagSet.Bool("rbac", true, "Include RBAC manifest.")
-		crdManifest             = flagSet.Bool("crd", true, "Include CRD manifest.")
+		crdManifest             = flagSet.Bool("crd", false, "Include CRD manifest.")
 		snapshotWebhookManifest = flagSet.Bool("snapshot-webhook", false, "Include snapshot webhook manifest.")
 		driverVersion           = flagSet.String("driver-version", "main", "Use specific driver version to render setup manifest.")
 		upcloudUsername         = flagSet.String("upcloud-username", "", "Use UpCloud username to render secrets manifest. If empty, 'UPCLOUD_USERNAME' environment variable is used.")
