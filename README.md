@@ -80,8 +80,8 @@ In `example` directory you may find 2 manifests for deploying a pod and persiste
 operations
 
 ```shell
-$ kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/example/test-pod.yaml
-$ kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/example/test-pvc.yaml
+$ kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/main/example/test-pod.yaml
+$ kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/main/example/test-pvc.yaml
 ```
 
 Check if pod is deployed with Running status and already using the PVC:
@@ -102,7 +102,7 @@ drwx------    2 root     root       16.0K Feb 22 12:25 lost+found
 $ kubectl delete pods/csi-app
 pod "csi-app" deleted
 
-$ kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/example/test-pod.yaml
+$ kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/main/example/test-pod.yaml
 pod/csi-app created
 
 $ kubectl exec -it csi-app -- /bin/sh -c "ls -l /data"
