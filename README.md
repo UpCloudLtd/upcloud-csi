@@ -60,8 +60,8 @@ Manifest `snapshot-webhook-upcloud-csi.yaml` can be used to deploy webhook servi
 Manifest assumes that secret named `snapshot-validation-secret` exists and is populated with valid x509 certificate `cert.pem` (CA cert, if any, concatenated after server cert) and matching private key `key.pem`.
 If custom CA is used (e.g. when using self-signed certificate) `caBundle` field needs to be set with CA data as value.
 
-```sh
-kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/main/deploy/kubernetes/snapshot-webhook-upcloud-csi.yaml
+```shell
+$ kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/main/deploy/kubernetes/snapshot-webhook-upcloud-csi.yaml
 ```
 
 
