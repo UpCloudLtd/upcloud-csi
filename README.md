@@ -23,43 +23,32 @@ Before reaching the **v1.0.0** version, UpCloud CSI Driver is **NOT** recommende
 
 ### Create a Kubernetes secret
 
-Execute the following commands to add UpCloud credentials as Kubernetes secret:
-
-```bash
-export UPCLOUD_USERNAME=your-username && export UPCLOUD_PASSWORD=your-password
-cat <<EOF | kubectl apply -f -
-```
-
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: upcloud
-  namespace: kube-system
-stringData:
-  username: "$UPCLOUD_USERNAME"
-  password: "$UPCLOUD_PASSWORD"
-EOF
+Execute the following commands to add UpCloud credentials as Kubernetes secret:  
+<sub>_Replace `$UPCLOUD_PASSWORD` and `$UPCLOUD_USERNAME` with your UpCloud API credentials if not defined using environment variables._</sub>
+```shell
+$ kubectl -n kube-system create secret generic upcloud --from-literal=password=$UPCLOUD_PASSWORD --from-literal=username=$UPCLOUD_USERNAME
 ```
 
 After the message, that secret was created, you can run this command to check the existence of `upcloud` secret
 in `kube-system` namespace:
 
-```sh
+```shell
 $ kubectl -n kube-system get secret upcloud
-NAME                  TYPE                                  DATA      AGE
+NAME             TYPE                                  DATA      AGE
 upcloud          Opaque                                2         18h
 ```
 
 ### Deploy CSI Driver
 
-The following command will deploy the CSI driver with the related Kubernetes custom resources, volume attachment, driver registration, and
-provisioning sidecars:
-
-```sh
-kubectl apply -fhttps://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/main/deploy/kubernetes/{crd-upcloud-csi.yaml,rbac-upcloud-csi.yaml,setup-upcloud-csi.yaml}
+Deploy custom resources definitions required by CSI driver:
+```shell
+$ kubectl apply -f https://github.com/UpCloudLtd/upcloud-csi/releases/latest/download/upcloud-csi-crd.yaml
 ```
-*note: no blank space after `-f`*
+
+Deploy the CSI driver with the related Kubernetes volume attachment, driver registration, and provisioning sidecars:
+```shell
+$ kubectl apply -f https://github.com/UpCloudLtd/upcloud-csi/releases/latest/download/upcloud-csi-setup.yaml
+```
 
 #### Deploy snapshot validation webhook (optional)
 The snapshot validating webhook is service that provides tightened validation on snapshot objects. 
@@ -90,21 +79,21 @@ If `storageClassName` field is not set, the default provisioned option will be `
 In `example` directory you may find 2 manifests for deploying a pod and persistent volume claim to test CSI Driver
 operations
 
-```sh
-kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/example/test-pod.yaml
-kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/example/test-pvc.yaml
+```shell
+$ kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/example/test-pod.yaml
+$ kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/example/test-pvc.yaml
 ```
 
 Check if pod is deployed with Running status and already using the PVC:
 
-```sh
-kubectl get pvc/csi-pvc pods/csi-app
-kubectl describe pvc/csi-pvc pods/csi-app | less
+```shell
+$ kubectl get pvc/csi-pvc pods/csi-app
+$ kubectl describe pvc/csi-pvc pods/csi-app | less
 ```
 
 To check the persistence feature - you may create the sample file in Pod, later, delete the pod and re-create it from yaml manifest and notice that the file is still in mounted directory 
 
-```sh
+```shell
 $ kubectl exec -it csi-app -- /bin/sh -c "touch /data/persistent-file.txt"
 total 24K
 -rw-r--r--    1 root     root           0 Feb 22 12:29 persistent-file.txt
