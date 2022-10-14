@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -39,40 +38,6 @@ const (
 	blkidExitStatusNoIdentifiers = 2
 )
 
-type Mounter interface {
-	// Format formats the source with the given filesystem type
-	Format(ctx context.Context, source, fsType string, mkfsArgs []string) error
-
-	// Mount mounts source to target with the given fstype and options.
-	Mount(ctx context.Context, source, target, fsType string, options ...string) error
-
-	// Unmount unmounts the given target
-	Unmount(ctx context.Context, target string) error
-
-	// IsFormatted checks whether the source device is formatted or not. It
-	// returns true if the source device is already formatted.
-	IsFormatted(ctx context.Context, source string) (bool, error)
-
-	// IsMounted checks whether the target path is a correct mount (i.e:
-	// propagated). It returns true if it's mounted. An error is returned in
-	// case of system errors or if it's mounted incorrectly.
-	IsMounted(ctx context.Context, target string) (bool, error)
-
-	// IsPrepared checks whether a device is uniquely addressable
-	isPrepared(ctx context.Context, target string) (string, error)
-
-	// Sets the filesystem UUID to the same UUID as used within Upcloud for easy downstream handling
-	setUUID(ctx context.Context, source, newUUID string) error
-
-	// GetStatistics returns capacity-related volume statistics for the given
-	// volume path.
-	GetStatistics(ctx context.Context, volumePath string) (volumeStatistics, error)
-
-	wipeDevice(ctx context.Context, deviceId string) error
-
-	GetDeviceName(ctx context.Context, mounter mount.Interface, mountPath string) (string, error)
-}
-
 type mounter struct {
 	log *logrus.Entry
 }
@@ -84,6 +49,7 @@ func newMounter(log *logrus.Entry) *mounter {
 	}
 }
 
+// Format formats the source with the given filesystem type
 func (m *mounter) Format(ctx context.Context, source, fsType string, mkfsArgs []string) error {
 	if fsType == "" {
 		return errors.New("fs type is not specified for formatting the volume")
@@ -102,10 +68,10 @@ func (m *mounter) Format(ctx context.Context, source, fsType string, mkfsArgs []
 	if err != nil {
 		return err
 	}
-	return m.format(ctx, lastPartition, fsType, mkfsArgs)
+	return m.createFilesystem(ctx, lastPartition, fsType, mkfsArgs)
 }
 
-func (m *mounter) format(ctx context.Context, partition, fsType string, mkfsArgs []string) error {
+func (m *mounter) createFilesystem(ctx context.Context, partition, fsType string, mkfsArgs []string) error {
 	if fsType == "ext4" || fsType == "ext3" {
 		mkfsArgs = append(mkfsArgs, "-F", partition)
 	}
@@ -121,12 +87,14 @@ func (m *mounter) format(ctx context.Context, partition, fsType string, mkfsArgs
 	}
 
 	logWithServerContext(m.log, ctx).WithFields(logrus.Fields{logCommandKey: mkfsCmd, logCommandArgsKey: mkfsArgs}).Debug("executing command")
+
 	return exec.CommandContext(ctx, mkfsCmd, mkfsArgs...).Run()
 }
 
+// Mount mounts source to target with the given fstype and options.
 func (m *mounter) Mount(ctx context.Context, source, target, fsType string, opts ...string) error {
 	mountCmd := "mount"
-	mountArgs := []string{}
+	mountArgs := make([]string, 0)
 
 	if source == "" {
 		return errors.New("source is not specified for mounting the volume")
@@ -169,6 +137,7 @@ func (m *mounter) Mount(ctx context.Context, source, target, fsType string, opts
 	return exec.CommandContext(ctx, mountCmd, mountArgs...).Run()
 }
 
+// Unmount unmounts the given target
 func (m *mounter) Unmount(ctx context.Context, target string) error {
 	log := logWithServerContext(m.log, ctx)
 	if target == "" {
@@ -188,6 +157,8 @@ func (m *mounter) Unmount(ctx context.Context, target string) error {
 	return exec.CommandContext(ctx, umountCmd, umountArgs...).Run()
 }
 
+// IsFormatted checks whether the source device is formatted or not. It
+// returns true if the source device is already formatted.
 func (m *mounter) IsFormatted(ctx context.Context, source string) (bool, error) {
 	if source == "" {
 		return false, errors.New("source is not specified")
@@ -223,20 +194,6 @@ func (m *mounter) IsFormatted(ctx context.Context, source string) (bool, error) 
 	return true, nil
 }
 
-func (m *mounter) isPrepared(ctx context.Context, source string) (string, error) {
-	unformattedDevice := ""
-	formatted, err := m.IsFormatted(ctx, source)
-	if err != nil {
-		return "", err
-	}
-
-	if !formatted {
-		unformattedDevice = source
-		return unformattedDevice, nil
-	}
-	return "", fmt.Errorf("no conclusive unformatted device found. recover manually")
-}
-
 func (m *mounter) wipeDevice(ctx context.Context, deviceId string) error {
 	cmd := "wipefs"
 	args := []string{"-a", "-f", deviceId}
@@ -246,38 +203,9 @@ func (m *mounter) wipeDevice(ctx context.Context, deviceId string) error {
 	return exec.CommandContext(ctx, cmd, args...).Run()
 }
 
-func (m *mounter) setUUID(ctx context.Context, source, newUUID string) error {
-	findmntCmd := "tune2fs"
-	findmntArgs := []string{"-U", newUUID, source}
-
-	logWithServerContext(m.log, ctx).WithFields(logrus.Fields{logCommandKey: findmntCmd, logCommandArgsKey: findmntArgs}).Debug("executing command")
-
-	cmd := exec.CommandContext(ctx, findmntCmd, findmntArgs...)
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		fmt.Println(err)
-	}
-	defer stdin.Close()
-	if err = cmd.Start(); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(stdin, "y\n"); err != nil {
-		return err
-	}
-	if err := cmd.Wait(); err != nil {
-		return err
-	}
-	if err != nil {
-		if exitError, ok := err.(*exec.ExitError); ok {
-			return exitError
-		}
-		return err
-	}
-
-	logWithServerContext(m.log, ctx).WithFields(logrus.Fields{logCommandKey: "udevadm", logCommandArgsKey: "trigger"}).Debug("executing command")
-	return exec.CommandContext(ctx, "udevadm", "trigger").Run()
-}
-
+// IsMounted checks whether the target path is a correct mount (i.e:
+// propagated). It returns true if it's mounted. An error is returned in
+// case of system errors or if it's mounted incorrectly.
 func (m *mounter) IsMounted(ctx context.Context, target string) (bool, error) {
 	if target == "" {
 		return false, errors.New("target is not specified for checking the mount")
@@ -334,6 +262,7 @@ func (m *mounter) IsMounted(ctx context.Context, target string) (bool, error) {
 	return targetFound, nil
 }
 
+// GetStatistics returns capacity-related volume statistics for the given volume path.
 func (m *mounter) GetStatistics(ctx context.Context, volumePath string) (volumeStatistics, error) {
 	var statfs unix.Statfs_t
 	// See http://man7.org/linux/man-pages/man2/statfs.2.html for details.

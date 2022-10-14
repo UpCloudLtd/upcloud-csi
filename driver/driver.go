@@ -33,15 +33,18 @@ const (
 )
 
 const (
-	// StorageSizeThreshold is a size value for checking if user can provision
-	// additional volumes
+	// StorageSizeThreshold is a size value for checking if user can provision additional volumes.
 	StorageSizeThreshold = 10
-	// ClientTimeout helps to tune for timeout on requests to UpCloud API. Measurement: seconds
+	// ClientTimeout helps to tune for timeout on requests to UpCloud API. Measurement: seconds.
 	ClientTimeout = 120
-	// InitTimeout specifies a time limit for driver initialization in seconds
+	// InitTimeout specifies a time limit for driver initialization in seconds.
 	initTimeout = 30
-	// CheckStorageQuotaTimeout specifies a time limit for checking storage quota in seconds
+	// CheckStorageQuotaTimeout specifies a time limit for checking storage quota in seconds.
 	checkStorageQuotaTimeout = 30
+	// udevDiskTimeout specifies a time limit for waiting disk appear under /dev/disk/by-id.
+	udevDiskTimeout = 30
+	// udevSettleTimeout specifies a time limit for waiting udev event queue to become empty.
+	udevSettleTimeout = 20
 )
 
 // Driver implements the following CSI interfaces:
@@ -55,7 +58,7 @@ type Driver struct {
 	srv     *grpc.Server
 	httpSrv http.Server
 
-	mounter Mounter
+	mounter *mounter
 	log     *logrus.Entry
 
 	upcloudclient *upcloudservice.ServiceContext
