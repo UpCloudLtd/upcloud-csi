@@ -62,7 +62,7 @@ func TestMounterFilesystem(t *testing.T) {
 
 	m := newTestMounter()
 
-	if err := m.format(context.Background(), part, "ext4", nil); err != nil {
+	if err := m.createFilesystem(context.Background(), part, "ext4", nil); err != nil {
 		t.Errorf("Format failed with error: %s", err.Error())
 		return
 	}

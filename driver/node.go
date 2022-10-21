@@ -2,10 +2,13 @@ package driver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/sirupsen/logrus"
@@ -14,14 +17,12 @@ import (
 )
 
 const (
-	diskIDPath        = "/dev/disk/by-id"
+	udevDiskByIDPath  = "/dev/disk/by-id"
 	diskPrefix        = "virtio-"
 	maxVolumesPerNode = 7
 )
 
-var annsNoFormatVolume = []string{
-	"storage.csi.upcloud.com/noformat",
-}
+var errNodeDiskNotFound = errors.New("disk not found")
 
 // NodeStageVolume mounts the volume to a staging path on the node. This is
 // called by the CO before NodePublishVolume and is used to temporary mount the
@@ -40,9 +41,8 @@ func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRe
 		return nil, status.Error(codes.InvalidArgument, "volume vapability must be provided")
 	}
 
-	source := d.getDiskSource(req.VolumeId)
 	target := req.GetStagingTargetPath()
-	log = log.WithFields(logrus.Fields{logMountSourceKey: source, logMountTargetKey: target})
+	log = log.WithField(logMountTargetKey, target)
 	// No need to stage raw block device.
 	switch req.VolumeCapability.GetAccessType().(type) {
 	case *csi.VolumeCapability_Block:
@@ -58,62 +58,25 @@ func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRe
 		fsType = mnt.FsType
 	}
 
-	log = log.WithFields(logrus.Fields{"fs_type": fsType, "mount_options": options})
-
-	// TODO: review format feature - is this needed/supported ?
-	var noFormat bool
-	for _, ann := range annsNoFormatVolume {
-		_, noFormat = req.VolumeContext[ann]
-		if noFormat {
-			break
-		}
+	log.Info("getting disk source for volume ID")
+	source, err := getBlockDeviceByVolumeID(ctx, req.GetVolumeId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-	if noFormat {
-		log.Info("skipping formatting the source device")
-	} else {
-		log.Infof("expected source device location: %s", source)
-		_, err := os.Stat(source)
-		// TODO: review source-does-not-exist - is this correct way to handle this ?
-		if os.IsNotExist(err) {
-			log.Info("expected source device location not found. checking whether device present and identifiable")
-			newDevice, err := d.mounter.isPrepared(ctx, source)
-			if err != nil {
-				return nil, err
-			}
-			log.Infof("found anonymous and unformatted device at location %s", newDevice)
-			partialUUID := strings.Split(req.VolumeId, "-")[0]
-			log.Infof("formatting %s volume for staging with partial uuid %s", newDevice, partialUUID)
-			if err := d.mounter.Format(ctx, newDevice, fsType, []string{"-L", partialUUID}); err != nil {
-				log.Infof("error, wiping device %s", newDevice)
-				if err := d.mounter.wipeDevice(ctx, newDevice); err != nil {
-					d.log.WithFields(logrus.Fields{"device": newDevice}).Infof("wiping device failed: %s", err.Error())
-				}
-				return nil, status.Error(codes.Internal, err.Error())
-			}
-			log.Infof("changing filesystem uuid to %s", req.VolumeId)
-			if err := d.mounter.setUUID(ctx, newDevice, req.VolumeId); err != nil {
-				log.Infof("error, wiping device %s", newDevice)
-				if err := d.mounter.wipeDevice(ctx, newDevice); err != nil {
-					d.log.WithFields(logrus.Fields{"device": newDevice}).Infof("wiping device failed: %s", err.Error())
-				}
-				return nil, status.Error(codes.Internal, err.Error())
-			}
-			log.Info("done preparing volume")
-		} else {
-			log.Info("checking whether source if formatted")
-			formatted, err := d.mounter.IsFormatted(ctx, source)
-			if err != nil {
-				return nil, err
-			}
-			if !formatted {
-				log.Info("formatting the source volume for staging")
-				if err := d.mounter.Format(ctx, source, fsType, []string{}); err != nil {
-					return nil, status.Error(codes.Internal, err.Error())
-				}
-			} else {
-				log.Info("source device is already formatted")
-			}
+	log = log.WithFields(logrus.Fields{logMountSourceKey: source, "fs_type": fsType, "mount_options": options})
+
+	log.Info("checking whether source if formatted")
+	formatted, err := d.mounter.IsFormatted(ctx, source)
+	if err != nil {
+		return nil, err
+	}
+	if !formatted {
+		log.Info("formatting the source volume for staging")
+		if err := d.mounter.Format(ctx, source, fsType, []string{}); err != nil {
+			return nil, status.Error(codes.Internal, err.Error())
 		}
+	} else {
+		log.Info("source device is already formatted")
 	}
 
 	log.Info("check if target is already mounted")
@@ -189,6 +152,7 @@ func (d *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolu
 		return nil, status.Error(codes.InvalidArgument, "volume capability must be provided")
 	}
 
+	var err error
 	source := req.GetStagingTargetPath()
 	target := req.GetTargetPath()
 	log = log.WithFields(logrus.Fields{logMountSourceKey: source, logMountTargetKey: target})
@@ -201,7 +165,10 @@ func (d *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolu
 	switch req.GetVolumeCapability().GetAccessType().(type) {
 	case *csi.VolumeCapability_Block:
 		// raw block device requested, ignore filesystem and mount flags
-		source = d.getDiskSource(req.GetVolumeId())
+		if source, err = getBlockDeviceByVolumeID(ctx, req.GetVolumeId()); err != nil {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
+
 	case *csi.VolumeCapability_Mount:
 		if mnt := req.VolumeCapability.GetMount(); mnt != nil {
 			options = append(options, mnt.GetMountFlags()...)
@@ -363,35 +330,67 @@ func (d *Driver) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolume
 	return nil, status.Errorf(codes.Unimplemented, "method NodeExpandVolume not implemented")
 }
 
-// getDiskSource returns the absolute path of the attached volume for the given volumeID.
-func (d *Driver) getDiskSource(volumeID string) string {
-	diskID := volumeIDToDiskID(volumeID)
-	if diskID == "" {
-		return ""
-	}
-	return getDiskByID(diskID, "")
-}
-
-func getDiskByID(diskID, basePath string) string {
-	if basePath == "" {
-		basePath = diskIDPath
-	}
-	link, err := os.Readlink(filepath.Join(basePath, diskPrefix+diskID))
+// getBlockDeviceByVolumeID returns the absolute path of the attached block device for the given volumeID.
+func getBlockDeviceByVolumeID(ctx context.Context, volumeID string) (string, error) {
+	diskID, err := volumeIDToDiskID(volumeID)
 	if err != nil {
-		fmt.Println(fmt.Errorf("failed to get the link to source"))
-		return ""
+		return diskID, err
 	}
-	if filepath.IsAbs(link) {
-		return link
-	}
-
-	return filepath.Join(basePath, link)
+	return getBlockDeviceByDiskID(ctx, diskID)
 }
 
-func volumeIDToDiskID(volumeID string) string {
+// getBlockDeviceByDiskID returns actual block device path (e.g. /dev/vda) that correspond to disk ID (hardware serial number).
+// diskID can be udev disk ID or path to disk ID symbolic link e.g. /dev/disk/by-id/virtio-014e425736724563ab83
+func getBlockDeviceByDiskID(ctx context.Context, diskID string) (dev string, err error) {
+	ln := diskID
+	if !filepath.IsAbs(diskID) {
+		ln = filepath.Join(udevDiskByIDPath, diskID)
+	}
+
+	if err := udevWaitDiskToSettle(ctx, ln); err != nil {
+		return ln, err
+	}
+
+	for s := time.Now(); time.Since(s) < time.Second*udevDiskTimeout; {
+		dev, err = os.Readlink(ln)
+		if err != nil && !os.IsNotExist(err) {
+			return ln, err
+		}
+		if dev != "" {
+			break
+		}
+		time.Sleep(time.Second * 2)
+	}
+
+	if dev == "" {
+		return ln, errNodeDiskNotFound
+	}
+
+	if !filepath.IsAbs(dev) {
+		dev, err = filepath.Abs(filepath.Join(filepath.Dir(ln), dev))
+		if err != nil {
+			return dev, err
+		}
+	}
+	_, err = os.Stat(dev)
+	return dev, err
+}
+
+// udevWaitDiskToSettle uses udevadm to wait events in event queue to be handled.
+func udevWaitDiskToSettle(ctx context.Context, path string) error {
+	return exec.CommandContext(ctx,
+		"udevadm",
+		"settle",
+		fmt.Sprintf("--timeout=%d", udevSettleTimeout*time.Second),
+		fmt.Sprintf("--exit-if-exists=%s", path),
+	).Run()
+}
+
+// volumeIDToDiskID converts volume ID to disk ID managed by udev e.g. f67db1ca-825b-40aa-a6f4-390ac6ff1b91 -> virtio-f67db1ca825b40aaa6f4
+func volumeIDToDiskID(volumeID string) (string, error) {
 	fullId := strings.Join(strings.Split(volumeID, "-"), "")
 	if len(fullId) <= 20 {
-		return ""
+		return "", fmt.Errorf("volume ID '%s' too short", volumeID)
 	}
-	return fullId[:20]
+	return diskPrefix + fullId[:20], nil
 }
