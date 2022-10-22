@@ -14,7 +14,7 @@ and [Kubernetes Blog](https://kubernetes.io/blog/2019/01/15/container-storage-in
 
 Before reaching the **v1.0.0** version, UpCloud CSI Driver is **NOT** recommended for production environment usage.
 
-## Deployment
+## Kubernetes Deployment
 
 ### Requirements
 
@@ -111,6 +111,10 @@ total 20
 drwx------    2 root     root       16.0K Feb 22 12:25 lost+found
 
 ```
+
+## Nomad Deployment
+
+Nomad deployment [README](deploy/nomad/README.md) describes how to deploy UpCloud CSI driver using Nomad.
 
 ## Contribution
 
