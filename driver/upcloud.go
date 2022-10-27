@@ -278,7 +278,7 @@ func (u *upcloudClient) createStorageBackup(ctx context.Context, uuid, title str
 	})
 }
 
-// listStorageBackups lists strage backups. If `originUUID` is empty all backups are retured
+// listStorageBackups lists strage backups. If `originUUID` is empty all backups are retured.
 func (u *upcloudClient) listStorageBackups(ctx context.Context, originUUID string) ([]upcloud.Storage, error) {
 	storages, err := u.svc.GetStorages(ctx, &request.GetStoragesRequest{Type: upcloud.StorageTypeBackup})
 	if err != nil {

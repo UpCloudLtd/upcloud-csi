@@ -25,7 +25,7 @@ import (
 
 const (
 	// DefaultDriverName defines the driverName that is used in Kubernetes and the CSI
-	// system for the canonical, official driverName of this plugin
+	// system for the canonical, official driverName of this plugin.
 	DefaultDriverName = "storage.csi.upcloud.com"
 	// DefaultAddress is the default address that the csi plugin will serve its
 	// http handler on.
@@ -87,7 +87,7 @@ type driverOptions struct {
 
 // NewDriver returns a CSI plugin that contains the necessary gRPC
 // interfaces to interact with Kubernetes over unix domain sockets for
-// managing Upcloud Block Storage
+// managing Upcloud Block Storage.
 func NewDriver(logger *logrus.Logger, options ...func(*driverOptions)) (*Driver, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*initTimeout)
 	defer cancel()
@@ -165,7 +165,7 @@ func determineServer(ctx context.Context, svc *upcloudservice.ServiceContext, no
 	return nil, fmt.Errorf("node %s not found", nodeHost)
 }
 
-// Run starts the CSI plugin by communication over the given endpoint
+// Run starts the CSI plugin by communication over the given endpoint.
 func (d *Driver) Run() error {
 	u, err := url.Parse(d.options.endpoint)
 	if err != nil {
@@ -269,13 +269,12 @@ func (d *Driver) checkStorageQuota() (map[string]int, error) {
 			"storage_provisioned_ssd_size": total,
 		}
 		return storageDetails, fmt.Errorf("available storage size may be insufficient for correct work of CSI controller")
-
 	}
 
 	return nil, nil
 }
 
-// Stop stops the plugin
+// Stop stops the plugin.
 func (d *Driver) Stop() {
 	d.readyMu.Lock()
 	d.ready = false
@@ -331,7 +330,7 @@ func WithNodeHost(nodeHost string) func(*driverOptions) {
 // ldflags like so:
 //   go build -ldflags "-X github.com/UpCloudLtd/upcloud-csi/driver.version=0.0.1"
 
-// TODO look at cleaner way to set these :(
+// TODO look at cleaner way to set these :(.
 var (
 	gitTreeState = "not a git tree"
 	commit       string

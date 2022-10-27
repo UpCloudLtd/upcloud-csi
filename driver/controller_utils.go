@@ -18,15 +18,15 @@ const (
 	tiB
 
 	// minimumVolumeSizeInBytes is used to validate that the user is not trying
-	// to create a volume that is smaller than what we support
+	// to create a volume that is smaller than what we support.
 	minimumVolumeSizeInBytes int64 = 10 * giB
 
 	// maximumVolumeSizeInBytes is used to validate that the user is not trying
-	// to create a volume that is larger than what we support
+	// to create a volume that is larger than what we support.
 	maximumVolumeSizeInBytes int64 = 4096 * giB
 
 	// defaultVolumeSize is used when the user did not provide a size or
-	// the size they provided did not satisfy our requirements
+	// the size they provided did not satisfy our requirements.
 	defaultVolumeSize = 10 * giB
 )
 
@@ -97,7 +97,7 @@ func getStorageRange(cr *csi.CapacityRange) (int64, error) {
 	return defaultVolumeSize, nil
 }
 
-// displayByteString takes a byte representation of storage size and returns a human-readable string: (1 GiB)
+// displayByteString takes a byte representation of storage size and returns a human-readable string: (1 GiB).
 func displayByteString(bytes int64) string {
 	output := float64(bytes)
 	unit := ""

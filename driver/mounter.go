@@ -42,14 +42,14 @@ type mounter struct {
 	log *logrus.Entry
 }
 
-// newMounter returns a new mounter instance
+// newMounter returns a new mounter instance.
 func newMounter(log *logrus.Entry) *mounter {
 	return &mounter{
 		log: log,
 	}
 }
 
-// Format formats the source with the given filesystem type
+// Format formats the source with the given filesystem type.
 func (m *mounter) Format(ctx context.Context, source, fsType string, mkfsArgs []string) error {
 	if fsType == "" {
 		return errors.New("fs type is not specified for formatting the volume")
@@ -106,11 +106,11 @@ func (m *mounter) Mount(ctx context.Context, source, target, fsType string, opts
 
 	// block device requires that target is file instead of directory
 	if fsType == "" {
-		err := os.MkdirAll(filepath.Dir(target), 0750)
+		err := os.MkdirAll(filepath.Dir(target), 0o750)
 		if err != nil {
 			return err
 		}
-		f, err := os.OpenFile(target, os.O_CREATE, 0660)
+		f, err := os.OpenFile(target, os.O_CREATE, 0o660)
 		if err != nil {
 			return err
 		}
@@ -120,7 +120,7 @@ func (m *mounter) Mount(ctx context.Context, source, target, fsType string, opts
 	} else {
 		mountArgs = append(mountArgs, "-t", fsType)
 		// create target, os.Mkdirall is noop if it exists
-		err := os.MkdirAll(target, 0750)
+		err := os.MkdirAll(target, 0o750)
 		if err != nil {
 			return err
 		}
@@ -137,7 +137,7 @@ func (m *mounter) Mount(ctx context.Context, source, target, fsType string, opts
 	return exec.CommandContext(ctx, mountCmd, mountArgs...).Run()
 }
 
-// Unmount unmounts the given target
+// Unmount unmounts the given target.
 func (m *mounter) Unmount(ctx context.Context, target string) error {
 	log := logWithServerContext(m.log, ctx)
 	if target == "" {
@@ -236,7 +236,7 @@ func (m *mounter) IsMounted(ctx context.Context, target string) (bool, error) {
 	}
 
 	// no response means there is no mount
-	if string(out) == "" {
+	if len(out) == 0 {
 		return false, nil
 	}
 
@@ -289,7 +289,6 @@ func (m *mounter) GetDeviceName(ctx context.Context, mounter mount.Interface, mo
 }
 
 func (m *mounter) createPartition(ctx context.Context, device string) error {
-
 	cmd := "parted"
 	args := []string{device, "mklabel", "gpt"}
 	log := logWithServerContext(m.log, ctx).WithFields(logrus.Fields{logCommandKey: cmd, logCommandArgsKey: args})

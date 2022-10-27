@@ -191,7 +191,6 @@ func (d *Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest)
 		return &csi.DeleteVolumeResponse{}, err
 	}
 	return &csi.DeleteVolumeResponse{}, nil
-
 }
 
 // ControllerPublishVolume attaches storage to a node via UpCloud Storage service.
@@ -347,7 +346,7 @@ func (d *Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Valida
 }
 
 // ListVolumes returns a list of all requested volumes.
-// TODO OPTIONAL: implement starting token / pagination
+// TODO OPTIONAL: implement starting token / pagination.
 func (d *Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
 	log := logWithServerContext(d.log, ctx).WithFields(logrus.Fields{
 		logListStartingTokenKey: req.GetStartingToken(),
@@ -467,7 +466,7 @@ func (d *Driver) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotRequ
 // ListSnapshots should not list a snapshot that is being created but has not
 // been cut successfully yet.
 //
-// TODO OPTIONAL: implement starting token / pagination
+// TODO OPTIONAL: implement starting token / pagination.
 func (d *Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest) (*csi.ListSnapshotsResponse, error) {
 	log := logWithServerContext(d.log, ctx).WithFields(logrus.Fields{
 		logListStartingTokenKey: req.GetStartingToken(),
@@ -503,7 +502,6 @@ func (d *Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsReques
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "listsnapshots failed with: %s", err.Error())
 		}
-
 	}
 	backups, listNext := paginateStorage(backups, listStart, int(req.GetMaxEntries()))
 	entries := make([]*csi.ListSnapshotsResponse_Entry, 0)

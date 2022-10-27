@@ -340,7 +340,7 @@ func getBlockDeviceByVolumeID(ctx context.Context, volumeID string) (string, err
 }
 
 // getBlockDeviceByDiskID returns actual block device path (e.g. /dev/vda) that correspond to disk ID (hardware serial number).
-// diskID can be udev disk ID or path to disk ID symbolic link e.g. /dev/disk/by-id/virtio-014e425736724563ab83
+// diskID can be udev disk ID or path to disk ID symbolic link e.g. /dev/disk/by-id/virtio-014e425736724563ab83.
 func getBlockDeviceByDiskID(ctx context.Context, diskID string) (dev string, err error) {
 	ln := diskID
 	if !filepath.IsAbs(diskID) {
@@ -386,7 +386,7 @@ func udevWaitDiskToSettle(ctx context.Context, path string) error {
 	).Run()
 }
 
-// volumeIDToDiskID converts volume ID to disk ID managed by udev e.g. f67db1ca-825b-40aa-a6f4-390ac6ff1b91 -> virtio-f67db1ca825b40aaa6f4
+// volumeIDToDiskID converts volume ID to disk ID managed by udev e.g. f67db1ca-825b-40aa-a6f4-390ac6ff1b91 -> virtio-f67db1ca825b40aaa6f4.
 func volumeIDToDiskID(volumeID string) (string, error) {
 	fullId := strings.Join(strings.Split(volumeID, "-"), "")
 	if len(fullId) <= 20 {

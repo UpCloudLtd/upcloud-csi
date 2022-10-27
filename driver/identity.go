@@ -7,14 +7,14 @@ import (
 	"github.com/golang/protobuf/ptypes/wrappers"
 )
 
-// GetPluginInfo returns metadata of the plugin
+// GetPluginInfo returns metadata of the plugin.
 func (d *Driver) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
 	return &csi.GetPluginInfoResponse{
 		Name: d.options.driverName,
 	}, nil
 }
 
-// GetPluginCapabilities returns available capabilities of the plugin
+// GetPluginCapabilities returns available capabilities of the plugin.
 func (d *Driver) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCapabilitiesRequest) (*csi.GetPluginCapabilitiesResponse, error) {
 	return &csi.GetPluginCapabilitiesResponse{
 		Capabilities: []*csi.PluginCapability{
@@ -43,7 +43,7 @@ func (d *Driver) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCa
 	}, nil
 }
 
-// Probe returns the health and readiness of the plugin
+// Probe returns the health and readiness of the plugin.
 func (d *Driver) Probe(ctx context.Context, req *csi.ProbeRequest) (*csi.ProbeResponse, error) {
 	d.log.WithField("method", "probe").Info("check whether the plugin is ready")
 	d.readyMu.Lock()

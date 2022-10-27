@@ -2,7 +2,6 @@ package driver
 
 import (
 	"context"
-
 	"reflect"
 	"testing"
 
@@ -208,11 +207,9 @@ func TestControllerService_CreateVolume(t *testing.T) {
 						return
 					}
 				}
-
 			}
 		})
 	}
-
 }
 
 func TestControllerService_DeleteVolume(t *testing.T) {
@@ -319,7 +316,6 @@ func TestControllerService_ControllerUnpublishVolume(t *testing.T) {
 				t.Errorf("ControllerUnpublishVolume() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-
 		})
 	}
 }
@@ -378,7 +374,7 @@ func TestControllerExpandVolume(t *testing.T) {
 			RequiredBytes: wantBytes,
 			LimitBytes:    0,
 		},
-		//VolumeCapability:     &csi.VolumeCapability{},
+		// VolumeCapability:     &csi.VolumeCapability{},
 	})
 	if err != nil {
 		t.Errorf("ControllerExpandVolume error = %v", err)
