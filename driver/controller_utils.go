@@ -16,39 +16,29 @@ const (
 	miB
 	giB
 	tiB
-)
 
-const (
 	// minimumVolumeSizeInBytes is used to validate that the user is not trying
-	// to create a volume that is smaller than what we support.
+	// to create a volume that is smaller than what we support
 	minimumVolumeSizeInBytes int64 = 10 * giB
 
 	// maximumVolumeSizeInBytes is used to validate that the user is not trying
-	// to create a volume that is larger than what we support.
+	// to create a volume that is larger than what we support
 	maximumVolumeSizeInBytes int64 = 4096 * giB
 
 	// defaultVolumeSize is used when the user did not provide a size or
-	// the size they provided did not satisfy our requirements.
+	// the size they provided did not satisfy our requirements
 	defaultVolumeSize = 10 * giB
 )
 
-// SupportedAccessMode TODO lots of rewording
-// currently only support a single node to be attached to a single node
-// in read/write mode. This corresponds to `accessModes.ReadWriteOnce` in a
-// PVC resource on Kubernetes.
+var supportedAccessMode = &csi.VolumeCapability_AccessMode{
+	Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+}
 
 type storageRange struct {
 	requiredBytes int64
 	requiredSet   bool
 	limitBytes    int64
 	limitSet      bool
-}
-
-// GetDefaultAccessMode returns volume capability with.
-func GetDefaultAccessMode() *csi.VolumeCapability_AccessMode {
-	return &csi.VolumeCapability_AccessMode{
-		Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
-	}
 }
 
 // TODO reword/rework
@@ -107,24 +97,24 @@ func getStorageRange(cr *csi.CapacityRange) (int64, error) {
 	return defaultVolumeSize, nil
 }
 
-// displayByteString takes a byte representation of storage size and returns a human-readable string: (1 GiB).
+// displayByteString takes a byte representation of storage size and returns a human-readable string: (1 GiB)
 func displayByteString(bytes int64) string {
 	output := float64(bytes)
 	unit := ""
 
 	switch {
 	case bytes >= tiB:
-		output /= tiB
-		unit = "Tb"
+		output = output / tiB
+		unit = "Ti"
 	case bytes >= giB:
-		output /= giB
-		unit = "Gb"
+		output = output / giB
+		unit = "Gi"
 	case bytes >= miB:
-		output /= miB
-		unit = "Mb"
+		output = output / miB
+		unit = "Mi"
 	case bytes >= kiB:
-		output /= kiB
-		unit = "Kb"
+		output = output / kiB
+		unit = "Ki"
 	case bytes == 0:
 		return "0"
 	}
@@ -140,7 +130,7 @@ func displayByteString(bytes int64) string {
 func validateCapabilities(capacities []*csi.VolumeCapability) []string {
 	violations := sets.NewString()
 	for _, capacity := range capacities {
-		if capacity.GetAccessMode().GetMode() != GetDefaultAccessMode().GetMode() {
+		if capacity.GetAccessMode().GetMode() != supportedAccessMode.GetMode() {
 			violations.Insert(fmt.Sprintf("unsupported access mode %s", capacity.GetAccessMode().GetMode().String()))
 		}
 

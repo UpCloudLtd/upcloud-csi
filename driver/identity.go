@@ -3,29 +3,20 @@ package driver
 import (
 	"context"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/protobuf/ptypes/wrappers"
 )
 
-// GetPluginInfo returns metadata of the plugin.
+// GetPluginInfo returns metadata of the plugin
 func (d *Driver) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
-	resp := &csi.GetPluginInfoResponse{
+	return &csi.GetPluginInfoResponse{
 		Name: d.options.driverName,
-	}
-
-	d.log.WithFields(logrus.Fields{
-		"response": resp,
-		"method":   "get_plugin_info",
-	}).Info("return plugin info")
-
-	return resp, nil
+	}, nil
 }
 
-// GetPluginCapabilities returns available capabilities of the plugin.
+// GetPluginCapabilities returns available capabilities of the plugin
 func (d *Driver) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCapabilitiesRequest) (*csi.GetPluginCapabilitiesResponse, error) {
-	resp := &csi.GetPluginCapabilitiesResponse{
+	return &csi.GetPluginCapabilitiesResponse{
 		Capabilities: []*csi.PluginCapability{
 			{
 				Type: &csi.PluginCapability_Service_{
@@ -49,17 +40,10 @@ func (d *Driver) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCa
 				},
 			},
 		},
-	}
-
-	d.log.WithFields(logrus.Fields{
-		"response": resp,
-		"method":   "get_plugin_capabilities",
-	}).Info("get plugin capabitilies called")
-
-	return resp, nil
+	}, nil
 }
 
-// Probe returns the health and readiness of the plugin.
+// Probe returns the health and readiness of the plugin
 func (d *Driver) Probe(ctx context.Context, req *csi.ProbeRequest) (*csi.ProbeResponse, error) {
 	d.log.WithField("method", "probe").Info("check whether the plugin is ready")
 	d.readyMu.Lock()

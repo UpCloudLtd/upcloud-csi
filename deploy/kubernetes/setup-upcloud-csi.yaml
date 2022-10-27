@@ -1,0 +1,301 @@
+#######################
+# Driver
+#######################
+apiVersion: storage.k8s.io/v1
+kind: CSIDriver
+metadata:
+  name: storage.csi.upcloud.com
+spec:
+  attachRequired: true
+  podInfoOnMount: true
+  fsGroupPolicy: File
+
+---
+#######################
+# Storage classes
+#######################
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: upcloud-block-storage-maxiops
+  namespace: kube-system
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+parameters:
+  tier: maxiops
+provisioner: storage.csi.upcloud.com
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: upcloud-block-storage-hdd
+  namespace: kube-system
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "false"
+parameters:
+  tier: hdd
+provisioner: storage.csi.upcloud.com
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+
+---
+#######################
+# Controller plugin
+#######################
+kind: StatefulSet
+apiVersion: apps/v1
+metadata:
+  name: csi-upcloud-controller
+  namespace: kube-system
+spec:
+  serviceName: "csi-upcloud"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: csi-upcloud-controller
+  template:
+    metadata:
+      labels:
+        app: csi-upcloud-controller
+        role: csi-upcloud
+    spec:
+      priorityClassName: system-cluster-critical
+      serviceAccount: csi-upcloud-controller-sa
+      containers:
+        - name: csi-provisioner
+          image: k8s.gcr.io/sig-storage/csi-provisioner:v3.1.0
+          args:
+            - "--csi-address=$(ADDRESS)"
+            - "--v=5"
+            - "--timeout=600s"
+          env:
+            - name: ADDRESS
+              value: /var/lib/csi/sockets/pluginproxy/csi.sock
+          imagePullPolicy: "Always"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/csi/sockets/pluginproxy/
+        - name: csi-attacher
+          image: k8s.gcr.io/sig-storage/csi-attacher:v3.4.0
+          args:
+            - "--v=5"
+            - "--csi-address=$(ADDRESS)"
+            - "--timeout=120s"
+          env:
+            - name: ADDRESS
+              value: /var/lib/csi/sockets/pluginproxy/csi.sock
+          imagePullPolicy: "Always"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/csi/sockets/pluginproxy/
+        - name: csi-resizer
+          image: k8s.gcr.io/sig-storage/csi-resizer:v1.4.0
+          args:
+            - "--v=5"
+            - "--timeout=120s"
+            - "--csi-address=$(ADDRESS)"
+            - "--handle-volume-inuse-error=true"
+          env:
+            - name: ADDRESS
+              value: /var/lib/csi/sockets/pluginproxy/csi.sock
+          imagePullPolicy: "Always"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/csi/sockets/pluginproxy/
+        - name: csi-snapshotter
+          image: k8s.gcr.io/sig-storage/csi-snapshotter:v4.2.1
+          args:
+            - "--csi-address=$(ADDRESS)"
+            - "--v=5"
+            - "--timeout=120s"
+            - "--leader-election=false"
+          env:
+            - name: ADDRESS
+              value: /var/lib/csi/sockets/pluginproxy/csi.sock
+          imagePullPolicy: "Always"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/csi/sockets/pluginproxy/
+        - name: csi-upcloud-plugin
+          image: ghcr.io/upcloudltd/upcloud-csi:${UPCLOUD_CSI_VERSION}
+          args:
+            - "--endpoint=$(CSI_ENDPOINT)"
+            - "--nodehost=$(NODE_ID)"
+            - "--username=$(UPCLOUD_USERNAME)"
+            - "--password=$(UPCLOUD_PASSWORD)"
+          env:
+            - name: CSI_ENDPOINT
+              value: unix:///var/lib/csi/sockets/pluginproxy/csi.sock
+            - name: UPCLOUD_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: upcloud
+                  key: username
+            - name: UPCLOUD_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: upcloud
+                  key: password
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          imagePullPolicy: "Always"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/csi/sockets/pluginproxy/
+      imagePullSecrets:
+        - name: regcred
+      volumes:
+        - name: socket-dir
+          emptyDir: {}
+
+---
+#######################
+# Snapshot Controller
+#######################
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: csi-upcloud-snapshot-controller
+  namespace: kube-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: csi-upcloud-snapshot-controller
+  # the snapshot controller won't be marked as ready if the v1 CRDs are unavailable
+  # in #504 the snapshot-controller will exit after around 7.5 seconds if it
+  # can't find the v1 CRDs so this value should be greater than that
+  minReadySeconds: 15
+  strategy:
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: csi-upcloud-snapshot-controller
+    spec:
+      serviceAccount: csi-upcloud-controller-sa
+      containers:
+        - name: snapshot-controller
+          image: k8s.gcr.io/sig-storage/snapshot-controller:v4.2.1
+          args:
+            - "--v=5"
+            - "--leader-election=true"
+          imagePullPolicy: IfNotPresent
+
+---
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: upcloud-csi-snapshotclass
+driver: storage.csi.upcloud.com
+deletionPolicy: Delete
+
+---
+#######################
+# Node plugin
+#######################
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: csi-upcloud-node
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: csi-upcloud-node
+  template:
+    metadata:
+      labels:
+        app: csi-upcloud-node
+        role: csi-upcloud
+    spec:
+      priorityClassName: system-node-critical
+      serviceAccount: csi-upcloud-node-sa
+      hostNetwork: true
+      containers:
+        - name: csi-node-driver-registrar
+          image: k8s.gcr.io/sig-storage/csi-node-driver-registrar:v2.5.0
+          args:
+            - "--v=5"
+            - "--csi-address=$(ADDRESS)"
+            - "--kubelet-registration-path=$(DRIVER_REG_SOCK_PATH)"
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+            - name: DRIVER_REG_SOCK_PATH
+              value: /var/lib/kubelet/plugins/storage.csi.upcloud.com/csi.sock
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - name: plugin-dir
+              mountPath: /csi/
+            - name: registration-dir
+              mountPath: /registration/
+        - name: csi-upcloud-plugin
+          image: ghcr.io/upcloudltd/upcloud-csi:${UPCLOUD_CSI_VERSION}
+          args:
+            - "--endpoint=$(CSI_ENDPOINT)"
+            - "--nodehost=$(NODE_ID)"
+            - "--username=$(UPCLOUD_USERNAME)"
+            - "--password=$(UPCLOUD_PASSWORD)"
+          env:
+            - name: CSI_ENDPOINT
+              value: unix:///csi/csi.sock
+            - name: UPCLOUD_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: upcloud
+                  key: username
+            - name: UPCLOUD_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: upcloud
+                  key: password
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          imagePullPolicy: "Always"
+          securityContext:
+            privileged: true
+            capabilities:
+              add: ["SYS_ADMIN"]
+            allowPrivilegeEscalation: true
+          volumeMounts:
+            - name: plugin-dir
+              mountPath: /csi
+            - name: pods-mount-dir
+              mountPath: /var/lib/kubelet
+              # needed so that any mounts setup inside this container are
+              # propagated back to the host machine.
+              mountPropagation: "Bidirectional"
+            - name: device-dir
+              mountPath: /dev
+      imagePullSecrets:
+        - name: regcred
+      volumes:
+        - name: registration-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins_registry/
+            type: DirectoryOrCreate
+        - name: plugin-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins/storage.csi.upcloud.com
+            type: DirectoryOrCreate
+        - name: pods-mount-dir
+          hostPath:
+            path: /var/lib/kubelet
+            type: Directory
+        - name: device-dir
+          hostPath:
+            path: /dev

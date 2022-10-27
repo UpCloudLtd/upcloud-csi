@@ -1,0 +1,22 @@
+name: UpCloud CSI driver test
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    paths:
+      - driver/**
+      - vendor/**
+      - go.*
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-go@v3
+
+      - name: Test Driver
+        run: sudo make test

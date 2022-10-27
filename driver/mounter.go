@@ -1,13 +1,13 @@
 package driver
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -15,13 +15,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
-)
-
-const (
-	// blkidExitStatusNoIdentifiers defines the exit code returned from blkid indicating that no devices have been found.
-	blkidExitStatusNoIdentifiers = 2
-	ext3                         = "ext3"
-	ext4                         = "ext4"
 )
 
 type findmntResponse struct {
@@ -40,52 +33,24 @@ type volumeStatistics struct {
 	availableInodes, totalInodes, usedInodes int64
 }
 
-type Mounter interface {
-	// Format formats the source with the given filesystem type
-	Format(source, fsType string, mkfsArgs []string) error
-
-	// Mount mounts source to target with the given fstype and options.
-	Mount(source, target, fsType string, options ...string) error
-
-	// Unmount unmounts the given target
-	Unmount(target string) error
-
-	// IsFormatted checks whether the source device is formatted or not. It
-	// returns true if the source device is already formatted.
-	IsFormatted(source string) (bool, error)
-
-	// IsMounted checks whether the target path is a correct mount (i.e:
-	// propagated). It returns true if it's mounted. An error is returned in
-	// case of system errors or if it's mounted incorrectly.
-	IsMounted(target string) (bool, error)
-
-	// IsPrepared checks whether a device is uniquely addressable
-	isPrepared(target string) (string, error)
-
-	// Sets the filesystem UUID to the same UUID as used within Upcloud for easy downstream handling
-	setUUID(source, newUUID string) error
-
-	// GetStatistics returns capacity-related volume statistics for the given
-	// volume path.
-	GetStatistics(volumePath string) (volumeStatistics, error)
-
-	wipeDevice(deviceID string) error
-
-	GetDeviceName(mounter mount.Interface, mountPath string) (string, error)
-}
+const (
+	// blkidExitStatusNoIdentifiers defines the exit code returned from blkid indicating that no devices have been found. See http://www.polarhome.com/service/man/?qf=blkid&tf=2&of=Alpinelinux for details.
+	blkidExitStatusNoIdentifiers = 2
+)
 
 type mounter struct {
 	log *logrus.Entry
 }
 
-// newMounter returns a new mounter instance.
+// newMounter returns a new mounter instance
 func newMounter(log *logrus.Entry) *mounter {
 	return &mounter{
 		log: log,
 	}
 }
 
-func (m *mounter) Format(source, fsType string, mkfsArgs []string) error {
+// Format formats the source with the given filesystem type
+func (m *mounter) Format(ctx context.Context, source, fsType string, mkfsArgs []string) error {
 	if fsType == "" {
 		return errors.New("fs type is not specified for formatting the volume")
 	}
@@ -94,54 +59,42 @@ func (m *mounter) Format(source, fsType string, mkfsArgs []string) error {
 		return errors.New("source is not specified for formatting the volume")
 	}
 
-	m.log.Infof("source: %s", source)
-
-	m.log.Info("create partition called")
-	err := createPartition(source)
+	err := m.createPartition(ctx, source)
 	if err != nil {
 		return err
 	}
 
-	lastPartition, err := getLastPartition(m.log)
+	lastPartition, err := getLastPartition(ctx, source)
 	if err != nil {
 		return err
 	}
+	return m.createFilesystem(ctx, lastPartition, fsType, mkfsArgs)
+}
 
-	if fsType == ext4 || fsType == ext3 {
-		mkfsArgs = append(mkfsArgs, "-F", lastPartition)
+func (m *mounter) createFilesystem(ctx context.Context, partition, fsType string, mkfsArgs []string) error {
+	if fsType == "ext4" || fsType == "ext3" {
+		mkfsArgs = append(mkfsArgs, "-F", partition)
 	}
 
 	mkfsCmd := fmt.Sprintf("mkfs.%s", fsType)
 
-	_, err = exec.LookPath(mkfsCmd)
+	_, err := exec.LookPath(mkfsCmd)
 	if err != nil {
-		if errors.Is(err, exec.ErrNotFound) {
+		if err == exec.ErrNotFound {
 			return fmt.Errorf("%q executable not found in $PATH", mkfsCmd)
 		}
 		return err
 	}
 
-	m.log.WithFields(logrus.Fields{
-		"cmd":  mkfsCmd,
-		"args": mkfsArgs,
-	}).Info("executing format command")
+	logWithServerContext(m.log, ctx).WithFields(logrus.Fields{logCommandKey: mkfsCmd, logCommandArgsKey: mkfsArgs}).Debug("executing command")
 
-	out, err := exec.Command(mkfsCmd, mkfsArgs...).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("formatting disk failed: %w cmd: '%s %s' output: %q",
-			err, mkfsCmd, strings.Join(mkfsArgs, " "), string(out))
-	}
-
-	return nil
+	return exec.CommandContext(ctx, mkfsCmd, mkfsArgs...).Run()
 }
 
-func (m *mounter) Mount(source, target, fsType string, opts ...string) error {
+// Mount mounts source to target with the given fstype and options.
+func (m *mounter) Mount(ctx context.Context, source, target, fsType string, opts ...string) error {
 	mountCmd := "mount"
-	mountArgs := []string{}
-
-	if fsType == "" {
-		return errors.New("fs type is not specified for mounting the volume")
-	}
+	mountArgs := make([]string, 0)
 
 	if source == "" {
 		return errors.New("source is not specified for mounting the volume")
@@ -151,7 +104,27 @@ func (m *mounter) Mount(source, target, fsType string, opts ...string) error {
 		return errors.New("target is not specified for mounting the volume")
 	}
 
-	mountArgs = append(mountArgs, "-t", fsType)
+	// block device requires that target is file instead of directory
+	if fsType == "" {
+		err := os.MkdirAll(filepath.Dir(target), 0750)
+		if err != nil {
+			return err
+		}
+		f, err := os.OpenFile(target, os.O_CREATE, 0660)
+		if err != nil {
+			return err
+		}
+		if err := f.Close(); err != nil {
+			return err
+		}
+	} else {
+		mountArgs = append(mountArgs, "-t", fsType)
+		// create target, os.Mkdirall is noop if it exists
+		err := os.MkdirAll(target, 0750)
+		if err != nil {
+			return err
+		}
+	}
 
 	if len(opts) > 0 {
 		mountArgs = append(mountArgs, "-o", strings.Join(opts, ","))
@@ -159,49 +132,34 @@ func (m *mounter) Mount(source, target, fsType string, opts ...string) error {
 
 	mountArgs = append(mountArgs, source, target)
 
-	// create target, os.Mkdirall is noop if it exists
-	err := os.MkdirAll(target, 0o750)
-	if err != nil {
-		return err
-	}
+	logWithServerContext(m.log, ctx).WithFields(logrus.Fields{logCommandKey: mountCmd, logCommandArgsKey: mountArgs}).Debug("executing command")
 
-	m.log.WithFields(logrus.Fields{
-		"cmd":  mountCmd,
-		"args": mountArgs,
-	}).Info("executing mount command")
-
-	out, err := exec.Command(mountCmd, mountArgs...).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("mounting failed: %w cmd: '%s %s' output: %q",
-			err, mountCmd, strings.Join(mountArgs, " "), string(out))
-	}
-
-	return nil
+	return exec.CommandContext(ctx, mountCmd, mountArgs...).Run()
 }
 
-func (m *mounter) Unmount(target string) error {
-	umountCmd := "umount"
+// Unmount unmounts the given target
+func (m *mounter) Unmount(ctx context.Context, target string) error {
+	log := logWithServerContext(m.log, ctx)
 	if target == "" {
 		return errors.New("target is not specified for unmounting the volume")
 	}
 
-	umountArgs := []string{target}
-
-	m.log.WithFields(logrus.Fields{
-		"cmd":  umountCmd,
-		"args": umountArgs,
-	}).Info("executing umount command")
-
-	out, err := exec.Command(umountCmd, umountArgs...).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("unmounting failed: %w cmd: '%s %s' output: %q",
-			err, umountCmd, target, string(out))
+	if _, err := os.Stat(target); os.IsNotExist(err) {
+		log.WithFields(logrus.Fields{"target": target}).Debug("unmount target does not exist")
+		return nil
 	}
 
-	return nil
+	umountCmd := "umount"
+	umountArgs := []string{target}
+
+	logWithServerContext(m.log, ctx).WithFields(logrus.Fields{logCommandKey: umountCmd, logCommandArgsKey: umountArgs}).Debug("executing command")
+
+	return exec.CommandContext(ctx, umountCmd, umountArgs...).Run()
 }
 
-func (m *mounter) IsFormatted(source string) (bool, error) {
+// IsFormatted checks whether the source device is formatted or not. It
+// returns true if the source device is already formatted.
+func (m *mounter) IsFormatted(ctx context.Context, source string) (bool, error) {
 	if source == "" {
 		return false, errors.New("source is not specified")
 	}
@@ -209,7 +167,7 @@ func (m *mounter) IsFormatted(source string) (bool, error) {
 	blkidCmd := "blkid"
 	_, err := exec.LookPath(blkidCmd)
 	if err != nil {
-		if errors.Is(err, exec.ErrNotFound) {
+		if err == exec.ErrNotFound {
 			return false, fmt.Errorf("%q executable not found in $PATH", blkidCmd)
 		}
 		return false, err
@@ -217,95 +175,38 @@ func (m *mounter) IsFormatted(source string) (bool, error) {
 
 	blkidArgs := []string{source}
 
-	m.log.WithFields(logrus.Fields{
-		"cmd":  blkidCmd,
-		"args": blkidArgs,
-	}).Info("checking if source is formatted")
-
+	logWithServerContext(m.log, ctx).WithFields(logrus.Fields{logCommandKey: blkidCmd, logCommandArgsKey: blkidArgs}).Debug("executing command")
 	exitCode := 0
-	cmd := exec.Command(blkidCmd, blkidArgs...)
-	err = cmd.Run()
-	if err != nil {
-		var exitError *exec.ExitError
-		if !errors.As(err, &exitError) {
-			return false, fmt.Errorf("checking formatting failed: %w cmd: %q, args: %q", err, blkidCmd, blkidArgs)
+	if err = exec.CommandContext(ctx, blkidCmd, blkidArgs...).Run(); err != nil {
+		exitError, ok := err.(*exec.ExitError)
+		if !ok {
+			return false, fmt.Errorf("checking formatting failed: %v cmd: %q, args: %q", err, blkidCmd, blkidArgs)
 		}
-		//nolint:errcheck // Error exit code is checked below
 		ws := exitError.Sys().(syscall.WaitStatus)
 		exitCode = ws.ExitStatus()
 		if exitCode == blkidExitStatusNoIdentifiers {
 			return false, nil
+		} else {
+			return false, fmt.Errorf("checking formatting failed: %v cmd: %q, args: %q", err, blkidCmd, blkidArgs)
 		}
-		return false, fmt.Errorf("checking formatting failed: %w cmd: %q, args: %q", err, blkidCmd, blkidArgs)
 	}
 
 	return true, nil
 }
 
-func (m *mounter) isPrepared(source string) (string, error) {
-	unformattedDevice := ""
-	formatted, err := m.IsFormatted(source)
-	if err != nil {
-		return "", err
-	}
+func (m *mounter) wipeDevice(ctx context.Context, deviceId string) error {
+	cmd := "wipefs"
+	args := []string{"-a", "-f", deviceId}
 
-	if !formatted {
-		unformattedDevice = source
-		return unformattedDevice, nil
-	}
-	return "", fmt.Errorf("no conclusive unformatted device found. recover manually")
+	logWithServerContext(m.log, ctx).WithFields(logrus.Fields{logCommandKey: cmd, logCommandArgsKey: args}).Debug("executing command")
+
+	return exec.CommandContext(ctx, cmd, args...).Run()
 }
 
-func (m *mounter) wipeDevice(deviceID string) error {
-	_, err := exec.Command("wipefs", "-a", deviceID).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("error wiping device %s", deviceID)
-	}
-	return nil
-}
-
-func (m *mounter) setUUID(source, newUUID string) error {
-	findmntCmd := "tune2fs"
-	findmntArgs := []string{"-U", newUUID, source}
-	m.log.WithFields(logrus.Fields{
-		"cmd":  findmntCmd,
-		"args": findmntArgs,
-	}).Info("setting uuid for new filesystem")
-
-	cmd := exec.Command(findmntCmd, findmntArgs...)
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return err
-	}
-
-	defer stdin.Close()
-	if err = cmd.Start(); err != nil {
-		return err
-	}
-
-	if _, err = io.WriteString(stdin, "y\n"); err != nil {
-		return err
-	}
-
-	if err = cmd.Wait(); err != nil {
-		return err
-	}
-
-	if err != nil {
-		var exitError *exec.ExitError
-		if errors.As(err, &exitError) {
-			return exitError
-		}
-		return err
-	}
-	_, err = exec.Command("udevadm", "trigger").CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("triggering udevadm failed - error: %w", err)
-	}
-	return nil
-}
-
-func (m *mounter) IsMounted(target string) (bool, error) {
+// IsMounted checks whether the target path is a correct mount (i.e:
+// propagated). It returns true if it's mounted. An error is returned in
+// case of system errors or if it's mounted incorrectly.
+func (m *mounter) IsMounted(ctx context.Context, target string) (bool, error) {
 	if target == "" {
 		return false, errors.New("target is not specified for checking the mount")
 	}
@@ -313,7 +214,7 @@ func (m *mounter) IsMounted(target string) (bool, error) {
 	findmntCmd := "findmnt"
 	_, err := exec.LookPath(findmntCmd)
 	if err != nil {
-		if errors.Is(err, exec.ErrNotFound) {
+		if err == exec.ErrNotFound {
 			return false, fmt.Errorf("%q executable not found in $PATH", findmntCmd)
 		}
 		return false, err
@@ -321,31 +222,28 @@ func (m *mounter) IsMounted(target string) (bool, error) {
 
 	findmntArgs := []string{"-o", "TARGET,PROPAGATION,FSTYPE,OPTIONS", "-M", target, "-J"}
 
-	m.log.WithFields(logrus.Fields{
-		"cmd":  findmntCmd,
-		"args": findmntArgs,
-	}).Info("checking if target is mounted")
+	logWithServerContext(m.log, ctx).WithFields(logrus.Fields{logCommandKey: findmntCmd, logCommandArgsKey: findmntArgs}).Debug("executing command")
 
-	out, err := exec.Command(findmntCmd, findmntArgs...).CombinedOutput()
+	out, err := exec.CommandContext(ctx, findmntCmd, findmntArgs...).CombinedOutput()
 	if err != nil {
 		// findmnt exits with non zero exit status if it couldn't find anything
 		if strings.TrimSpace(string(out)) == "" {
 			return false, nil
 		}
 
-		return false, fmt.Errorf("checking mounted failed: %w cmd: %q output: %q",
+		return false, fmt.Errorf("checking mounted failed: %v cmd: %q output: %q",
 			err, findmntCmd, string(out))
 	}
 
 	// no response means there is no mount
-	if len(out) == 0 {
+	if string(out) == "" {
 		return false, nil
 	}
 
 	var resp *findmntResponse
 	err = json.Unmarshal(out, &resp)
 	if err != nil {
-		return false, fmt.Errorf("couldn't unmarshal data: %q: %w", string(out), err)
+		return false, fmt.Errorf("couldn't unmarshal data: %q: %s", string(out), err)
 	}
 
 	targetFound := false
@@ -364,14 +262,14 @@ func (m *mounter) IsMounted(target string) (bool, error) {
 	return targetFound, nil
 }
 
-func (m *mounter) GetStatistics(volumePath string) (volumeStatistics, error) {
+// GetStatistics returns capacity-related volume statistics for the given volume path.
+func (m *mounter) GetStatistics(ctx context.Context, volumePath string) (volumeStatistics, error) {
 	var statfs unix.Statfs_t
 	// See http://man7.org/linux/man-pages/man2/statfs.2.html for details.
 	err := unix.Statfs(volumePath, &statfs)
 	if err != nil {
 		return volumeStatistics{}, err
 	}
-
 	volStats := volumeStatistics{
 		availableBytes: int64(statfs.Bavail) * int64(statfs.Bsize),
 		totalBytes:     int64(statfs.Blocks) * int64(statfs.Bsize),
@@ -385,67 +283,44 @@ func (m *mounter) GetStatistics(volumePath string) (volumeStatistics, error) {
 	return volStats, nil
 }
 
-func (m *mounter) GetDeviceName(mounter mount.Interface, mountPath string) (string, error) {
+func (m *mounter) GetDeviceName(ctx context.Context, mounter mount.Interface, mountPath string) (string, error) {
 	devicePath, _, err := mount.GetDeviceNameFromMount(mounter, mountPath)
 	return devicePath, err
 }
 
-func getLastPartition(log *logrus.Entry) (string, error) {
-	log.Info("get last partition called")
-	sfdisk := exec.Command("sfdisk", "-q", "--list")
-	awk := exec.Command("awk", "NR>1{print $1}")
+func (m *mounter) createPartition(ctx context.Context, device string) error {
 
-	r, w := io.Pipe()
-	sfdisk.Stdout = w
-	awk.Stdin = r
-
-	var buf bytes.Buffer
-	awk.Stdout = &buf
-
-	if err := sfdisk.Start(); err != nil {
-		return "", err
-	}
-	if err := awk.Start(); err != nil {
-		return "", err
-	}
-	if err := sfdisk.Wait(); err != nil {
-		return "", err
-	}
-	if err := w.Close(); err != nil {
-		return "", err
-	}
-	if err := awk.Wait(); err != nil {
-		return "", err
+	cmd := "parted"
+	args := []string{device, "mklabel", "gpt"}
+	log := logWithServerContext(m.log, ctx).WithFields(logrus.Fields{logCommandKey: cmd, logCommandArgsKey: args})
+	log.Debug("executing command")
+	partedMklabel := exec.CommandContext(ctx, cmd, args...)
+	if err := partedMklabel.Run(); err != nil {
+		return err
 	}
 
-	out := buf.String()
-	partitions := strings.Split(out, "\n")
+	args = []string{"-a", "opt", device, "mkpart", "primary", "2048s", "100%"}
+	logWithServerContext(m.log, ctx).WithFields(logrus.Fields{logCommandKey: cmd, logCommandArgsKey: args}).Debug("executing command")
+	return exec.CommandContext(ctx, cmd, args...).Run()
+}
 
+func getLastPartition(ctx context.Context, source string) (string, error) {
+	sfdisk, err := exec.CommandContext(ctx, "sfdisk", "-q", "--list", "-o", "device", source).CombinedOutput()
+	if err != nil {
+		return "", err
+	}
+	return sfdiskOutputGetLastPartition(source, string(sfdisk))
+}
+
+func sfdiskOutputGetLastPartition(source, sfdiskOutput string) (string, error) {
+	outLines := strings.Split(sfdiskOutput, "\n")
 	var lastPartition string
-	for i := len(partitions) - 1; i > 0; i-- {
-		if !strings.HasPrefix(partitions[i], "/dev") {
-			continue
-		} else {
-			lastPartition = partitions[i]
+	for i := len(outLines) - 1; i >= 0; i-- {
+		partition := strings.TrimSpace(outLines[i])
+		if strings.HasPrefix(partition, source) {
+			lastPartition = partition
 			break
 		}
 	}
-
 	return lastPartition, nil
-}
-
-func createPartition(device string) error {
-	partedMklabelOut, err := exec.Command("parted", device, "mklabel", "gpt").CombinedOutput()
-	if err != nil {
-		return err
-	}
-	logrus.Printf("parted mklabel output: %s\n", partedMklabelOut)
-
-	partedCreatePartitionOut, err := exec.Command("parted", "-a", "opt", device, "mkpart", "primary", "2048s", "100%").CombinedOutput()
-	if err != nil {
-		return err
-	}
-	logrus.Printf("mkpart output: %s\n", partedCreatePartitionOut)
-
-	return nil
 }

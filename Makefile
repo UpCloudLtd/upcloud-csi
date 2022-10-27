@@ -1,20 +1,25 @@
-NAME=upcloud-csi-plugin
+PLUGIN_NAME=upcloud-csi-plugin
+PLUGIN_PKG ?= github.com/UpCloudLtd/upcloud-csi/cmd/upcloud-csi-plugin
+MANIFEST_NAME=upcloud-csi-manifest
+MANIFEST_PKG ?= github.com/UpCloudLtd/upcloud-csi/cmd/upcloud-csi-manifest
 OS ?= linux
-PKG ?= github.com/UpCloudLtd/upcloud-csi/cmd/upcloud-csi-plugin
+GO_VERSION := 1.17.6
 ARCH := amd64
+CGO_ENABLED := 1
 
-.PHONY: test
-test:
-	go test ./...
+.PHONY: compile
+compile:
+	@echo "==> Building the project"
+	@docker run --rm -e CGO_ENABLED=${CGO_ENABLED} -e GOOS=${OS} -e GOARCH=${ARCH} -v ${PWD}/:/app -w /app golang:${GO_VERSION}-alpine sh -c \
+		'apk add git && \
+		go build -ldflags "-w -s" -o cmd/upcloud-csi-plugin/${PLUGIN_NAME} ${PLUGIN_PKG} && \
+		go build -ldflags "-w -s" -o cmd/upcloud-csi-manifest/${MANIFEST_NAME} ${MANIFEST_PKG}'
 
-.PHONY: build
-build:
-	go build -mod=vendor -ldflags "-w -s" -o ${NAME} ${PKG}
 
 .PHONY: docker-build
 docker-build:
 	# TODO add versions and tags -t $(DOCKER_REPO):$(VERSION)
-	docker build --platform linux/x86_64 -t ghcr.io/mescudi21/upcloud-csi:test cmd/upcloud-csi-plugin -f cmd/upcloud-csi-plugin/Dockerfile
+	docker build --platform linux/x86_64 -t ghcr.io/upcloudltd/upcloud-csi:main cmd/upcloud-csi-plugin -f cmd/upcloud-csi-plugin/Dockerfile
 
 .PHONY: deploy-csi
 deploy-csi:
@@ -25,4 +30,21 @@ deploy-csi:
 clean-tests:
 	KUBECONFIG=$(KUBECONFIG) kubectl delete all --all
 	KUBECONFIG=$(KUBECONFIG) kubectl delete persistentvolumeclaims --all
+
+test-driver:
+	go test -v github.com/UpCloudLtd/upcloud-csi/driver
+
+test-objgen:
+	go test -v github.com/UpCloudLtd/upcloud-csi/driver/objgen
+
+test: test-driver test-objgen
+
+build-plugin:
+	CGO_ENABLED=0 go build -ldflags "-w -s" -o cmd/upcloud-csi-plugin/${PLUGIN_NAME} ${PLUGIN_PKG}
+
+build-manifest:
+	CGO_ENABLED=0 go build -ldflags "-w -s" -o cmd/upcloud-csi-manifest/${MANIFEST_NAME} ${MANIFEST_PKG}
+
+.PHONY: build
+build: build-plugin build-manifest
 

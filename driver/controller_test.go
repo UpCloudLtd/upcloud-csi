@@ -1,37 +1,38 @@
-package driver_test
+package driver
 
 import (
 	"context"
+
 	"reflect"
 	"testing"
 
-	"github.com/UpCloudLtd/upcloud-csi/driver"
-
+	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestControllerService_ControllerGetCapabilities(t *testing.T) {
-	t.Parallel()
 	type args struct {
+		ctx context.Context
 		req *csi.ControllerGetCapabilitiesRequest
 	}
-	ctx := context.Background()
 	tests := []struct {
 		name    string
 		args    args
 		wantErr bool
 	}{
 		{
-			name:    "Get Capabilities",
+			name: "Get Capabilities",
+			args: args{
+				ctx: context.Background(),
+			},
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			d := driver.NewMockDriver()
-			gotResp, err := d.ControllerGetCapabilities(ctx, tt.args.req)
+			d := NewMockDriver(nil)
+			gotResp, err := d.ControllerGetCapabilities(tt.args.ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ControllerGetCapabilities() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -45,11 +46,10 @@ func TestControllerService_ControllerGetCapabilities(t *testing.T) {
 }
 
 func TestControllerService_ControllerPublishVolume(t *testing.T) {
-	t.Parallel()
 	type args struct {
+		ctx context.Context
 		req *csi.ControllerPublishVolumeRequest
 	}
-	ctx := context.Background()
 	tests := []struct {
 		name     string
 		args     args
@@ -59,6 +59,7 @@ func TestControllerService_ControllerPublishVolume(t *testing.T) {
 		{
 			name: "Test Publish Volume",
 			args: args{
+				ctx: context.Background(),
 				req: &csi.ControllerPublishVolumeRequest{
 					VolumeId: "test-volume-id",
 					NodeId:   "test-node-id",
@@ -73,11 +74,9 @@ func TestControllerService_ControllerPublishVolume(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			d := driver.NewMockDriver()
-			gotResp, err := d.ControllerPublishVolume(ctx, tt.args.req)
+			d := NewMockDriver(nil)
+			gotResp, err := d.ControllerPublishVolume(tt.args.ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ControllerPublishVolume() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -90,34 +89,35 @@ func TestControllerService_ControllerPublishVolume(t *testing.T) {
 }
 
 func TestControllerService_CreateVolume(t *testing.T) {
-	t.Parallel()
+	caps := []*csi.VolumeCapability{
+		{
+			AccessType: &csi.VolumeCapability_Mount{
+				Mount: &csi.VolumeCapability_MountVolume{},
+			},
+			AccessMode: &csi.VolumeCapability_AccessMode{
+				Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
+			},
+		},
+	}
 	type args struct {
+		ctx context.Context
 		req *csi.CreateVolumeRequest
 	}
-
-	ctx := context.Background()
 	tests := []struct {
-		name         string
-		args         args
-		volumeExists bool
-		wantResp     *csi.CreateVolumeResponse
-		wantErr      bool
+		name             string
+		args             args
+		volumeNameExists bool
+		volumeUUIDExists bool
+		wantResp         *csi.CreateVolumeResponse
+		wantErr          bool
 	}{
 		{
 			name: "Test Volume Already Exists",
 			args: args{
+				context.Background(),
 				&csi.CreateVolumeRequest{
-					Name: "testVolume",
-					VolumeCapabilities: []*csi.VolumeCapability{
-						{
-							AccessType: &csi.VolumeCapability_Mount{
-								Mount: &csi.VolumeCapability_MountVolume{},
-							},
-							AccessMode: &csi.VolumeCapability_AccessMode{
-								Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
-							},
-						},
-					},
+					Name:               "testVolume",
+					VolumeCapabilities: caps,
 					VolumeContentSource: &csi.VolumeContentSource{
 						Type: &csi.VolumeContentSource_Snapshot{
 							Snapshot: &csi.VolumeContentSource_SnapshotSource{
@@ -127,17 +127,72 @@ func TestControllerService_CreateVolume(t *testing.T) {
 					},
 				},
 			},
-			volumeExists: true,
-			wantErr:      false,
+			volumeNameExists: true,
+			volumeUUIDExists: true,
+			wantErr:          false,
+		},
+		{
+			name: "Test Clone Volume Size",
+			args: args{
+				context.Background(),
+				&csi.CreateVolumeRequest{
+					Name:               "testCloneVolume",
+					VolumeCapabilities: caps,
+					VolumeContentSource: &csi.VolumeContentSource{
+						Type: &csi.VolumeContentSource_Volume{
+							Volume: &csi.VolumeContentSource_VolumeSource{
+								VolumeId: "volumeID",
+							},
+						},
+					},
+				},
+			},
+			wantResp: &csi.CreateVolumeResponse{
+				Volume: &csi.Volume{
+					CapacityBytes: 10 * giB,
+					VolumeId:      "testCloneVolume",
+				},
+			},
+			volumeNameExists: false,
+			volumeUUIDExists: true,
+			wantErr:          false,
+		},
+		{
+			name: "Test Clone Snapshot Volume Size",
+			args: args{
+				context.Background(),
+				&csi.CreateVolumeRequest{
+					Name:               "testCloneSnapshotVolume",
+					VolumeCapabilities: caps,
+					VolumeContentSource: &csi.VolumeContentSource{
+						Type: &csi.VolumeContentSource_Snapshot{
+							Snapshot: &csi.VolumeContentSource_SnapshotSource{
+								SnapshotId: "snapshotID",
+							},
+						},
+					},
+				},
+			},
+			wantResp: &csi.CreateVolumeResponse{
+				Volume: &csi.Volume{
+					CapacityBytes: 10 * giB,
+					VolumeId:      "testCloneSnapshotVolume",
+				},
+			},
+			volumeNameExists: false,
+			volumeUUIDExists: true,
+			wantErr:          false,
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			d := driver.NewMockDriver()
-
-			gotResp, err := d.CreateVolume(ctx, tt.args.req)
+			d := NewMockDriver(&mockUpCloudDriver{
+				volumeNameExists: tt.volumeNameExists,
+				volumeUUIDExists: tt.volumeUUIDExists,
+				storageSize:      10,
+				cloneStorageSize: 9, // set smaller size so that resize is triggered
+			})
+			gotResp, err := d.CreateVolume(tt.args.ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("CreateVolume() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -146,17 +201,25 @@ func TestControllerService_CreateVolume(t *testing.T) {
 				t.Error("volume ID should not be empty")
 				return
 			}
+			if tt.wantResp != nil {
+				if vol := tt.wantResp.GetVolume(); vol != nil {
+					if vol.CapacityBytes != gotResp.Volume.CapacityBytes {
+						t.Errorf("volume capacity mismatch want %d got %d", vol.CapacityBytes, gotResp.Volume.CapacityBytes)
+						return
+					}
+				}
+
+			}
 		})
 	}
+
 }
 
 func TestControllerService_DeleteVolume(t *testing.T) {
-	t.Parallel()
 	type args struct {
+		ctx context.Context
 		req *csi.DeleteVolumeRequest
 	}
-
-	ctx := context.Background()
 	tests := []struct {
 		name     string
 		args     args
@@ -166,6 +229,7 @@ func TestControllerService_DeleteVolume(t *testing.T) {
 		{
 			name: "Test Delete Volume",
 			args: args{
+				context.Background(),
 				&csi.DeleteVolumeRequest{
 					VolumeId: "testVolume",
 				},
@@ -175,11 +239,9 @@ func TestControllerService_DeleteVolume(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			d := driver.NewMockDriver()
-			gotResp, err := d.DeleteVolume(ctx, tt.args.req)
+			d := NewMockDriver(nil)
+			gotResp, err := d.DeleteVolume(tt.args.ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("DeleteVolume() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -192,12 +254,10 @@ func TestControllerService_DeleteVolume(t *testing.T) {
 }
 
 func TestControllerService_ListVolumes(t *testing.T) {
-	t.Parallel()
 	type args struct {
+		ctx context.Context
 		req *csi.ListVolumesRequest
 	}
-
-	ctx := context.Background()
 	tests := []struct {
 		name     string
 		args     args
@@ -207,17 +267,16 @@ func TestControllerService_ListVolumes(t *testing.T) {
 		{
 			name: "Test List Volumes",
 			args: args{
+				context.Background(),
 				&csi.ListVolumesRequest{},
 			},
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			d := driver.NewMockDriver()
-			gotResp, err := d.ListVolumes(ctx, tt.args.req)
+			d := NewMockDriver(nil)
+			gotResp, err := d.ListVolumes(tt.args.ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ListVolumes() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -231,12 +290,10 @@ func TestControllerService_ListVolumes(t *testing.T) {
 }
 
 func TestControllerService_ControllerUnpublishVolume(t *testing.T) {
-	t.Parallel()
 	type args struct {
+		ctx context.Context
 		req *csi.ControllerUnpublishVolumeRequest
 	}
-
-	ctx := context.Background()
 	tests := []struct {
 		name    string
 		args    args
@@ -246,6 +303,7 @@ func TestControllerService_ControllerUnpublishVolume(t *testing.T) {
 		{
 			name: "Test Unpublish Volume",
 			args: args{
+				context.Background(),
 				&csi.ControllerUnpublishVolumeRequest{
 					VolumeId: "testVolume",
 				},
@@ -254,26 +312,23 @@ func TestControllerService_ControllerUnpublishVolume(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			d := driver.NewMockDriver()
-			_, err := d.ControllerUnpublishVolume(ctx, tt.args.req)
+			d := NewMockDriver(nil)
+			_, err := d.ControllerUnpublishVolume(tt.args.ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ControllerUnpublishVolume() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+
 		})
 	}
 }
 
 func TestControllerService_ValidateVolumeCapabilities(t *testing.T) {
-	t.Parallel()
 	type args struct {
+		ctx context.Context
 		req *csi.ValidateVolumeCapabilitiesRequest
 	}
-
-	ctx := context.Background()
 	tests := []struct {
 		name    string
 		args    args
@@ -283,6 +338,7 @@ func TestControllerService_ValidateVolumeCapabilities(t *testing.T) {
 		{
 			name: "Test ValidateVolumeCapabilities",
 			args: args{
+				context.Background(),
 				&csi.ValidateVolumeCapabilitiesRequest{
 					VolumeId: "testVolume",
 					VolumeCapabilities: []*csi.VolumeCapability{
@@ -294,17 +350,14 @@ func TestControllerService_ValidateVolumeCapabilities(t *testing.T) {
 					},
 				},
 			},
-			want:    driver.GetDefaultAccessMode(),
+			want:    supportedAccessMode,
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
-		// Bypass goroutine (t.Parallel) on loop iterator variable
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			d := driver.NewMockDriver()
-			got, err := d.ValidateVolumeCapabilities(ctx, tt.args.req)
+			d := NewMockDriver(nil)
+			got, err := d.ValidateVolumeCapabilities(tt.args.ctx, tt.args.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateVolumeCapabilities() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -314,4 +367,90 @@ func TestControllerService_ValidateVolumeCapabilities(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestControllerExpandVolume(t *testing.T) {
+	d := NewMockDriver(nil)
+	wantBytes := int64(30 * giB)
+	r, err := d.ControllerExpandVolume(context.Background(), &csi.ControllerExpandVolumeRequest{
+		VolumeId: "test-vol",
+		CapacityRange: &csi.CapacityRange{
+			RequiredBytes: wantBytes,
+			LimitBytes:    0,
+		},
+		//VolumeCapability:     &csi.VolumeCapability{},
+	})
+	if err != nil {
+		t.Errorf("ControllerExpandVolume error = %v", err)
+		return
+	}
+	if r.CapacityBytes != wantBytes {
+		t.Errorf("CapacityBytes failed want %d got %d", wantBytes, r.CapacityBytes)
+	}
+}
+
+func TestPaginateStorage(t *testing.T) {
+	t.Parallel()
+	s := []upcloud.Storage{{UUID: "1"}, {UUID: "2"}}
+	var next int
+
+	t.Log("testing that empty start token and excessive size returns equal slice")
+	want := s[1:]
+	got, next := paginateStorage(want, 0, 10)
+	assert.Equal(t, want, got)
+	assert.Equal(t, 0, next)
+
+	t.Log("testing that zero size returns empty slice")
+	got, next = paginateStorage(s, 1, 0)
+	assert.Equal(t, want, got)
+	assert.Equal(t, 0, next)
+
+	t.Log("testing that start overflow return equal slice and next token set to zero")
+	want = s[2:]
+	got, next = paginateStorage(s, 100, 1)
+	assert.Equal(t, want, got)
+	assert.Equal(t, 0, next)
+
+	s = append(s,
+		upcloud.Storage{UUID: "3"},
+		upcloud.Storage{UUID: "4"},
+		upcloud.Storage{UUID: "5"},
+		upcloud.Storage{UUID: "6"},
+		upcloud.Storage{UUID: "7"},
+	)
+	size := 1
+	t.Logf("testing pagination with page size %d", size)
+	next = 0
+	for i := range s {
+		got, next = paginateStorage(s, next, size)
+		t.Logf("got page size %d and %d as next page", len(got), next)
+		assert.Equal(t, s[i*size], got[0])
+		if next < 1 {
+			break
+		}
+	}
+	size = 4
+	next = 0
+	t.Logf("testing pagination with page size %d", size)
+	for i := range s {
+		got, next = paginateStorage(s, next, size)
+		t.Logf("got page size %d and %d as next page", len(got), next)
+		assert.Equal(t, s[i*size], got[0])
+		assert.LessOrEqual(t, len(got), size)
+		if next < 1 {
+			break
+		}
+	}
+}
+
+func TestParseToken(t *testing.T) {
+	want := 0
+	got, err := parseToken("")
+	assert.NoError(t, err)
+	assert.Equal(t, want, got)
+
+	want = 10
+	got, err = parseToken("10")
+	assert.NoError(t, err)
+	assert.Equal(t, want, got)
 }
