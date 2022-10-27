@@ -30,9 +30,7 @@ const (
 	defaultVolumeSize = 10 * giB
 )
 
-var supportedAccessMode = &csi.VolumeCapability_AccessMode{
-	Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
-}
+var supportedAccessMode = &csi.VolumeCapability_AccessMode{Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER} //nolint: gochecknoglobals // supportedAccessMode is readonly variable
 
 type storageRange struct {
 	requiredBytes int64
@@ -104,16 +102,16 @@ func displayByteString(bytes int64) string {
 
 	switch {
 	case bytes >= tiB:
-		output = output / tiB
+		output /= tiB
 		unit = "Ti"
 	case bytes >= giB:
-		output = output / giB
+		output /= giB
 		unit = "Gi"
 	case bytes >= miB:
-		output = output / miB
+		output /= miB
 		unit = "Mi"
 	case bytes >= kiB:
-		output = output / kiB
+		output /= kiB
 		unit = "Ki"
 	case bytes == 0:
 		return "0"

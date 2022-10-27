@@ -31,7 +31,7 @@ func main() {
 	}
 
 	if *version {
-		fmt.Printf("%s - %s (%s)\n", driver.GetVersion(), driver.GetCommit(), driver.GetTreeState())
+		fmt.Printf("%s - %s (%s)\n", driver.GetVersion(), driver.GetCommit(), driver.GetTreeState()) //nolint: forbidigo // allow printing to console
 		os.Exit(0)
 	}
 

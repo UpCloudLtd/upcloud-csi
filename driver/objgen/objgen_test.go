@@ -1,4 +1,4 @@
-package objgen
+package objgen //nolint:testpackage // use conventional naming for now
 
 import (
 	"testing"
@@ -40,7 +40,7 @@ func TestGet_Instantination(t *testing.T) {
 	for _, o := range res.Objects {
 		kind := o.GetObjectKind().GroupVersionKind().Kind
 		if _, ok := kindCounts[kind]; ok {
-			kindCounts[kind] -= 1
+			kindCounts[kind]--
 		} else {
 			t.Errorf("objects doesn't contain kind '%s'", kind)
 		}

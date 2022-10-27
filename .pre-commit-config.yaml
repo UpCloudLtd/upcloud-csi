@@ -1,11 +1,19 @@
 repos:
   - repo: https://github.com/golangci/golangci-lint
-    rev: v1.46.2
+    rev: v1.50.1 
     hooks:
       - id: golangci-lint
-  - repo: https://github.com/dnephin/pre-commit-golang
-    rev: 96221dc741cb30cc0136999083dc6bd0e2113000
+  - repo: local 
     hooks:
-      - id: go-unit-tests
-      - id: go-build
-      - id: go-mod-tidy
+      - id: test
+        name: test
+        language: system
+        entry: make
+        args: ["test"] 
+        pass_filenames: false  
+      - id: build 
+        name: build
+        language: system
+        entry: make
+        args: ["build"] 
+        pass_filenames: false  

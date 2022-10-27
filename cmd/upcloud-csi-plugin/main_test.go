@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"testing"
@@ -11,12 +10,14 @@ import (
 )
 
 func TestRun(t *testing.T) {
+	t.Skip("WIP")
+	t.Parallel()
 	flagSet := pflag.NewFlagSet("default", pflag.ContinueOnError)
 
 	version := flagSet.Bool("version", false, "Print the version and exit.")
 
 	if *version {
-		fmt.Printf("%s - %s (%s)\n", driver.GetVersion(), driver.GetCommit(), driver.GetTreeState())
+		log.Printf("%s - %s (%s)\n", driver.GetVersion(), driver.GetCommit(), driver.GetTreeState())
 		os.Exit(0)
 	}
 

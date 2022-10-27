@@ -72,7 +72,7 @@ func (m *mounter) Format(ctx context.Context, source, fsType string, mkfsArgs []
 }
 
 func (m *mounter) createFilesystem(ctx context.Context, partition, fsType string, mkfsArgs []string) error {
-	if fsType == "ext4" || fsType == "ext3" {
+	if fsType == fileSystemExt4 || fsType == "ext3" {
 		mkfsArgs = append(mkfsArgs, "-F", partition)
 	}
 
@@ -80,13 +80,13 @@ func (m *mounter) createFilesystem(ctx context.Context, partition, fsType string
 
 	_, err := exec.LookPath(mkfsCmd)
 	if err != nil {
-		if err == exec.ErrNotFound {
+		if errors.Is(err, exec.ErrNotFound) {
 			return fmt.Errorf("%q executable not found in $PATH", mkfsCmd)
 		}
 		return err
 	}
 
-	logWithServerContext(m.log, ctx).WithFields(logrus.Fields{logCommandKey: mkfsCmd, logCommandArgsKey: mkfsArgs}).Debug("executing command")
+	logWithServerContext(ctx, m.log).WithFields(logrus.Fields{logCommandKey: mkfsCmd, logCommandArgsKey: mkfsArgs}).Debug("executing command")
 
 	return exec.CommandContext(ctx, mkfsCmd, mkfsArgs...).Run()
 }
@@ -105,7 +105,7 @@ func (m *mounter) Mount(ctx context.Context, source, target, fsType string, opts
 	}
 
 	// block device requires that target is file instead of directory
-	if fsType == "" {
+	if fsType == "" { //nolint: nestif // TODO: refactor
 		err := os.MkdirAll(filepath.Dir(target), 0o750)
 		if err != nil {
 			return err
@@ -132,14 +132,14 @@ func (m *mounter) Mount(ctx context.Context, source, target, fsType string, opts
 
 	mountArgs = append(mountArgs, source, target)
 
-	logWithServerContext(m.log, ctx).WithFields(logrus.Fields{logCommandKey: mountCmd, logCommandArgsKey: mountArgs}).Debug("executing command")
+	logWithServerContext(ctx, m.log).WithFields(logrus.Fields{logCommandKey: mountCmd, logCommandArgsKey: mountArgs}).Debug("executing command")
 
 	return exec.CommandContext(ctx, mountCmd, mountArgs...).Run()
 }
 
 // Unmount unmounts the given target.
 func (m *mounter) Unmount(ctx context.Context, target string) error {
-	log := logWithServerContext(m.log, ctx)
+	log := logWithServerContext(ctx, m.log)
 	if target == "" {
 		return errors.New("target is not specified for unmounting the volume")
 	}
@@ -152,7 +152,7 @@ func (m *mounter) Unmount(ctx context.Context, target string) error {
 	umountCmd := "umount"
 	umountArgs := []string{target}
 
-	logWithServerContext(m.log, ctx).WithFields(logrus.Fields{logCommandKey: umountCmd, logCommandArgsKey: umountArgs}).Debug("executing command")
+	logWithServerContext(ctx, m.log).WithFields(logrus.Fields{logCommandKey: umountCmd, logCommandArgsKey: umountArgs}).Debug("executing command")
 
 	return exec.CommandContext(ctx, umountCmd, umountArgs...).Run()
 }
@@ -167,7 +167,7 @@ func (m *mounter) IsFormatted(ctx context.Context, source string) (bool, error) 
 	blkidCmd := "blkid"
 	_, err := exec.LookPath(blkidCmd)
 	if err != nil {
-		if err == exec.ErrNotFound {
+		if errors.Is(err, exec.ErrNotFound) {
 			return false, fmt.Errorf("%q executable not found in $PATH", blkidCmd)
 		}
 		return false, err
@@ -175,30 +175,32 @@ func (m *mounter) IsFormatted(ctx context.Context, source string) (bool, error) 
 
 	blkidArgs := []string{source}
 
-	logWithServerContext(m.log, ctx).WithFields(logrus.Fields{logCommandKey: blkidCmd, logCommandArgsKey: blkidArgs}).Debug("executing command")
+	logWithServerContext(ctx, m.log).WithFields(logrus.Fields{logCommandKey: blkidCmd, logCommandArgsKey: blkidArgs}).Debug("executing command")
 	exitCode := 0
 	if err = exec.CommandContext(ctx, blkidCmd, blkidArgs...).Run(); err != nil {
-		exitError, ok := err.(*exec.ExitError)
-		if !ok {
-			return false, fmt.Errorf("checking formatting failed: %v cmd: %q, args: %q", err, blkidCmd, blkidArgs)
+		var exitError *exec.ExitError
+		if !errors.As(err, &exitError) {
+			return false, fmt.Errorf("checking formatting failed: %w cmd: %q, args: %q", err, blkidCmd, blkidArgs)
 		}
-		ws := exitError.Sys().(syscall.WaitStatus)
+		ws, ok := exitError.Sys().(syscall.WaitStatus)
+		if !ok {
+			return false, fmt.Errorf("checking formatting exit status: %w cmd: %q, args: %q", err, blkidCmd, blkidArgs)
+		}
 		exitCode = ws.ExitStatus()
 		if exitCode == blkidExitStatusNoIdentifiers {
 			return false, nil
-		} else {
-			return false, fmt.Errorf("checking formatting failed: %v cmd: %q, args: %q", err, blkidCmd, blkidArgs)
 		}
+		return false, fmt.Errorf("checking formatting failed: %w cmd: %q, args: %q", err, blkidCmd, blkidArgs)
 	}
 
 	return true, nil
 }
 
-func (m *mounter) wipeDevice(ctx context.Context, deviceId string) error {
+func (m *mounter) wipeDevice(ctx context.Context, deviceID string) error {
 	cmd := "wipefs"
-	args := []string{"-a", "-f", deviceId}
+	args := []string{"-a", "-f", deviceID}
 
-	logWithServerContext(m.log, ctx).WithFields(logrus.Fields{logCommandKey: cmd, logCommandArgsKey: args}).Debug("executing command")
+	logWithServerContext(ctx, m.log).WithFields(logrus.Fields{logCommandKey: cmd, logCommandArgsKey: args}).Debug("executing command")
 
 	return exec.CommandContext(ctx, cmd, args...).Run()
 }
@@ -214,7 +216,7 @@ func (m *mounter) IsMounted(ctx context.Context, target string) (bool, error) {
 	findmntCmd := "findmnt"
 	_, err := exec.LookPath(findmntCmd)
 	if err != nil {
-		if err == exec.ErrNotFound {
+		if errors.Is(err, exec.ErrNotFound) {
 			return false, fmt.Errorf("%q executable not found in $PATH", findmntCmd)
 		}
 		return false, err
@@ -222,7 +224,7 @@ func (m *mounter) IsMounted(ctx context.Context, target string) (bool, error) {
 
 	findmntArgs := []string{"-o", "TARGET,PROPAGATION,FSTYPE,OPTIONS", "-M", target, "-J"}
 
-	logWithServerContext(m.log, ctx).WithFields(logrus.Fields{logCommandKey: findmntCmd, logCommandArgsKey: findmntArgs}).Debug("executing command")
+	logWithServerContext(ctx, m.log).WithFields(logrus.Fields{logCommandKey: findmntCmd, logCommandArgsKey: findmntArgs}).Debug("executing command")
 
 	out, err := exec.CommandContext(ctx, findmntCmd, findmntArgs...).CombinedOutput()
 	if err != nil {
@@ -231,8 +233,7 @@ func (m *mounter) IsMounted(ctx context.Context, target string) (bool, error) {
 			return false, nil
 		}
 
-		return false, fmt.Errorf("checking mounted failed: %v cmd: %q output: %q",
-			err, findmntCmd, string(out))
+		return false, fmt.Errorf("checking mounted failed: %w cmd: %q output: %q", err, findmntCmd, string(out))
 	}
 
 	// no response means there is no mount
@@ -243,7 +244,7 @@ func (m *mounter) IsMounted(ctx context.Context, target string) (bool, error) {
 	var resp *findmntResponse
 	err = json.Unmarshal(out, &resp)
 	if err != nil {
-		return false, fmt.Errorf("couldn't unmarshal data: %q: %s", string(out), err)
+		return false, fmt.Errorf("couldn't unmarshal data: %q: %w", string(out), err)
 	}
 
 	targetFound := false
@@ -271,9 +272,9 @@ func (m *mounter) GetStatistics(ctx context.Context, volumePath string) (volumeS
 		return volumeStatistics{}, err
 	}
 	volStats := volumeStatistics{
-		availableBytes: int64(statfs.Bavail) * int64(statfs.Bsize),
-		totalBytes:     int64(statfs.Blocks) * int64(statfs.Bsize),
-		usedBytes:      (int64(statfs.Blocks) - int64(statfs.Bfree)) * int64(statfs.Bsize),
+		availableBytes: int64(statfs.Bavail) * statfs.Bsize,
+		totalBytes:     int64(statfs.Blocks) * statfs.Bsize,
+		usedBytes:      (int64(statfs.Blocks) - int64(statfs.Bfree)) * statfs.Bsize,
 
 		availableInodes: int64(statfs.Ffree),
 		totalInodes:     int64(statfs.Files),
@@ -291,7 +292,7 @@ func (m *mounter) GetDeviceName(ctx context.Context, mounter mount.Interface, mo
 func (m *mounter) createPartition(ctx context.Context, device string) error {
 	cmd := "parted"
 	args := []string{device, "mklabel", "gpt"}
-	log := logWithServerContext(m.log, ctx).WithFields(logrus.Fields{logCommandKey: cmd, logCommandArgsKey: args})
+	log := logWithServerContext(ctx, m.log).WithFields(logrus.Fields{logCommandKey: cmd, logCommandArgsKey: args})
 	log.Debug("executing command")
 	partedMklabel := exec.CommandContext(ctx, cmd, args...)
 	if err := partedMklabel.Run(); err != nil {
@@ -299,7 +300,7 @@ func (m *mounter) createPartition(ctx context.Context, device string) error {
 	}
 
 	args = []string{"-a", "opt", device, "mkpart", "primary", "2048s", "100%"}
-	logWithServerContext(m.log, ctx).WithFields(logrus.Fields{logCommandKey: cmd, logCommandArgsKey: args}).Debug("executing command")
+	logWithServerContext(ctx, m.log).WithFields(logrus.Fields{logCommandKey: cmd, logCommandArgsKey: args}).Debug("executing command")
 	return exec.CommandContext(ctx, cmd, args...).Run()
 }
 

@@ -2,9 +2,6 @@
 # UpCloud golangci-lint configuration
 #
 
-run:
-  go: &run_go_version "1.18"
-
 linters:
   #
   # We use a custom set of linters, so disable all and enable one-by-one.
@@ -12,7 +9,7 @@ linters:
   disable-all: true
   #
   # Run golangci-lint linters or see https://golangci-lint.run/usage/linters/
-  # for a list of all linters. This config was last updated for v1.45.2.
+  # for a list of all linters. This config was last updated for v1.50.1.
   #
   # Please keep the list sorted alphabetically.
   #
@@ -31,6 +28,10 @@ linters:
   # instead of disabling something wholesale on this level.
   #
   enable:
+    # Warn about slices suspiciously passed as `any` variadic arguments.
+    # This is usually not the intent; contents of the slice more often is.
+    - asasalint
+
     # Makes sure there are no non-ASCII identifiers that could be confusing or
     # hard to use.
     - asciicheck
@@ -66,10 +67,7 @@ linters:
     # Similar: `gocognit`, `gocyclo`, `maintidx`.
     ## - cyclop # DISABLE
 
-    # Finds unused code. Getting rid of unused code is good and with version
-    # control, doesn't really have downsides. Redundant with `unused` and
-    # `varcheck` enabled, possibly to be deprecated in golangci-lint v2.
-    ## - deadcode # DISABLE
+    ### - deadcode # deprecated, replaced by `unused`
 
     # Encourage various rules on grouping and arranging `const`s, `var`s,
     # `type`s and `func`s, configurability per mentioned keyword; and `init`
@@ -105,6 +103,10 @@ linters:
     # to missing subtle differences. Good idea to enable this as early in
     # project lifecycle as possible.
     - dupl
+
+    # Check for duplicate adjacent words in comments and strings. These are
+    # almost always errors, often caused by inadvertent edits.
+    - dupword
 
     # Checks for two durations multiplied together. Seems like this could
     # prevent potential bugs, but based on the experiences with actual code,
@@ -142,16 +144,23 @@ linters:
     # using `pkg/errors`, but those are generally moving towards stdlib.
     - errorlint
 
+    # Checks that SQL statements are executed with the appropriate `.Exec` or
+    # `.Query` function.
+    - execinquery
+
     # Checks that switches of enum(-like) types cover every possible case.
     # Very helpful when we need to add new cases to enums, making sure that all
     # the relevant bits are checked. Can become annoying if there's a _lot_ of
     # possible cases, for example with `reflect.Kind`.
     - exhaustive
 
+    ### - exhaustivestruct # deprecated, replaced by exhaustruct
+
     # Checks if all struct's fields are initialized. Good in the sense that
     # doing so would make it easier to spot changes to underlying structs.
-    # Breaks the "empty struct as default value" convention of Go code.
-    ## - exhaustivestruct # DISABLE
+    # Breaks the "empty struct as default value" convention of Go code. Not
+    # meant to be enabled for everything, can be useful in specific cases.
+    ## - exhaustruct # DISABLE
 
     # Forbids passing pointers to the loop variable out of scope. This is a
     # common class of bugs in Go code, as the semantics aren't immediately
@@ -304,10 +313,7 @@ linters:
     # expand beyond what `gofumpt` does.
     ## - grouper # DISABLE
 
-    # Simplifies if statements and encourages the "single line" style of `if`s.
-    # Arguably decrease readability in some cases as well, approach with common
-    # sense.
-    - ifshort
+    ### - ifshort # deprecated
 
     # Promotes consistent style of import aliasing. Enabled as long as there
     # are some entries to configure, see `linters-settings` for more info.
@@ -318,6 +324,10 @@ linters:
     # kept enabled for now due to its issues with Go 1.18:
     # https://github.com/sanposhiho/wastedassign/issues/41
     - ineffassign
+
+    # Check for too many interface members.
+    # Go Proverbs: "The bigger the interface, the weaker the abstraction."
+    - interfacebloat
 
     ### - interfacer # deprecated
 
@@ -330,6 +340,10 @@ linters:
 
     # Report too long lines. Likely calls for discussion before enabling.
     ## - lll # DISABLE
+
+    # Check that common logger library function calls have appropriate number
+    # of key/value arguments.
+    - logrlint
 
     # See discussion in `cyclop`.
     ## - maintidx # DISABLE
@@ -388,6 +402,17 @@ linters:
     # golangci-lint config, see `linters-settings` for non-defaults we set.
     - nolintlint
 
+    # Similar as `nakedret`, but without the configurability, and triggers
+    # on existence rather than use of named return values.
+    ## - nonamedreturns # DISABLE
+
+    # Redundant subset of what `revive`s `var-naming` does.
+    ## - nosnakecase # DISABLE
+
+    # Advises to use `net.JoinHostPort` instead of direct `fmt.Sprintf` with
+    # separate host and port to construct URLs, for IPv6 compatibility.
+    - nosprintfhostport
+
     # Together with `tparallel', encourages the use of `t.Parallel()` in all
     # tests and catches some common problems with them. Using `t.Parallel()` as
     # much as possible improves confidence in our code being thread-safe and
@@ -415,6 +440,12 @@ linters:
     # Check Prometheus metrics naming via promlint. Not applicable for now.
     ## - promlinter # DISABLE
 
+    # Warn about reassigning top level variables from another package.
+    # Such variables are rarely if ever intended to be reassigned; they tend
+    # to be variables instead of constants because of language constraints or
+    # for interoperability/idiomacy.
+    - reassign
+
     # A better (e.g. more rules and faster) version of the original `golint`
     # which has been deprecated.
     # Similar: `stylecheck` (`revive` seems more extensive, `stylecheck` is a
@@ -437,9 +468,7 @@ linters:
     # problems.
     - staticcheck
 
-    # Finds unused struct fields, i.e. fields that are not referenced from
-    # anywhere else. Helps remove dead code.
-    - structcheck
+    ### - structcheck # deprecated, replaced by `unused`
 
     # Encourages various opinionated styles and rules including naming.
     # Redundant with `revive`.
@@ -452,10 +481,14 @@ linters:
     ## - tagliatelle # DISABLE
 
     # Advises to use `t.SetEnv` instead of `os.SetEnv` so that one does not
-    # need to bother with restoring the pre-test env var value. `t.SetEnv` is
-    # available in Go >= 1.17. Note that this is not applicable to parallel
-    # tests.
+    # need to bother with restoring the pre-test env var value. Note that
+    # this is not applicable to parallel tests.
     - tenv
+
+    # Checks that examples run by the `testing` package have an applicable
+    # "output" comment, so that the example output can be verified to be as
+    # expected.
+    - testableexamples
 
     # Promotes using test packages (eg. `package foo_test`) in regular tests
     # (files ending with `_test.go`), allows for internal tests (in the same
@@ -479,9 +512,10 @@ linters:
 
     # Basically does what the frontend of the Go compiler does, parses and type
     # checks code. More of a sanity check before committing than an actual
-    # linter.
-    # DISABLED for go 1.18
-    # - typecheck
+    # linter. Several other linters require compiled/typechecked code before
+    # they can do their work, so this cannot really be disabled in the usual
+    # sense. See https://github.com/golangci/golangci-lint/issues/2912
+    - typecheck
 
     # Warns on unnecessary type conversions. Unnecessary conversions make code
     # harder to read and can also relay false information to the developer,
@@ -500,8 +534,10 @@ linters:
     # development and even cause unnecessary work.
     - unused
 
-    # Finds unused global variables and constants. Helps remove dead code.
-    - varcheck
+    # Endorse use of various consts and variables defined in stdlib.
+    - usestdlibvars
+
+    ### - varcheck # deprecated, replaced by `unused`
 
     # Variable name length checks, takes definition and use span lengths into
     # account. Nice idea, idiomatic Go, but needs discussion if we want to go
@@ -524,10 +560,10 @@ linters:
     # (also not seem to be autofixable (?), at least through golangci-lint).
     - whitespace
 
-    # Makes sure that errors returned originating from external packages are
-    # wrapped. This is good for consistency of emitted errors, but might be a
-    # tad much to always wrap everything.
-    # - wrapcheck  # Disabled for now, worth to look into enabling later
+    # Checks that errors returned originating from external packages are
+    # wrapped. The most important facet of wrapping errors is to provide
+    # context for figuring out where an error actually occurred.
+    #- wrapcheck
 
     # A whitespace linter that is quite aggressive, causing a lot of changes
     # in typical codebases. `whitespace` is the generally preferred choice
@@ -541,12 +577,12 @@ output:
 
 issues:
   exclude:
-  # We used to have a mixture of initialisms and non-initialisms between and
-  # even within projects, but are converging towards the initialisms practice
-  # that is the most common one with Go code in general. Note that changing
-  # the naming is a breaking change, and whether/when/how to do it depends on
-  # the case at hand.
-  # - "^var-naming: .+ should be " # OPTIONAL, if needed
+    # We used to have a mixture of initialisms and non-initialisms between and
+    # even within projects, but are converging towards the initialisms practice
+    # that is the most common one with Go code in general. Note that changing
+    # the naming is a breaking change, and whether/when/how to do it depends on
+    # the case at hand.
+    # - "^var-naming: .+ should be " # OPTIONAL, if needed
   # Disable per linter/same-issue limits, again to get the whole picture on
   # first pass.
   max-issues-per-linter: 0
@@ -554,12 +590,20 @@ issues:
   # Fix found issues where supported, because life is too short. Be sure to
   # sanity check the diffs.
   fix: true
+  # Exclude some linters from testing
   exclude-rules:
     - path: _test\.go
       linters:
+        # Test functions can easily grow quite large and don't/can't really
+        # be shortened
         - funlen
+        # Enforcing context in tests clutters up the code and isn't really
+        # necessary
         - noctx
+        # Closing response bodies in tests clutters up the code and isn't
+        # really necessary
         - bodyclose
+
 linters-settings:
   errcheck:
     # See discussion in `forcetypeassert`.
@@ -583,11 +627,7 @@ linters-settings:
         paramsOnly: false
 
   gofumpt:
-    lang-version: *run_go_version
     extra-rules: true
-
-  gosimple:
-    go: *run_go_version
 
   importas:
     no-unaliased: true
@@ -597,9 +637,70 @@ linters-settings:
         alias: pkgerrors
 
   nolintlint:
-    allow-leading-space: false
     require-explanation: true
     require-specific: true
 
-  staticcheck:
-    go: *run_go_version
+  reassign:
+    patterns:
+      - ".*"
+
+  revive:
+    rules:
+      - name: var-naming
+        arguments:
+          - []
+          - [
+              "ACME",
+              "AMQP",
+              "BGP",
+              "CA",
+              "CIDR",
+              "CSV",
+              "DB",
+              "DCMI",
+              "DHCP",
+              "DSA",
+              "ECDSA",
+              "EMA",
+              "EVI",
+              "EVPN",
+              "FIFO",
+              "FRU",
+              "GID",
+              "GPU",
+              "IB",
+              "IPMI",
+              "JWT",
+              "KV",
+              "LAN",
+              "LFU",
+              "LIFO",
+              "LRU",
+              "MAC",
+              "NIC",
+              "PDF",
+              "PKI",
+              "PSU",
+              "PTR",
+              "REST",
+              "RSA",
+              "RTP",
+              "RX",
+              "SCSI",
+              "SDN",
+              "SHA",
+              "SIP",
+              "SPOE",
+              "SSD",
+              "TS",
+              "TSV",
+              "TTL",
+              "TX",
+              "TXN",
+              "ULID",
+              "VAT",
+              "VCPU",
+              "VIP",
+              "VLAN",
+              "VRF",
+            ]

@@ -2,18 +2,18 @@ package main
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"log"
 	"os"
 
-	. "github.com/UpCloudLtd/upcloud-csi/deploy/kubernetes"
+	"github.com/UpCloudLtd/upcloud-csi/deploy/kubernetes"
 	"github.com/UpCloudLtd/upcloud-csi/driver"
 	"github.com/UpCloudLtd/upcloud-csi/driver/objgen"
 	"github.com/spf13/pflag"
 )
 
-func main() {
-
+func main() { //nolint: funlen // TODO: refactor
 	flagSet := pflag.NewFlagSet("default", pflag.ContinueOnError)
 
 	var (
@@ -31,43 +31,42 @@ func main() {
 
 	err := flagSet.Parse(os.Args[1:])
 	if err != nil {
-		if err == pflag.ErrHelp {
+		if errors.Is(err, pflag.ErrHelp) {
 			os.Exit(0)
 		}
 		log.Fatalln(err)
 	}
 
 	if *version {
-		fmt.Printf("%s - %s (%s)\n", driver.GetVersion(), driver.GetCommit(), driver.GetTreeState())
+		fmt.Printf("%s - %s (%s)\n", driver.GetVersion(), driver.GetCommit(), driver.GetTreeState()) //nolint: forbidigo // allow printing to console
 		os.Exit(0)
 	}
 
 	vars := map[string]string{}
 	templates := make([]string, 0)
 	if *secretsManifest {
-		templates = append(templates, SecretsTemplate)
+		templates = append(templates, kubernetes.SecretsTemplate)
 		vars["UPCLOUD_CSI_USERNAME_B64"] = base64.StdEncoding.EncodeToString([]byte(secretsUsername(upcloudUsername)))
 		vars["UPCLOUD_CSI_PASSWORD_B64"] = base64.StdEncoding.EncodeToString([]byte(secretsPassword(upcloudPassword)))
 	}
 	if *crdManifest {
-		templates = append(templates, CRDTemplate)
+		templates = append(templates, kubernetes.CRDTemplate)
 	}
 	if *rbacManifest {
-		templates = append(templates, RbacTemplate)
+		templates = append(templates, kubernetes.RbacTemplate)
 	}
 	if *setupManifest {
-		templates = append(templates, CSITemplate)
+		templates = append(templates, kubernetes.CSITemplate)
 		vars["UPCLOUD_CSI_VERSION"] = *driverVersion
 	}
 	if *snapshotWebhookManifest {
-		templates = append(templates, SnapshotTemplate)
+		templates = append(templates, kubernetes.SnapshotTemplate)
 	}
 	if len(templates) == 0 {
 		log.Fatal("select atleast one manifest")
 	}
 
 	manifest, err := objgen.Get(vars, templates...)
-
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -82,9 +81,9 @@ func main() {
 
 func writeOutput(file string, data []byte) error {
 	if file != "" {
-		return os.WriteFile(file, data, 0640)
+		return os.WriteFile(file, data, 0o600)
 	}
-	_, err := fmt.Println(string(data))
+	_, err := fmt.Println(string(data)) //nolint: forbidigo // allow printing to console
 	return err
 }
 

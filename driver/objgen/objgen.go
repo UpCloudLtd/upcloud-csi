@@ -2,11 +2,12 @@ package objgen
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
 
-	. "github.com/UpCloudLtd/upcloud-csi/deploy/kubernetes"
+	"github.com/UpCloudLtd/upcloud-csi/deploy/kubernetes"
 
 	snapsv1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -46,14 +47,14 @@ func (o *Output) MarshalYAML() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (o *Output) UnmarshalYAML(data []byte) error {
+func (o *Output) UnmarshalYAML(data []byte) error { //nolint: funlen // TODO: refactor
 	o.RawYaml = data
 	decoder := yaml.NewYAMLDecoder(io.NopCloser(bytes.NewReader(o.RawYaml)))
 	defer decoder.Close()
 	for {
 		u := &unstructured.Unstructured{}
 		_, gvk, err := decoder.Decode(nil, u)
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if runtime.IsNotRegisteredError(err) {
@@ -114,7 +115,7 @@ func (o *Output) UnmarshalYAML(data []byte) error {
 
 func Get(vars map[string]string, template ...string) (*Output, error) {
 	if len(template) == 0 {
-		template = []string{SecretsTemplate, CRDTemplate, RbacTemplate, CSITemplate}
+		template = []string{kubernetes.SecretsTemplate, kubernetes.CRDTemplate, kubernetes.RbacTemplate, kubernetes.CSITemplate}
 	}
 
 	data, err := renderYAML(strings.Join(template, "---\n"), vars)

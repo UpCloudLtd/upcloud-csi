@@ -47,7 +47,7 @@ type contextualPublisher interface {
 	GetPublishContext() map[string]string
 }
 
-func logWithServerContext(e *logrus.Entry, ctx context.Context) *logrus.Entry {
+func logWithServerContext(ctx context.Context, e *logrus.Entry) *logrus.Entry {
 	if v := contextCorrelationID(ctx); v != "" {
 		e = e.WithField(logCorrelationIDKey, v)
 	}
@@ -86,7 +86,7 @@ func serverLogMiddleware(log *logrus.Entry) grpc.UnaryServerInterceptor {
 		ctx = context.WithValue(ctx, ctxCalledMethodKey, info.FullMethod)
 
 		// log requested method with correlation ID
-		log := logWithServerContext(log, ctx)
+		log := logWithServerContext(ctx, log)
 		log.Infof("request %s", info.FullMethod)
 
 		now := time.Now()

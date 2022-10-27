@@ -1,4 +1,4 @@
-package driver
+package driver //nolint:testpackage // use conventional naming for now
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestUpcloudClient_listStorage(t *testing.T) {
+func TestUpcloudClient_listStorage(t *testing.T) { //nolint:paralleltest // uses t.Setenv
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `
 		{
@@ -54,7 +54,7 @@ func TestUpcloudClient_listStorage(t *testing.T) {
 		`)
 	}))
 	defer srv.Close()
-	os.Setenv(client.EnvDebugAPIBaseURL, srv.URL)
+	t.Setenv(client.EnvDebugAPIBaseURL, srv.URL)
 	defer os.Setenv(client.EnvDebugAPIBaseURL, "")
 
 	c := upcloudClient{service.NewWithContext(client.NewWithContext("", ""))}
@@ -91,7 +91,7 @@ func TestUpcloudClient_listStorage(t *testing.T) {
 	}
 }
 
-func TestUpcloudClient_listStorageBackups(t *testing.T) {
+func TestUpcloudClient_listStorageBackups(t *testing.T) { //nolint:paralleltest // uses t.Setenv
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `
 		{
@@ -134,7 +134,7 @@ func TestUpcloudClient_listStorageBackups(t *testing.T) {
 		`)
 	}))
 	defer srv.Close()
-	os.Setenv(client.EnvDebugAPIBaseURL, srv.URL)
+	t.Setenv(client.EnvDebugAPIBaseURL, srv.URL)
 	defer os.Setenv(client.EnvDebugAPIBaseURL, "")
 
 	c := upcloudClient{service.NewWithContext(client.NewWithContext("", ""))}
