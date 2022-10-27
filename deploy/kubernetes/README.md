@@ -118,18 +118,18 @@ Watches the Kubernetes API server for `VolumeAttachment` objects and triggers `C
 - Image: k8s.gcr.io/sig-storage/csi-attacher
 - Controller capability: `PUBLISH_UNPUBLISH_VOLUME`
 
-### [external-snapshotter](https://github.com/kubernetes-csi/external-snapshotter) <sub>Beta/GA</sub>
+#### [external-snapshotter](https://github.com/kubernetes-csi/external-snapshotter) <sub>Beta/GA</sub>
 Watches the Kubernetes API server for `VolumeSnapshot` and `VolumeSnapshotContent` CRD objects and triggers `CreateSnapshot`, `DeleteSnapshot` and `ListSnapshots` operations against the driver. 
 - Image: k8s.gcr.io/sig-storage/csi-snapshotter
 - Controller capability: `CREATE_DELETE_SNAPSHOT`, `LIST_SNAPSHOTS`
 
-### [external-resizer](https://github.com/kubernetes-csi/external-resizer)
+#### [external-resizer](https://github.com/kubernetes-csi/external-resizer)
 Watches the Kubernetes API server for `PersistentVolumeClaim` object edits and triggers `ControllerExpandVolume` operation against the driver if volume size is increased.
 - Image: k8s.gcr.io/sig-storage/csi-resizer
 - Plugin capability: `VolumeExpansion_OFFLINE`
 
 ### Node
-### [node-driver-registrar](https://github.com/kubernetes-csi/node-driver-registrar)
+#### [node-driver-registrar](https://github.com/kubernetes-csi/node-driver-registrar)
 Fetches driver information using `NodeGetInfo` from the driver and registers it with the kubelet on that node using unix domain socket.  
 Kubelet triggers `NodeGetInfo`, `NodeStageVolume`, and `NodePublishVolume` operations against the driver. 
 - Image: k8s.gcr.io/sig-storage/csi-node-driver-registrar
