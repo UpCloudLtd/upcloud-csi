@@ -1,4 +1,4 @@
-package driver
+package driver //nolint:testpackage // use conventional naming for now
 
 import (
 	"context"
@@ -14,6 +14,7 @@ import (
 )
 
 func TestVolumeIDToDiskID(t *testing.T) {
+	t.Parallel()
 	volID := "f67db1ca-825b-40aa-a6f4-390ac6ff1b91"
 	want := "virtio-f67db1ca825b40aaa6f4"
 	got, err := volumeIDToDiskID(volID)
@@ -24,6 +25,7 @@ func TestVolumeIDToDiskID(t *testing.T) {
 }
 
 func TestGetBlockDeviceByDiskID(t *testing.T) {
+	t.Parallel()
 	tempDir, err := os.MkdirTemp(os.TempDir(), fmt.Sprintf("test-%s-*", DefaultDriverName))
 	if err != nil {
 		t.Fatal(err)
@@ -52,7 +54,7 @@ func TestGetBlockDeviceByDiskID(t *testing.T) {
 	vdaSymLink := filepath.Join(idPath, diskID)
 
 	// using ln command instead of Go's built-in so that link has relative path
-	if err := exec.Command("ln", "-s", fmt.Sprintf("../../%s", filepath.Base(vda)), vdaSymLink).Run(); err != nil {
+	if err := exec.Command("ln", "-s", fmt.Sprintf("../../%s", filepath.Base(vda)), vdaSymLink).Run(); err != nil { //nolint: gosec // test
 		t.Fatal(err)
 	}
 
@@ -77,6 +79,7 @@ func TestGetBlockDeviceByDiskID(t *testing.T) {
 }
 
 func TestNodeExpandVolume(t *testing.T) {
+	t.Parallel()
 	d := NewMockDriver(nil)
 	if _, err := d.NodeExpandVolume(context.TODO(), nil); err == nil {
 		t.Error("NodeExpandVolume should return error. Only offline volume expansion is supported and it's handled by controller.")

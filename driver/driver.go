@@ -25,7 +25,7 @@ import (
 
 const (
 	// DefaultDriverName defines the driverName that is used in Kubernetes and the CSI
-	// system for the canonical, official driverName of this plugin
+	// system for the canonical, official driverName of this plugin.
 	DefaultDriverName = "storage.csi.upcloud.com"
 	// DefaultAddress is the default address that the csi plugin will serve its
 	// http handler on.
@@ -33,10 +33,12 @@ const (
 )
 
 const (
-	// StorageSizeThreshold is a size value for checking if user can provision additional volumes.
-	StorageSizeThreshold = 10
-	// ClientTimeout helps to tune for timeout on requests to UpCloud API. Measurement: seconds.
-	ClientTimeout = 120
+	// storageSizeThreshold is a size value for checking if user can provision additional volumes.
+	storageSizeThreshold = 10
+	// clientTimeout helps to tune for timeout on requests to UpCloud API. Measurement: seconds.
+	clientTimeout = 120
+	// healthTimeout specifies a time limit for health HTTP server in seconds.
+	healthTimeout = 15
 	// InitTimeout specifies a time limit for driver initialization in seconds.
 	initTimeout = 30
 	// CheckStorageQuotaTimeout specifies a time limit for checking storage quota in seconds.
@@ -80,14 +82,14 @@ type driverOptions struct {
 	endpoint     string
 	address      string
 	nodeHost     string
-	nodeId       string
+	nodeID       string
 	zone         string
 	isController bool
 }
 
 // NewDriver returns a CSI plugin that contains the necessary gRPC
 // interfaces to interact with Kubernetes over unix domain sockets for
-// managing Upcloud Block Storage
+// managing Upcloud Block Storage.
 func NewDriver(logger *logrus.Logger, options ...func(*driverOptions)) (*Driver, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*initTimeout)
 	defer cancel()
@@ -106,24 +108,22 @@ func NewDriver(logger *logrus.Logger, options ...func(*driverOptions)) (*Driver,
 	c := upcloudclient.NewWithContext(driverOpts.username, driverOpts.password)
 
 	// It is generally a good idea to override the default timeout of the underlying HTTP client since some requests block for longer periods of time
-	c.SetTimeout(time.Second * ClientTimeout)
+	c.SetTimeout(time.Second * clientTimeout)
 
 	// Create the service object
 	svc := upcloudservice.NewWithContext(c)
 	acc, err := svc.GetAccount(ctx)
 	if err != nil {
-		fmt.Printf("Failed to login in API: %s\n", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("failed to login in API: %w", err)
 	}
 
 	serverDetails, err := determineServer(ctx, svc, driverOpts.nodeHost)
 	if err != nil {
-		fmt.Printf("Unable to list servers: %s\n", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("unable to list servers: %w", err)
 	}
 
 	driverOpts.zone = serverDetails.Server.Zone
-	driverOpts.nodeId = serverDetails.Server.UUID
+	driverOpts.nodeID = serverDetails.Server.UUID
 
 	healthChecker := NewHealthChecker(&upcloudHealthChecker{account: svc.GetAccount})
 	hostname, err := os.Hostname()
@@ -165,11 +165,11 @@ func determineServer(ctx context.Context, svc *upcloudservice.ServiceContext, no
 	return nil, fmt.Errorf("node %s not found", nodeHost)
 }
 
-// Run starts the CSI plugin by communication over the given endpoint
-func (d *Driver) Run() error {
+// Run starts the CSI plugin by communication over the given endpoint.
+func (d *Driver) Run() error { //nolint: funlen // TODO: refactor
 	u, err := url.Parse(d.options.endpoint)
 	if err != nil {
-		return fmt.Errorf("unable to parse address: %q", err)
+		return fmt.Errorf("unable to parse address: %w", err)
 	}
 
 	grpcAddr := path.Join(u.Host, filepath.FromSlash(u.Path))
@@ -187,12 +187,12 @@ func (d *Driver) Run() error {
 	d.log.WithField("socket", grpcAddr).Info("removing socket")
 
 	if err := os.Remove(grpcAddr); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to remove unix domain socket file %s, error: %s", grpcAddr, err)
+		return fmt.Errorf("failed to remove unix domain socket file %s, error: %w", grpcAddr, err)
 	}
 
 	grpcListener, err := net.Listen(u.Scheme, grpcAddr)
 	if err != nil {
-		return fmt.Errorf("failed to listen: %v", err)
+		return fmt.Errorf("failed to listen: %w", err)
 	}
 
 	if d.options.isController {
@@ -211,7 +211,7 @@ func (d *Driver) Run() error {
 
 	httpListener, err := net.Listen("tcp", d.options.address)
 	if err != nil {
-		return fmt.Errorf("failed to listen: %v", err)
+		return fmt.Errorf("failed to listen: %w", err)
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -223,7 +223,8 @@ func (d *Driver) Run() error {
 		w.WriteHeader(http.StatusOK)
 	})
 	d.httpSrv = http.Server{
-		Handler: mux,
+		Handler:           mux,
+		ReadHeaderTimeout: healthTimeout * time.Second,
 	}
 
 	d.ready = true // we're now ready to go!
@@ -248,34 +249,33 @@ func (d *Driver) checkStorageQuota() (map[string]int, error) {
 	defer cancel()
 	account, err := d.upcloudclient.GetAccount(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("unable to retrieve account details: %s", err)
+		return nil, fmt.Errorf("unable to retrieve account details: %w", err)
 	}
 	ssdLimit := account.ResourceLimits.StorageSSD
 
 	storages, err := d.upcloudclient.GetStorages(ctx, &request.GetStoragesRequest{})
 	if err != nil {
-		return nil, fmt.Errorf("unable to retrieve server's storage details: %s", err)
+		return nil, fmt.Errorf("unable to retrieve server's storage details: %w", err)
 	}
 
 	total := 0
 	for _, s := range storages.Storages {
-		total = total + s.Size
+		total += s.Size
 	}
 	sizeAvailable := ssdLimit - total
-	if sizeAvailable <= StorageSizeThreshold {
+	if sizeAvailable <= storageSizeThreshold {
 		storageDetails := map[string]int{
 			"storage_size_quota":           ssdLimit,
 			"storage_available_ssd_size":   sizeAvailable,
 			"storage_provisioned_ssd_size": total,
 		}
 		return storageDetails, fmt.Errorf("available storage size may be insufficient for correct work of CSI controller")
-
 	}
 
-	return nil, nil
+	return nil, err
 }
 
-// Stop stops the plugin
+// Stop stops the plugin.
 func (d *Driver) Stop() {
 	d.readyMu.Lock()
 	d.ready = false
@@ -331,11 +331,11 @@ func WithNodeHost(nodeHost string) func(*driverOptions) {
 // ldflags like so:
 //   go build -ldflags "-X github.com/UpCloudLtd/upcloud-csi/driver.version=0.0.1"
 
-// TODO look at cleaner way to set these :(
+// TODO look at cleaner way to set these :(.
 var (
-	gitTreeState = "not a git tree"
-	commit       string
-	version      string
+	gitTreeState = "not a git tree" //nolint: gochecknoglobals // set by build
+	commit       string             //nolint: gochecknoglobals // set by build
+	version      string             //nolint: gochecknoglobals // set by build
 )
 
 func GetVersion() string {

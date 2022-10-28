@@ -28,7 +28,7 @@ type upcloudClient struct {
 	svc *service.ServiceContext
 }
 
-type upcloudService interface {
+type upcloudService interface { //nolint:interfacebloat // TODO: refactor
 	getStorageByUUID(context.Context, string) (*upcloud.StorageDetails, error)
 	getStorageByName(context.Context, string) ([]*upcloud.StorageDetails, error)
 	createStorage(context.Context, *request.CreateStorageRequest) (*upcloud.StorageDetails, error)
@@ -83,7 +83,6 @@ func (u *upcloudClient) getStorageByName(ctx context.Context, storageName string
 func (u *upcloudClient) createStorage(ctx context.Context, csr *request.CreateStorageRequest) (*upcloud.StorageDetails, error) {
 	s, err := u.svc.CreateStorage(ctx, csr)
 	if err != nil {
-		fmt.Println(err)
 		return nil, err
 	}
 	return u.svc.WaitForStorageState(ctx, &request.WaitForStorageStateRequest{
@@ -185,7 +184,7 @@ func (u *upcloudClient) getServer(ctx context.Context, uuid string) (*upcloud.Se
 func (u *upcloudClient) getServerByHostname(ctx context.Context, hostname string) (*upcloud.Server, error) {
 	servers, err := u.svc.GetServers(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch servers: %s", err)
+		return nil, fmt.Errorf("failed to fetch servers: %w", err)
 	}
 
 	for _, server := range servers.Servers {
@@ -210,8 +209,6 @@ func (u *upcloudClient) resizeStorage(ctx context.Context, uuid string, newSize 
 	if err != nil {
 		return nil, err
 	}
-
-	fmt.Printf("backup: %#v\n", *backup)
 
 	if deleteBackup {
 		if err = u.svc.DeleteStorage(ctx, &request.DeleteStorageRequest{UUID: backup.UUID}); err != nil {
@@ -278,7 +275,7 @@ func (u *upcloudClient) createStorageBackup(ctx context.Context, uuid, title str
 	})
 }
 
-// listStorageBackups lists strage backups. If `originUUID` is empty all backups are retured
+// listStorageBackups lists strage backups. If `originUUID` is empty all backups are retured.
 func (u *upcloudClient) listStorageBackups(ctx context.Context, originUUID string) ([]upcloud.Storage, error) {
 	storages, err := u.svc.GetStorages(ctx, &request.GetStoragesRequest{Type: upcloud.StorageTypeBackup})
 	if err != nil {

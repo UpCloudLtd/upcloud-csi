@@ -1,4 +1,4 @@
-package driver
+package driver //nolint:testpackage // use conventional naming for now
 
 import (
 	"context"
@@ -15,6 +15,7 @@ import (
 )
 
 func TestSfdiskOutputGetLastPartition(t *testing.T) {
+	t.Parallel()
 	outputMultiple := `
 		Device
 		/dev/vda1
@@ -48,6 +49,7 @@ func TestSfdiskOutputGetLastPartition(t *testing.T) {
 }
 
 func TestMounterFilesystem(t *testing.T) {
+	t.Parallel()
 	if err := checkSystemRequirements(); err != nil {
 		t.Skipf("skipping test: %s", err.Error())
 	}
@@ -79,11 +81,11 @@ func TestMounterFilesystem(t *testing.T) {
 	}
 
 	if canMount() {
-		if err := testMounterMountFilesystem(m, part, t); err != nil {
+		if err := testMounterMountFilesystem(t, m, part); err != nil {
 			t.Error(err)
 			return
 		}
-		if err := testMounterMountBlockDevice(m, part, t); err != nil {
+		if err := testMounterMountBlockDevice(t, m, part); err != nil {
 			t.Error(err)
 			return
 		}
@@ -92,16 +94,17 @@ func TestMounterFilesystem(t *testing.T) {
 	}
 }
 
-func testMounterMountFilesystem(m *mounter, partition string, t *testing.T) error {
+func testMounterMountFilesystem(t *testing.T, m *mounter, partition string) error {
+	t.Helper()
 	mountPath := filepath.Join(os.TempDir(), fmt.Sprintf("%s-mount-path-%d", DefaultDriverName, time.Now().Unix()))
 	defer os.RemoveAll(mountPath)
 
 	if err := m.Mount(context.Background(), partition, mountPath, "ext4"); err != nil {
-		return fmt.Errorf("Mount failed with error: %s", err.Error())
+		return fmt.Errorf("Mount failed with error: %w", err)
 	}
 	isMounted, err := m.IsMounted(context.Background(), mountPath)
 	if err != nil {
-		return fmt.Errorf("IsMounted failed with error: %s", err.Error())
+		return fmt.Errorf("IsMounted failed with error: %w", err)
 	}
 	if !isMounted {
 		return errors.New("IsMounted returned false")
@@ -109,22 +112,23 @@ func testMounterMountFilesystem(m *mounter, partition string, t *testing.T) erro
 
 	t.Logf("mounted %s to %s", partition, mountPath)
 	if err := m.Unmount(context.Background(), mountPath); err != nil {
-		return fmt.Errorf("Unmount failed with error: %s", err.Error())
+		return fmt.Errorf("Unmount failed with error: %w", err)
 	}
 	t.Logf("unmounted %s", mountPath)
 	return nil
 }
 
-func testMounterMountBlockDevice(m *mounter, partition string, t *testing.T) error {
+func testMounterMountBlockDevice(t *testing.T, m *mounter, partition string) error {
+	t.Helper()
 	mountPath := filepath.Join(os.TempDir(), fmt.Sprintf("%s-mount-path-%d", DefaultDriverName, time.Now().Unix()))
 	defer os.RemoveAll(mountPath)
 
 	if err := m.Mount(context.Background(), partition, mountPath, "", "bind"); err != nil {
-		return fmt.Errorf("Mount failed with error: %s", err.Error())
+		return fmt.Errorf("Mount failed with error: %w", err)
 	}
 	isMounted, err := m.IsMounted(context.Background(), mountPath)
 	if err != nil {
-		return fmt.Errorf("IsMounted failed with error: %s", err.Error())
+		return fmt.Errorf("IsMounted failed with error: %w", err)
 	}
 	if !isMounted {
 		return errors.New("IsMounted returned false")
@@ -132,13 +136,14 @@ func testMounterMountBlockDevice(m *mounter, partition string, t *testing.T) err
 
 	t.Logf("mounted %s to %s", partition, mountPath)
 	if err := m.Unmount(context.Background(), mountPath); err != nil {
-		return fmt.Errorf("Unmount failed with error: %s", err.Error())
+		return fmt.Errorf("Unmount failed with error: %w", err)
 	}
 	t.Logf("unmounted %s", mountPath)
 	return nil
 }
 
 func TestMounterDisk(t *testing.T) {
+	t.Parallel()
 	if err := checkSystemRequirements(); err != nil {
 		t.Skipf("skipping test: %s", err.Error())
 	}
@@ -219,7 +224,7 @@ func checkSystemRequirements() error {
 	}
 	for _, t := range tools {
 		if _, err := exec.LookPath(t); err != nil {
-			if err == exec.ErrNotFound {
+			if errors.Is(err, exec.ErrNotFound) {
 				return fmt.Errorf("%s executable not found in $PATH", t)
 			}
 			return err

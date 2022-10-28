@@ -20,6 +20,7 @@ const (
 	udevDiskByIDPath  = "/dev/disk/by-id"
 	diskPrefix        = "virtio-"
 	maxVolumesPerNode = 7
+	fileSystemExt4    = "ext4"
 )
 
 var errNodeDiskNotFound = errors.New("disk not found")
@@ -28,11 +29,11 @@ var errNodeDiskNotFound = errors.New("disk not found")
 // called by the CO before NodePublishVolume and is used to temporary mount the
 // volume to a staging path. Once mounted, NodePublishVolume will make sure to
 // mount it to the appropriate path.
-func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
+func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) { //nolint: funlen // TODO: refactor
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume ID must be provided")
 	}
-	log := logWithServerContext(d.log, ctx).WithField(logVolumeIDKey, req.GetVolumeId())
+	log := logWithServerContext(ctx, d.log).WithField(logVolumeIDKey, req.GetVolumeId())
 
 	if req.StagingTargetPath == "" {
 		return nil, status.Error(codes.InvalidArgument, "staging target path must be provided")
@@ -44,8 +45,7 @@ func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRe
 	target := req.GetStagingTargetPath()
 	log = log.WithField(logMountTargetKey, target)
 	// No need to stage raw block device.
-	switch req.VolumeCapability.GetAccessType().(type) {
-	case *csi.VolumeCapability_Block:
+	if _, ok := req.VolumeCapability.GetAccessType().(*csi.VolumeCapability_Block); ok {
 		log.Info("raw block device requested")
 		return &csi.NodeStageVolumeResponse{}, nil
 	}
@@ -53,7 +53,7 @@ func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRe
 	mnt := req.VolumeCapability.GetMount()
 	options := mnt.GetMountFlags()
 
-	fsType := "ext4"
+	fsType := fileSystemExt4
 	if mnt.FsType != "" {
 		fsType = mnt.FsType
 	}
@@ -106,7 +106,7 @@ func (d *Driver) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolu
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume ID must be provided")
 	}
-	log := logWithServerContext(d.log, ctx).WithField(logVolumeIDKey, req.GetVolumeId())
+	log := logWithServerContext(ctx, d.log).WithField(logVolumeIDKey, req.GetVolumeId())
 
 	if req.StagingTargetPath == "" {
 		return nil, status.Error(codes.InvalidArgument, "staging target path must be provided")
@@ -134,11 +134,11 @@ func (d *Driver) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolu
 }
 
 // NodePublishVolume mounts the volume mounted to the staging path to the target path.
-func (d *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
+func (d *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) { //nolint: funlen // TODO: refactor
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume ID must be provided")
 	}
-	log := logWithServerContext(d.log, ctx).WithField(logVolumeIDKey, req.GetVolumeId())
+	log := logWithServerContext(ctx, d.log).WithField(logVolumeIDKey, req.GetVolumeId())
 
 	if req.StagingTargetPath == "" {
 		return nil, status.Error(codes.InvalidArgument, "staging target path must be provided")
@@ -175,7 +175,7 @@ func (d *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolu
 			fsType = mnt.GetFsType()
 		}
 		if fsType == "" {
-			fsType = "ext4"
+			fsType = fileSystemExt4
 		}
 	default:
 		return nil, status.Error(codes.InvalidArgument, "unknown volume access type")
@@ -206,7 +206,7 @@ func (d *Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublish
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume ID must be provided")
 	}
-	log := logWithServerContext(d.log, ctx).WithField(logVolumeIDKey, req.GetVolumeId())
+	log := logWithServerContext(ctx, d.log).WithField(logVolumeIDKey, req.GetVolumeId())
 
 	if req.TargetPath == "" {
 		return nil, status.Error(codes.InvalidArgument, "target path must be provided")
@@ -238,7 +238,7 @@ func (d *Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublish
 
 // NodeGetCapabilities returns the supported capabilities of the node server.
 func (d *Driver) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
-	log := logWithServerContext(d.log, ctx)
+	log := logWithServerContext(ctx, d.log)
 	caps := []*csi.NodeServiceCapability{
 		{
 			Type: &csi.NodeServiceCapability_Rpc{
@@ -288,7 +288,7 @@ func (d *Driver) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeS
 	if volumePath == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume path must be provided")
 	}
-	log := logWithServerContext(d.log, ctx).WithField(logVolumeIDKey, req.GetVolumeId()).WithField("volume_path", volumePath)
+	log := logWithServerContext(ctx, d.log).WithField(logVolumeIDKey, req.GetVolumeId()).WithField("volume_path", volumePath)
 
 	log.Info("check if volume path is already mounted")
 	mounted, err := d.mounter.IsMounted(ctx, volumePath)
@@ -340,7 +340,7 @@ func getBlockDeviceByVolumeID(ctx context.Context, volumeID string) (string, err
 }
 
 // getBlockDeviceByDiskID returns actual block device path (e.g. /dev/vda) that correspond to disk ID (hardware serial number).
-// diskID can be udev disk ID or path to disk ID symbolic link e.g. /dev/disk/by-id/virtio-014e425736724563ab83
+// diskID can be udev disk ID or path to disk ID symbolic link e.g. /dev/disk/by-id/virtio-014e425736724563ab83.
 func getBlockDeviceByDiskID(ctx context.Context, diskID string) (dev string, err error) {
 	ln := diskID
 	if !filepath.IsAbs(diskID) {
@@ -378,7 +378,7 @@ func getBlockDeviceByDiskID(ctx context.Context, diskID string) (dev string, err
 
 // udevWaitDiskToSettle uses udevadm to wait events in event queue to be handled.
 func udevWaitDiskToSettle(ctx context.Context, path string) error {
-	return exec.CommandContext(ctx,
+	return exec.CommandContext(ctx, //nolint: gosec // TODO: should we validate path that might not exists? Disabled for now
 		"udevadm",
 		"settle",
 		fmt.Sprintf("--timeout=%d", udevSettleTimeout*time.Second),
@@ -386,11 +386,11 @@ func udevWaitDiskToSettle(ctx context.Context, path string) error {
 	).Run()
 }
 
-// volumeIDToDiskID converts volume ID to disk ID managed by udev e.g. f67db1ca-825b-40aa-a6f4-390ac6ff1b91 -> virtio-f67db1ca825b40aaa6f4
+// volumeIDToDiskID converts volume ID to disk ID managed by udev e.g. f67db1ca-825b-40aa-a6f4-390ac6ff1b91 -> virtio-f67db1ca825b40aaa6f4.
 func volumeIDToDiskID(volumeID string) (string, error) {
-	fullId := strings.Join(strings.Split(volumeID, "-"), "")
-	if len(fullId) <= 20 {
+	fullID := strings.Join(strings.Split(volumeID, "-"), "")
+	if len(fullID) <= 20 {
 		return "", fmt.Errorf("volume ID '%s' too short", volumeID)
 	}
-	return diskPrefix + fullId[:20], nil
+	return diskPrefix + fullID[:20], nil
 }

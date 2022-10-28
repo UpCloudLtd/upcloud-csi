@@ -1,9 +1,10 @@
-package e2e
+package e2e_test
 
 import (
+	"log"
+
 	"github.com/UpCloudLtd/upcloud-csi/test/e2e/testruns"
 	. "github.com/onsi/ginkgo/v2"
-	"log"
 )
 
 var _ = Describe("", func() {
@@ -20,5 +21,4 @@ var _ = Describe("", func() {
 		testruns.TestDataPersistenceDeployment()
 		log.Println("Persistence Passed")
 	})
-
 })
