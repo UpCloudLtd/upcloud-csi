@@ -2,7 +2,6 @@ package driver
 
 import (
 	"context"
-	"log"
 
 	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud"
 	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/request"
@@ -59,7 +58,6 @@ func newMockBackupStorage(s *upcloud.Storage) *upcloud.Storage {
 }
 
 func (m *mockUpCloudDriver) Run() error {
-	log.Println("sup")
 	return nil
 }
 
