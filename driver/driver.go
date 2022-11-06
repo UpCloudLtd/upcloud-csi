@@ -2,6 +2,7 @@ package driver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -60,8 +61,8 @@ type Driver struct {
 	srv     *grpc.Server
 	httpSrv http.Server
 
-	mounter *mounter
-	log     *logrus.Entry
+	fs  Filesystem
+	log *logrus.Entry
 
 	upcloudclient *upcloudservice.ServiceContext
 	upclouddriver upcloudService
@@ -138,13 +139,21 @@ func NewDriver(logger *logrus.Logger, options ...func(*driverOptions)) (*Driver,
 	log.WithField("username", acc.UserName).Info("init driver")
 	return &Driver{
 		options: driverOpts,
-		mounter: newMounter(log),
+		fs:      newNodeFilesystem(log),
 		log:     log,
 
 		healthChecker: healthChecker,
 		upcloudclient: svc,
 		upclouddriver: &upcloudClient{svc: svc},
 	}, nil
+}
+
+func UseFilesystem(d *Driver, fs Filesystem) (*Driver, error) {
+	if d.ready {
+		return d, errors.New("Driver is already initialized")
+	}
+	d.fs = fs
+	return d, nil
 }
 
 func determineServer(ctx context.Context, svc *upcloudservice.ServiceContext, nodeHost string) (*upcloud.ServerDetails, error) {
