@@ -48,7 +48,7 @@ func TestSfdiskOutputGetLastPartition(t *testing.T) {
 	}
 }
 
-func TestMounterFilesystem(t *testing.T) {
+func TestFilesystemFilesystem(t *testing.T) {
 	t.Parallel()
 	if err := checkSystemRequirements(); err != nil {
 		t.Skipf("skipping test: %s", err.Error())
@@ -62,30 +62,30 @@ func TestMounterFilesystem(t *testing.T) {
 	defer os.Remove(part)
 	t.Logf("create fake partition %s", part)
 
-	m := newTestMounter()
+	m := newTestFilesystem()
 
 	if err := m.createFilesystem(context.Background(), part, "ext4", nil); err != nil {
 		t.Errorf("Format failed with error: %s", err.Error())
 		return
 	}
 	t.Logf("formated %s", part)
-	s, err := m.GetStatistics(context.Background(), os.TempDir())
+	s, err := m.Statistics(os.TempDir())
 	if err != nil {
 		t.Errorf("GetStatistics failed with error: %s", err.Error())
 		return
 	}
 	t.Logf("got %s statistics", os.TempDir())
-	if s.availableBytes <= 0 {
+	if s.AvailableBytes <= 0 {
 		t.Errorf("GetStatistics failed available bytes if zero")
 		return
 	}
 
 	if canMount() {
-		if err := testMounterMountFilesystem(t, m, part); err != nil {
+		if err := testFilesystemMountFilesystem(t, m, part); err != nil {
 			t.Error(err)
 			return
 		}
-		if err := testMounterMountBlockDevice(t, m, part); err != nil {
+		if err := testFilesystemMountBlockDevice(t, m, part); err != nil {
 			t.Error(err)
 			return
 		}
@@ -94,7 +94,7 @@ func TestMounterFilesystem(t *testing.T) {
 	}
 }
 
-func testMounterMountFilesystem(t *testing.T, m *mounter, partition string) error {
+func testFilesystemMountFilesystem(t *testing.T, m *nodeFilesystem, partition string) error {
 	t.Helper()
 	mountPath := filepath.Join(os.TempDir(), fmt.Sprintf("%s-mount-path-%d", DefaultDriverName, time.Now().Unix()))
 	defer os.RemoveAll(mountPath)
@@ -118,7 +118,7 @@ func testMounterMountFilesystem(t *testing.T, m *mounter, partition string) erro
 	return nil
 }
 
-func testMounterMountBlockDevice(t *testing.T, m *mounter, partition string) error {
+func testFilesystemMountBlockDevice(t *testing.T, m *nodeFilesystem, partition string) error {
 	t.Helper()
 	mountPath := filepath.Join(os.TempDir(), fmt.Sprintf("%s-mount-path-%d", DefaultDriverName, time.Now().Unix()))
 	defer os.RemoveAll(mountPath)
@@ -142,7 +142,7 @@ func testMounterMountBlockDevice(t *testing.T, m *mounter, partition string) err
 	return nil
 }
 
-func TestMounterDisk(t *testing.T) {
+func TestFilesystemDisk(t *testing.T) {
 	t.Parallel()
 	if err := checkSystemRequirements(); err != nil {
 		t.Skipf("skipping test: %s", err.Error())
@@ -155,7 +155,7 @@ func TestMounterDisk(t *testing.T) {
 	}
 	defer os.Remove(disk)
 	t.Logf("create fake disk device %s", disk)
-	m := newTestMounter()
+	m := newTestFilesystem()
 
 	// Create partition equivalent to creating /dev/sda1 to device /dev/sda
 	if err := m.createPartition(context.Background(), disk); err != nil {
@@ -164,7 +164,7 @@ func TestMounterDisk(t *testing.T) {
 	}
 
 	// check if partition table exists
-	gotFormated, err := m.IsFormatted(context.Background(), disk)
+	gotFormated, err := m.isFormatted(context.Background(), disk)
 	if err != nil {
 		t.Errorf("IsFormatted failed with error: %s", err.Error())
 		return
@@ -176,7 +176,7 @@ func TestMounterDisk(t *testing.T) {
 
 	// check last partition
 	wantPartition := disk + "p1"
-	gotPartition, err := getLastPartition(context.Background(), disk)
+	gotPartition, err := m.GetDeviceLastPartition(context.Background(), disk)
 	if err != nil {
 		t.Errorf("getLastPartition failed with error: %s", err.Error())
 		return
@@ -186,24 +186,6 @@ func TestMounterDisk(t *testing.T) {
 		return
 	}
 	t.Logf("created new partition %s", wantPartition)
-
-	// Wipe signatures from a device.
-	if err := m.wipeDevice(context.Background(), disk); err != nil {
-		t.Errorf("wipeDevice failed with error: %s", err.Error())
-		return
-	}
-	t.Logf("wiped signatures from a device %s", disk)
-	wantPartition = ""
-	gotPartition, err = getLastPartition(context.Background(), disk)
-	if err != nil {
-		t.Errorf("getLastPartition after wipe failed with error: %s", err.Error())
-		return
-	}
-	if wantPartition != gotPartition {
-		t.Errorf("getLastPartition failed want %s got %s", wantPartition, gotPartition)
-		return
-	}
-	t.Logf("device %s is now empty", disk)
 }
 
 func createDeviceFile(size int64) (string, error) {
@@ -233,10 +215,10 @@ func checkSystemRequirements() error {
 	return nil
 }
 
-func newTestMounter() *mounter {
+func newTestFilesystem() *nodeFilesystem {
 	logger := logrus.New()
 	logger.SetOutput(io.Discard)
-	return newMounter(logger.WithFields(nil))
+	return newNodeFilesystem(logger.WithFields(nil))
 }
 
 func canMount() bool {

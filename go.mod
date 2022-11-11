@@ -7,21 +7,22 @@ require (
 	github.com/container-storage-interface/spec v1.6.0
 	github.com/golang/protobuf v1.5.2
 	github.com/google/uuid v1.3.0
-	github.com/onsi/ginkgo/v2 v2.1.3
-	github.com/onsi/gomega v1.18.1
+	github.com/onsi/ginkgo/v2 v2.1.4
+	github.com/onsi/gomega v1.20.0
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.7.2
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a
-	google.golang.org/grpc v1.47.0
+	golang.org/x/sys v0.0.0-20220731174439-a90be440212d
+	google.golang.org/grpc v1.48.0
 	google.golang.org/protobuf v1.28.0
 	k8s.io/api v0.24.2
 	k8s.io/apimachinery v0.24.2
 	k8s.io/client-go v0.24.2
-	k8s.io/mount-utils v0.23.6
 	sigs.k8s.io/cluster-api v1.2.2
 )
+
+require github.com/kubernetes-csi/csi-test/v5 v5.0.0
 
 require (
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
@@ -61,7 +62,7 @@ require (
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.32.1 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
-	golang.org/x/net v0.0.0-20220617184016-355a448f1bc9 // indirect
+	golang.org/x/net v0.0.0-20220802222814-0bcc04d9c69b // indirect
 	golang.org/x/oauth2 v0.0.0-20220608161450-d0670ef3b1eb // indirect
 	golang.org/x/term v0.0.0-20220411215600-e5f449aeb171 // indirect
 	golang.org/x/text v0.3.7 // indirect
@@ -74,7 +75,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/apiextensions-apiserver v0.24.2
 	k8s.io/component-base v0.24.2 // indirect
-	k8s.io/klog/v2 v2.60.1 // indirect
+	k8s.io/klog/v2 v2.70.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20220413171646-5e7f5fdc6da6 // indirect
 	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9 // indirect
 	sigs.k8s.io/controller-runtime v0.12.3 // indirect

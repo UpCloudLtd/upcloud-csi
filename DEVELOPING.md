@@ -59,6 +59,11 @@ $ upcloud-csi-plugin --username=$UPCLOUD_USERNAME --password=$UPCLOUD_PASSWORD -
 $ csi-sanity --csi.endpoint=/tmp/csi.sock --ginkgo.fail-fast -csi.testnodevolumeattachlimit
 ```
 
+Focus only specs that match regular expression
+```shell
+$ csi-sanity --csi.endpoint=/tmp/csi.sock --ginkgo.fail-fast -csi.testnodevolumeattachlimit --ginkgo.focus ListSnapshots
+```
+
 ### Container Storage Client
 The [Container Storage Client (csc)](https://github.com/rexray/gocsi/tree/master/csc) is a command line interface (CLI) tool that provides analogues for all of the CSI RPCs.
 Print command help

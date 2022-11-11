@@ -11,46 +11,41 @@ import (
 	"strings"
 	"syscall"
 
-	"k8s.io/mount-utils"
-
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
 
-type findmntResponse struct {
-	FileSystems []fileSystem `json:"filesystems"`
+type VolumeStatistics struct {
+	AvailableBytes,
+	TotalBytes,
+	UsedBytes,
+	AvailableInodes,
+	TotalInodes,
+	UsedInodes int64
 }
 
-type fileSystem struct {
-	Target      string `json:"target"`
-	Propagation string `json:"propagation"`
-	FsType      string `json:"fstype"`
-	Options     string `json:"options"`
+type Filesystem interface {
+	Format(ctx context.Context, source, fsType string, mkfsArgs []string) error
+	IsMounted(ctx context.Context, target string) (bool, error)
+	Mount(ctx context.Context, source, target, fsType string, opts ...string) error
+	Unmount(ctx context.Context, path string) error
+	Statistics(volumePath string) (VolumeStatistics, error)
+	GetDeviceByID(ctx context.Context, ID string) (string, error)
+	GetDeviceLastPartition(ctx context.Context, source string) (string, error)
 }
 
-type volumeStatistics struct {
-	availableBytes, totalBytes, usedBytes    int64
-	availableInodes, totalInodes, usedInodes int64
-}
-
-const (
-	// blkidExitStatusNoIdentifiers defines the exit code returned from blkid indicating that no devices have been found. See http://www.polarhome.com/service/man/?qf=blkid&tf=2&of=Alpinelinux for details.
-	blkidExitStatusNoIdentifiers = 2
-)
-
-type mounter struct {
+type nodeFilesystem struct {
 	log *logrus.Entry
 }
 
-// newMounter returns a new mounter instance.
-func newMounter(log *logrus.Entry) *mounter {
-	return &mounter{
+func newNodeFilesystem(log *logrus.Entry) *nodeFilesystem {
+	return &nodeFilesystem{
 		log: log,
 	}
 }
 
 // Format formats the source with the given filesystem type.
-func (m *mounter) Format(ctx context.Context, source, fsType string, mkfsArgs []string) error {
+func (m *nodeFilesystem) Format(ctx context.Context, source, fsType string, mkfsArgs []string) error {
 	if fsType == "" {
 		return errors.New("fs type is not specified for formatting the volume")
 	}
@@ -59,19 +54,27 @@ func (m *mounter) Format(ctx context.Context, source, fsType string, mkfsArgs []
 		return errors.New("source is not specified for formatting the volume")
 	}
 
-	err := m.createPartition(ctx, source)
+	formatted, err := m.isFormatted(ctx, source)
+	if err != nil {
+		return err
+	}
+	if formatted {
+		return nil
+	}
+
+	err = m.createPartition(ctx, source)
 	if err != nil {
 		return err
 	}
 
-	lastPartition, err := getLastPartition(ctx, source)
+	lastPartition, err := m.GetDeviceLastPartition(ctx, source)
 	if err != nil {
 		return err
 	}
 	return m.createFilesystem(ctx, lastPartition, fsType, mkfsArgs)
 }
 
-func (m *mounter) createFilesystem(ctx context.Context, partition, fsType string, mkfsArgs []string) error {
+func (m *nodeFilesystem) createFilesystem(ctx context.Context, partition, fsType string, mkfsArgs []string) error {
 	if fsType == fileSystemExt4 || fsType == "ext3" {
 		mkfsArgs = append(mkfsArgs, "-F", partition)
 	}
@@ -92,7 +95,7 @@ func (m *mounter) createFilesystem(ctx context.Context, partition, fsType string
 }
 
 // Mount mounts source to target with the given fstype and options.
-func (m *mounter) Mount(ctx context.Context, source, target, fsType string, opts ...string) error {
+func (m *nodeFilesystem) Mount(ctx context.Context, source, target, fsType string, opts ...string) error {
 	mountCmd := "mount"
 	mountArgs := make([]string, 0)
 
@@ -138,7 +141,7 @@ func (m *mounter) Mount(ctx context.Context, source, target, fsType string, opts
 }
 
 // Unmount unmounts the given target.
-func (m *mounter) Unmount(ctx context.Context, target string) error {
+func (m *nodeFilesystem) Unmount(ctx context.Context, target string) error {
 	log := logWithServerContext(ctx, m.log)
 	if target == "" {
 		return errors.New("target is not specified for unmounting the volume")
@@ -159,7 +162,11 @@ func (m *mounter) Unmount(ctx context.Context, target string) error {
 
 // IsFormatted checks whether the source device is formatted or not. It
 // returns true if the source device is already formatted.
-func (m *mounter) IsFormatted(ctx context.Context, source string) (bool, error) {
+func (m *nodeFilesystem) isFormatted(ctx context.Context, source string) (bool, error) {
+	// blkidExitStatusNoIdentifiers defines the exit code returned from blkid indicating that no devices have been found.
+	// See http://www.polarhome.com/service/man/?qf=blkid&tf=2&of=Alpinelinux for details.
+	const blkidExitStatusNoIdentifiers = 2
+
 	if source == "" {
 		return false, errors.New("source is not specified")
 	}
@@ -196,32 +203,15 @@ func (m *mounter) IsFormatted(ctx context.Context, source string) (bool, error) 
 	return true, nil
 }
 
-func (m *mounter) wipeDevice(ctx context.Context, deviceID string) error {
-	cmd := "wipefs"
-	args := []string{"-a", "-f", deviceID}
-
-	logWithServerContext(ctx, m.log).WithFields(logrus.Fields{logCommandKey: cmd, logCommandArgsKey: args}).Debug("executing command")
-
-	return exec.CommandContext(ctx, cmd, args...).Run()
-}
-
 // IsMounted checks whether the target path is a correct mount (i.e:
 // propagated). It returns true if it's mounted. An error is returned in
 // case of system errors or if it's mounted incorrectly.
-func (m *mounter) IsMounted(ctx context.Context, target string) (bool, error) {
+func (m *nodeFilesystem) IsMounted(ctx context.Context, target string) (bool, error) {
 	if target == "" {
 		return false, errors.New("target is not specified for checking the mount")
 	}
 
 	findmntCmd := "findmnt"
-	_, err := exec.LookPath(findmntCmd)
-	if err != nil {
-		if errors.Is(err, exec.ErrNotFound) {
-			return false, fmt.Errorf("%q executable not found in $PATH", findmntCmd)
-		}
-		return false, err
-	}
-
 	findmntArgs := []string{"-o", "TARGET,PROPAGATION,FSTYPE,OPTIONS", "-M", target, "-J"}
 
 	logWithServerContext(ctx, m.log).WithFields(logrus.Fields{logCommandKey: findmntCmd, logCommandArgsKey: findmntArgs}).Debug("executing command")
@@ -239,6 +229,17 @@ func (m *mounter) IsMounted(ctx context.Context, target string) (bool, error) {
 	// no response means there is no mount
 	if len(out) == 0 {
 		return false, nil
+	}
+
+	type fileSystem struct {
+		Target      string `json:"target"`
+		Propagation string `json:"propagation"`
+		FsType      string `json:"fstype"`
+		Options     string `json:"options"`
+	}
+
+	type findmntResponse struct {
+		FileSystems []fileSystem `json:"filesystems"`
 	}
 
 	var resp *findmntResponse
@@ -263,33 +264,7 @@ func (m *mounter) IsMounted(ctx context.Context, target string) (bool, error) {
 	return targetFound, nil
 }
 
-// GetStatistics returns capacity-related volume statistics for the given volume path.
-func (m *mounter) GetStatistics(ctx context.Context, volumePath string) (volumeStatistics, error) {
-	var statfs unix.Statfs_t
-	// See http://man7.org/linux/man-pages/man2/statfs.2.html for details.
-	err := unix.Statfs(volumePath, &statfs)
-	if err != nil {
-		return volumeStatistics{}, err
-	}
-	volStats := volumeStatistics{
-		availableBytes: int64(statfs.Bavail) * statfs.Bsize,
-		totalBytes:     int64(statfs.Blocks) * statfs.Bsize,
-		usedBytes:      (int64(statfs.Blocks) - int64(statfs.Bfree)) * statfs.Bsize,
-
-		availableInodes: int64(statfs.Ffree),
-		totalInodes:     int64(statfs.Files),
-		usedInodes:      int64(statfs.Files) - int64(statfs.Ffree),
-	}
-
-	return volStats, nil
-}
-
-func (m *mounter) GetDeviceName(ctx context.Context, mounter mount.Interface, mountPath string) (string, error) {
-	devicePath, _, err := mount.GetDeviceNameFromMount(mounter, mountPath)
-	return devicePath, err
-}
-
-func (m *mounter) createPartition(ctx context.Context, device string) error {
+func (m *nodeFilesystem) createPartition(ctx context.Context, device string) error {
 	cmd := "parted"
 	args := []string{device, "mklabel", "gpt"}
 	log := logWithServerContext(ctx, m.log).WithFields(logrus.Fields{logCommandKey: cmd, logCommandArgsKey: args})
@@ -304,23 +279,40 @@ func (m *mounter) createPartition(ctx context.Context, device string) error {
 	return exec.CommandContext(ctx, cmd, args...).Run()
 }
 
-func getLastPartition(ctx context.Context, source string) (string, error) {
+// filesystemStatistics returns capacity-related volume statistics for the given volume path.
+func (m *nodeFilesystem) Statistics(volumePath string) (VolumeStatistics, error) {
+	var statfs unix.Statfs_t
+	// See http://man7.org/linux/man-pages/man2/statfs.2.html for details.
+	err := unix.Statfs(volumePath, &statfs)
+	if err != nil {
+		return VolumeStatistics{}, err
+	}
+	volStats := VolumeStatistics{
+		AvailableBytes: int64(statfs.Bavail) * statfs.Bsize,
+		TotalBytes:     int64(statfs.Blocks) * statfs.Bsize,
+		UsedBytes:      (int64(statfs.Blocks) - int64(statfs.Bfree)) * statfs.Bsize,
+
+		AvailableInodes: int64(statfs.Ffree),
+		TotalInodes:     int64(statfs.Files),
+		UsedInodes:      int64(statfs.Files) - int64(statfs.Ffree),
+	}
+
+	return volStats, nil
+}
+
+// getBlockDeviceByVolumeID returns the absolute path of the attached block device for the given volumeID.
+func (m *nodeFilesystem) GetDeviceByID(ctx context.Context, id string) (string, error) {
+	diskID, err := volumeIDToDiskID(id)
+	if err != nil {
+		return diskID, err
+	}
+	return getBlockDeviceByDiskID(ctx, diskID)
+}
+
+func (m *nodeFilesystem) GetDeviceLastPartition(ctx context.Context, source string) (string, error) {
 	sfdisk, err := exec.CommandContext(ctx, "sfdisk", "-q", "--list", "-o", "device", source).CombinedOutput()
 	if err != nil {
 		return "", err
 	}
 	return sfdiskOutputGetLastPartition(source, string(sfdisk))
-}
-
-func sfdiskOutputGetLastPartition(source, sfdiskOutput string) (string, error) {
-	outLines := strings.Split(sfdiskOutput, "\n")
-	var lastPartition string
-	for i := len(outLines) - 1; i >= 0; i-- {
-		partition := strings.TrimSpace(outLines[i])
-		if strings.HasPrefix(partition, source) {
-			lastPartition = partition
-			break
-		}
-	}
-	return lastPartition, nil
 }

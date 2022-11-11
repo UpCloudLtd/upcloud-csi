@@ -39,6 +39,10 @@ test-objgen:
 
 test: test-driver test-objgen
 
+test-integration:
+	make -C test/integration test
+
+
 build-plugin:
 	CGO_ENABLED=0 go build -ldflags "-w -s" -o cmd/upcloud-csi-plugin/${PLUGIN_NAME} ${PLUGIN_PKG}
 

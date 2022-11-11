@@ -25,8 +25,7 @@ func NewMockDriver(upcloudDriver upcloudService) *Driver {
 		upcloudDriver = &mockUpCloudDriver{storageSize: 10, cloneStorageSize: 10, volumeUUIDExists: true}
 	}
 
-	socket := "/tmp/csi.sock"
-	endpoint := "unix://" + socket
+	endpoint := "unix:///tmp/csi.sock"
 
 	log := logrus.New().WithField("test_enabled", true)
 
@@ -35,7 +34,6 @@ func NewMockDriver(upcloudDriver upcloudService) *Driver {
 			zone:     "demoRegion",
 			endpoint: endpoint,
 		},
-		mounter:       newMounter(log),
 		upclouddriver: upcloudDriver,
 		log:           log,
 	}
@@ -55,10 +53,6 @@ func newMockBackupStorage(s *upcloud.Storage) *upcloud.Storage {
 	b.Type = upcloud.StorageTypeBackup
 	b.Origin = s.UUID
 	return b
-}
-
-func (m *mockUpCloudDriver) Run() error {
-	return nil
 }
 
 func (m *mockUpCloudDriver) getStorageByUUID(ctx context.Context, storageUUID string) (*upcloud.StorageDetails, error) {
