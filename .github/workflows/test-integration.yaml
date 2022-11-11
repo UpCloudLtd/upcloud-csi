@@ -14,4 +14,4 @@ jobs:
           UPCLOUD_TEST_USERNAME: ${{ secrets.UPCLOUD_TEST_USERNAME }}
           UPCLOUD_TEST_PASSWORD: ${{ secrets.UPCLOUD_TEST_PASSWORD }}
           UPCLOUD_TEST_HOSTNAME: ${{ secrets.UPCLOUD_TEST_HOSTNAME }}
-        run: test-integration
+        run: make test-integration
