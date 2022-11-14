@@ -2,6 +2,7 @@ package sanity_test
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"testing"
@@ -49,7 +50,8 @@ func runTestDriver(endpoint string) (*driver.Driver, error) {
 	}
 
 	logger := logrus.New()
-	logger.SetLevel(logrus.ErrorLevel)
+	logger.SetLevel(logrus.PanicLevel)
+	logger.SetOutput(io.Discard)
 	drv, err := driver.NewDriver(
 		logger,
 		driver.WithDriverName(driver.DefaultDriverName),
