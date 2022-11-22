@@ -134,10 +134,8 @@ func TestUpcloudClient_listStorageBackups(t *testing.T) { //nolint:paralleltest 
 		`)
 	}))
 	defer srv.Close()
-	t.Setenv(client.EnvDebugAPIBaseURL, srv.URL)
-	defer os.Setenv(client.EnvDebugAPIBaseURL, "")
 
-	c := upcloudClient{service.New(client.New("", ""))}
+	c := upcloudClient{service.New(client.New("", "", client.WithBaseURL(srv.URL)))}
 	storages, err := c.listStorageBackups(context.Background(), "id1")
 	assert.NoError(t, err)
 	want := []*upcloud.Storage{
