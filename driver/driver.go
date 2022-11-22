@@ -16,10 +16,10 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/sirupsen/logrus"
 
-	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud"
-	upcloudclient "github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/client"
-	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/request"
-	upcloudservice "github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/service"
+	"github.com/UpCloudLtd/upcloud-go-api/v5/upcloud"
+	upcloudclient "github.com/UpCloudLtd/upcloud-go-api/v5/upcloud/client"
+	"github.com/UpCloudLtd/upcloud-go-api/v5/upcloud/request"
+	upcloudservice "github.com/UpCloudLtd/upcloud-go-api/v5/upcloud/service"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 )
@@ -64,7 +64,7 @@ type Driver struct {
 	fs  Filesystem
 	log *logrus.Entry
 
-	upcloudclient *upcloudservice.ServiceContext
+	upcloudclient *upcloudservice.Service
 	upclouddriver upcloudService
 
 	healthChecker *HealthChecker
@@ -106,13 +106,10 @@ func NewDriver(logger *logrus.Logger, options ...func(*driverOptions)) (*Driver,
 	}
 
 	// Authenticate by passing your account login credentials to the client
-	c := upcloudclient.NewWithContext(driverOpts.username, driverOpts.password)
-
-	// It is generally a good idea to override the default timeout of the underlying HTTP client since some requests block for longer periods of time
-	c.SetTimeout(time.Second * clientTimeout)
+	c := upcloudclient.New(driverOpts.username, driverOpts.password, upcloudclient.WithTimeout((time.Second * clientTimeout)))
 
 	// Create the service object
-	svc := upcloudservice.NewWithContext(c)
+	svc := upcloudservice.New(c)
 	acc, err := svc.GetAccount(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to login in API: %w", err)
@@ -156,7 +153,7 @@ func UseFilesystem(d *Driver, fs Filesystem) (*Driver, error) {
 	return d, nil
 }
 
-func determineServer(ctx context.Context, svc *upcloudservice.ServiceContext, nodeHost string) (*upcloud.ServerDetails, error) {
+func determineServer(ctx context.Context, svc *upcloudservice.Service, nodeHost string) (*upcloud.ServerDetails, error) {
 	servers, err := svc.GetServers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't fetch servers list")

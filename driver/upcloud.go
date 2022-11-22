@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud"
-	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/request"
-	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/service"
+	"github.com/UpCloudLtd/upcloud-go-api/v5/upcloud"
+	"github.com/UpCloudLtd/upcloud-go-api/v5/upcloud/request"
+	"github.com/UpCloudLtd/upcloud-go-api/v5/upcloud/service"
 )
 
 // TODO sort out naming conventions
@@ -25,7 +25,7 @@ var (
 )
 
 type upcloudClient struct {
-	svc *service.ServiceContext
+	svc *service.Service
 }
 
 type upcloudService interface { //nolint:interfacebloat // TODO: refactor
@@ -251,8 +251,7 @@ func (u *upcloudClient) stopServer(ctx context.Context, uuid string) (*upcloud.S
 
 func (u *upcloudClient) startServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error) {
 	server, err := u.svc.StartServer(ctx, &request.StartServerRequest{
-		UUID:    uuid,
-		Timeout: startServerTimeout,
+		UUID: uuid,
 	})
 	if err != nil {
 		return nil, err

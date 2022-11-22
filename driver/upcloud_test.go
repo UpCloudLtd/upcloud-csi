@@ -8,9 +8,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud"
-	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/client"
-	"github.com/UpCloudLtd/upcloud-go-api/v4/upcloud/service"
+	"github.com/UpCloudLtd/upcloud-go-api/v5/upcloud"
+	"github.com/UpCloudLtd/upcloud-go-api/v5/upcloud/client"
+	"github.com/UpCloudLtd/upcloud-go-api/v5/upcloud/service"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -57,7 +57,7 @@ func TestUpcloudClient_listStorage(t *testing.T) { //nolint:paralleltest // uses
 	t.Setenv(client.EnvDebugAPIBaseURL, srv.URL)
 	defer os.Setenv(client.EnvDebugAPIBaseURL, "")
 
-	c := upcloudClient{service.NewWithContext(client.NewWithContext("", ""))}
+	c := upcloudClient{service.New(client.New("", ""))}
 	storages, err := c.listStorage(context.Background(), "fi-hel2")
 	if err != nil {
 		t.Error(err)
@@ -134,10 +134,8 @@ func TestUpcloudClient_listStorageBackups(t *testing.T) { //nolint:paralleltest 
 		`)
 	}))
 	defer srv.Close()
-	t.Setenv(client.EnvDebugAPIBaseURL, srv.URL)
-	defer os.Setenv(client.EnvDebugAPIBaseURL, "")
 
-	c := upcloudClient{service.NewWithContext(client.NewWithContext("", ""))}
+	c := upcloudClient{service.New(client.New("", "", client.WithBaseURL(srv.URL)))}
 	storages, err := c.listStorageBackups(context.Background(), "id1")
 	assert.NoError(t, err)
 	want := []*upcloud.Storage{

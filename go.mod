@@ -3,7 +3,6 @@ module github.com/UpCloudLtd/upcloud-csi
 go 1.18
 
 require (
-	github.com/UpCloudLtd/upcloud-go-api/v4 v4.8.0
 	github.com/container-storage-interface/spec v1.6.0
 	github.com/golang/protobuf v1.5.2
 	github.com/google/uuid v1.3.0
@@ -23,6 +22,8 @@ require (
 )
 
 require github.com/kubernetes-csi/csi-test/v5 v5.0.0
+
+require github.com/UpCloudLtd/upcloud-go-api/v5 v5.0.0
 
 require (
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
