@@ -23,7 +23,7 @@ require (
 
 require github.com/kubernetes-csi/csi-test/v5 v5.0.0
 
-require github.com/UpCloudLtd/upcloud-go-api/v5 v5.0.0
+require github.com/UpCloudLtd/upcloud-go-api/v5 v5.1.0
 
 require (
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
