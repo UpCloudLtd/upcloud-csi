@@ -149,3 +149,10 @@ func isValidUUID(s string) bool {
 	_, err := uuid.Parse(s)
 	return err == nil
 }
+
+func isValidStorageUUID(s string) bool {
+	if isValidUUID(s) {
+		return strings.HasPrefix(s, "01")
+	}
+	return false
+}

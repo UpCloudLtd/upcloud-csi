@@ -451,7 +451,7 @@ func (d *Driver) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotRequ
 		return nil, status.Error(codes.InvalidArgument, "snapshot ID must be provided")
 	}
 	// Delete should succeed if snapshot is not found or an invalid snapshot id is used.
-	if isValidUUID(snapID) {
+	if isValidStorageUUID(snapID) {
 		if err := d.upclouddriver.deleteStorageBackup(ctx, snapID); err != nil {
 			var svcError *upcloud.Error
 			if errors.As(err, &svcError) && svcError.Status != http.StatusNotFound {
