@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/UpCloudLtd/upcloud-go-api/v5/upcloud"
-	"github.com/UpCloudLtd/upcloud-go-api/v5/upcloud/client"
 	"github.com/UpCloudLtd/upcloud-go-api/v5/upcloud/request"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/sirupsen/logrus"
@@ -447,13 +446,17 @@ func (d *Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequ
 
 // DeleteSnapshot will be called by the CO to delete a snapshot.
 func (d *Driver) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
-	if req.GetSnapshotId() == "" {
+	snapID := req.GetSnapshotId()
+	if snapID == "" {
 		return nil, status.Error(codes.InvalidArgument, "snapshot ID must be provided")
 	}
-	if err := d.upclouddriver.deleteStorageBackup(ctx, req.GetSnapshotId()); err != nil {
-		var clientError *client.Error
-		if errors.As(err, &clientError) && clientError.ErrorCode != http.StatusNotFound {
-			return nil, status.Errorf(codes.Internal, err.Error())
+	// Delete should succeed if snapshot is not found or an invalid snapshot id is used.
+	if isValidStorageUUID(snapID) {
+		if err := d.upclouddriver.deleteStorageBackup(ctx, snapID); err != nil {
+			var svcError *upcloud.Error
+			if errors.As(err, &svcError) && svcError.Status != http.StatusNotFound {
+				return nil, status.Errorf(codes.Internal, err.Error())
+			}
 		}
 	}
 	return &csi.DeleteSnapshotResponse{}, nil

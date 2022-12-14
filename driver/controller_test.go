@@ -456,3 +456,18 @@ func TestParseToken(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, want, got)
 }
+
+func TestIsValidUUID(t *testing.T) {
+	t.Parallel()
+
+	assert.False(t, isValidUUID(""))
+	assert.False(t, isValidUUID("0160ffc3-58ec-4670-bdc9"))
+	assert.True(t, isValidUUID("0160ffc3-58ec-4670-bdc9-27fe385d281d"))
+}
+
+func TestIsValidStorageUUID(t *testing.T) {
+	t.Parallel()
+
+	assert.True(t, isValidUUID("1160ffc3-58ec-4670-bdc9-27fe385d281d"))
+	assert.True(t, isValidUUID("0160ffc3-58ec-4670-bdc9-27fe385d281d"))
+}

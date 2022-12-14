@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/google/uuid"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 )
@@ -142,4 +143,16 @@ func validateCapabilities(capacities []*csi.VolumeCapability) []string {
 	}
 
 	return violations.List()
+}
+
+func isValidUUID(s string) bool {
+	_, err := uuid.Parse(s)
+	return err == nil
+}
+
+func isValidStorageUUID(s string) bool {
+	if isValidUUID(s) {
+		return strings.HasPrefix(s, "01")
+	}
+	return false
 }
