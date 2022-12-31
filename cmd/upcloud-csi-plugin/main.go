@@ -30,6 +30,13 @@ func main() {
 		log.Fatalln(err)
 	}
 
+	if *username == "" {
+		*username = os.Getenv("USERNAME")
+	}
+	if *password == "" {
+		*password = os.Getenv("PASSWORD")
+	}
+
 	if *version {
 		fmt.Printf("%s - %s (%s)\n", driver.GetVersion(), driver.GetCommit(), driver.GetTreeState()) //nolint: forbidigo // allow printing to console
 		os.Exit(0)
