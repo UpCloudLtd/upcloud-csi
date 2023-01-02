@@ -30,6 +30,13 @@ func main() {
 		log.Fatalln(err)
 	}
 
+	if *username == "" {
+		*username = os.Getenv("UPCLOUD_USERNAME")
+	}
+	if *password == "" {
+		*password = os.Getenv("UPCLOUD_PASSWORD")
+	}
+
 	if *version {
 		fmt.Printf("%s - %s (%s)\n", driver.GetVersion(), driver.GetCommit(), driver.GetTreeState()) //nolint: forbidigo // allow printing to console
 		os.Exit(0)
