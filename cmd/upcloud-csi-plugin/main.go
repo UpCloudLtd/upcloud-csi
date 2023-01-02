@@ -31,10 +31,10 @@ func main() {
 	}
 
 	if *username == "" {
-		*username = os.Getenv("USERNAME")
+		*username = os.Getenv("UPCLOUD_USERNAME")
 	}
 	if *password == "" {
-		*password = os.Getenv("PASSWORD")
+		*password = os.Getenv("UPCLOUD_PASSWORD")
 	}
 
 	if *version {
