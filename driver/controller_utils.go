@@ -20,7 +20,7 @@ const (
 
 	// minimumVolumeSizeInBytes is used to validate that the user is not trying
 	// to create a volume that is smaller than what we support.
-	minimumVolumeSizeInBytes int64 = 10 * giB
+	minimumVolumeSizeInBytes int64 = 1 * giB
 
 	// maximumVolumeSizeInBytes is used to validate that the user is not trying
 	// to create a volume that is larger than what we support.
@@ -28,7 +28,7 @@ const (
 
 	// defaultVolumeSize is used when the user did not provide a size or
 	// the size they provided did not satisfy our requirements.
-	defaultVolumeSize = 10 * giB
+	defaultVolumeSize = 1 * giB
 )
 
 var supportedAccessMode = &csi.VolumeCapability_AccessMode{Mode: csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER} //nolint: gochecknoglobals // supportedAccessMode is readonly variable
