@@ -117,6 +117,9 @@ func TestControllerService_CreateVolume(t *testing.T) {
 				&csi.CreateVolumeRequest{
 					Name:               "testVolume",
 					VolumeCapabilities: caps,
+					CapacityRange: &csi.CapacityRange{
+						RequiredBytes: 10 * giB,
+					},
 					VolumeContentSource: &csi.VolumeContentSource{
 						Type: &csi.VolumeContentSource_Snapshot{
 							Snapshot: &csi.VolumeContentSource_SnapshotSource{
@@ -136,6 +139,9 @@ func TestControllerService_CreateVolume(t *testing.T) {
 				&csi.CreateVolumeRequest{
 					Name:               "testCloneVolume",
 					VolumeCapabilities: caps,
+					CapacityRange: &csi.CapacityRange{
+						RequiredBytes: 10 * giB,
+					},
 					VolumeContentSource: &csi.VolumeContentSource{
 						Type: &csi.VolumeContentSource_Volume{
 							Volume: &csi.VolumeContentSource_VolumeSource{
@@ -161,6 +167,9 @@ func TestControllerService_CreateVolume(t *testing.T) {
 				&csi.CreateVolumeRequest{
 					Name:               "testCloneSnapshotVolume",
 					VolumeCapabilities: caps,
+					CapacityRange: &csi.CapacityRange{
+						RequiredBytes: 10 * giB,
+					},
 					VolumeContentSource: &csi.VolumeContentSource{
 						Type: &csi.VolumeContentSource_Snapshot{
 							Snapshot: &csi.VolumeContentSource_SnapshotSource{
