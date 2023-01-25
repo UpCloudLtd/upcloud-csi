@@ -220,6 +220,16 @@ spec:
       priorityClassName: system-node-critical
       serviceAccount: csi-upcloud-node-sa
       hostNetwork: true
+      tolerations:
+        - effect: NoSchedule
+          operator: Exists
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: csi-upcloud-node
+              topologyKey: kubernetes.io/hostname
       containers:
         - name: csi-node-driver-registrar
           image: k8s.gcr.io/sig-storage/csi-node-driver-registrar:v2.5.0
