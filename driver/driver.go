@@ -45,7 +45,7 @@ const (
 	// CheckStorageQuotaTimeout specifies a time limit for checking storage quota in seconds.
 	checkStorageQuotaTimeout = 30
 	// udevDiskTimeout specifies a time limit for waiting disk appear under /dev/disk/by-id.
-	udevDiskTimeout = 30
+	udevDiskTimeout = 60
 	// udevSettleTimeout specifies a time limit for waiting udev event queue to become empty.
 	udevSettleTimeout = 20
 )

@@ -49,12 +49,15 @@ func getBlockDeviceByDiskID(ctx context.Context, diskID string) (dev string, err
 
 // udevWaitDiskToSettle uses udevadm to wait events in event queue to be handled.
 func udevWaitDiskToSettle(ctx context.Context, path string) error {
-	return exec.CommandContext(ctx, //nolint: gosec // TODO: should we validate path that might not exists? Disabled for now
-		"udevadm",
-		"settle",
-		fmt.Sprintf("--timeout=%d", udevSettleTimeout*time.Second),
-		fmt.Sprintf("--exit-if-exists=%s", path),
-	).Run()
+	if udevadm, err := exec.LookPath("udevadm"); err == nil {
+		return exec.CommandContext(ctx,
+			udevadm,
+			"settle",
+			fmt.Sprintf("--timeout=%d", udevSettleTimeout),
+			fmt.Sprintf("--exit-if-exists=%s", path),
+		).Run()
+	}
+	return nil
 }
 
 // volumeIDToDiskID converts volume ID to disk ID managed by udev e.g. f67db1ca-825b-40aa-a6f4-390ac6ff1b91 -> virtio-f67db1ca825b40aaa6f4.
