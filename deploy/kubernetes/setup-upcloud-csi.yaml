@@ -220,9 +220,6 @@ spec:
       priorityClassName: system-node-critical
       serviceAccount: csi-upcloud-node-sa
       hostNetwork: true
-      tolerations:
-        - effect: NoSchedule
-          operator: Exists
       affinity:
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
