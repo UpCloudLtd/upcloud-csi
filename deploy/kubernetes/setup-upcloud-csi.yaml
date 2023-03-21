@@ -147,8 +147,6 @@ spec:
           volumeMounts:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
-      imagePullSecrets:
-        - name: regcred
       volumes:
         - name: socket-dir
           emptyDir: {}
@@ -288,8 +286,6 @@ spec:
               mountPropagation: "Bidirectional"
             - name: device-dir
               mountPath: /dev
-      imagePullSecrets:
-        - name: regcred
       volumes:
         - name: registration-dir
           hostPath:
