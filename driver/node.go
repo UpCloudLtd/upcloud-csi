@@ -251,13 +251,13 @@ func (d *Driver) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabi
 // NodeGetInfo returns the supported capabilities of the node server.
 func (d *Driver) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
 	return &csi.NodeGetInfoResponse{
-		NodeId:            d.options.nodeHost,
+		NodeId:            d.options.NodeHost,
 		MaxVolumesPerNode: maxVolumesPerNode,
 
 		// make sure that the driver works on this particular region only
 		AccessibleTopology: &csi.Topology{
 			Segments: map[string]string{
-				"region": d.options.zone,
+				"region": d.options.Zone,
 			},
 		},
 	}, nil

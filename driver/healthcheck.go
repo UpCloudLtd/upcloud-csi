@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/UpCloudLtd/upcloud-go-api/v5/upcloud"
+	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud"
+	upsvc "github.com/UpCloudLtd/upcloud-go-api/v6/upcloud/service"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -43,19 +44,23 @@ func (c *HealthChecker) Check(ctx context.Context) error {
 	return eg.Wait()
 }
 
-type upcloudHealthChecker struct {
+type UpcloudHealthChecker struct {
 	account func(cxt context.Context) (*upcloud.Account, error)
 }
 
-func (c *upcloudHealthChecker) Name() string {
+func (c *UpcloudHealthChecker) Name() string {
 	return "upcloud"
 }
 
-func (c *upcloudHealthChecker) Check(ctx context.Context) error {
+func (c *UpcloudHealthChecker) Check(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, healthTimeout*time.Second)
 	defer cancel()
 	if _, err := c.account(ctx); err != nil {
 		return fmt.Errorf("checking health: %w", err)
 	}
 	return nil
+}
+
+func NewUpcloudHealthChecker(svc *upsvc.Service) *UpcloudHealthChecker {
+	return &UpcloudHealthChecker{account: svc.GetAccount}
 }

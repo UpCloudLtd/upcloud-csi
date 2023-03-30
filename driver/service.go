@@ -6,17 +6,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/UpCloudLtd/upcloud-go-api/v5/upcloud"
-	"github.com/UpCloudLtd/upcloud-go-api/v5/upcloud/request"
-	"github.com/UpCloudLtd/upcloud-go-api/v5/upcloud/service"
+	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud"
+	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud/request"
+	upsvc "github.com/UpCloudLtd/upcloud-go-api/v6/upcloud/service"
 )
 
-// TODO sort out naming conventions
-
 const (
-	startServerTimeout  = 30
-	stopServerTimeout   = 30
-	storageStateTimeout = 3600 // 1h
+	storageStateTimeout time.Duration = time.Hour
 )
 
 var (
@@ -24,33 +20,30 @@ var (
 	errUpCloudServerNotFound  = errors.New("upcloud: server not found")
 )
 
-type upcloudClient struct {
-	svc *service.Service
-}
-
-type upcloudService interface { //nolint:interfacebloat // TODO: refactor
+type service interface { //nolint:interfacebloat // Split this to smaller piece when it makes sense code wise
+	getServerByHostname(context.Context, string) (*upcloud.Server, error)
 	getStorageByUUID(context.Context, string) (*upcloud.StorageDetails, error)
 	getStorageByName(context.Context, string) ([]*upcloud.StorageDetails, error)
+	listStorage(context.Context, string) ([]upcloud.Storage, error)
+	getStorageBackupByName(context.Context, string) (*upcloud.Storage, error)
+	listStorageBackups(ctx context.Context, uuid string) ([]upcloud.Storage, error)
+	requireStorageOnline(ctx context.Context, s *upcloud.Storage) error
 	createStorage(context.Context, *request.CreateStorageRequest) (*upcloud.StorageDetails, error)
-	cloneStorage(context.Context, *request.CloneStorageRequest) (*upcloud.StorageDetails, error)
+	cloneStorage(context.Context, *request.CloneStorageRequest, ...upcloud.Label) (*upcloud.StorageDetails, error)
 	deleteStorage(context.Context, string) error
 	attachStorage(context.Context, string, string) error
 	detachStorage(context.Context, string, string) error
-	listStorage(context.Context, string) ([]upcloud.Storage, error)
-	getServer(context.Context, string) (*upcloud.ServerDetails, error)
-	getServerByHostname(context.Context, string) (*upcloud.Server, error)
 	resizeStorage(ctx context.Context, uuid string, newSize int, deleteBackup bool) (*upcloud.StorageDetails, error)
 	resizeBlockDevice(ctx context.Context, uuid string, newSize int) (*upcloud.StorageDetails, error)
-	stopServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error)
-	startServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error)
-	getStorageBackupByName(context.Context, string) (*upcloud.Storage, error)
 	createStorageBackup(ctx context.Context, uuid, title string) (*upcloud.StorageDetails, error)
-	listStorageBackups(ctx context.Context, uuid string) ([]upcloud.Storage, error)
 	deleteStorageBackup(ctx context.Context, uuid string) error
-	requireStorageOnline(ctx context.Context, s *upcloud.Storage) error
 }
 
-func (u *upcloudClient) getStorageByUUID(ctx context.Context, storageUUID string) (*upcloud.StorageDetails, error) {
+type upCloudService struct {
+	svc *upsvc.Service
+}
+
+func (u *upCloudService) getStorageByUUID(ctx context.Context, storageUUID string) (*upcloud.StorageDetails, error) {
 	gsr := &request.GetStoragesRequest{}
 	storages, err := u.svc.GetStorages(ctx, gsr)
 	if err != nil {
@@ -64,7 +57,7 @@ func (u *upcloudClient) getStorageByUUID(ctx context.Context, storageUUID string
 	return nil, errUpCloudStorageNotFound
 }
 
-func (u *upcloudClient) getStorageByName(ctx context.Context, storageName string) ([]*upcloud.StorageDetails, error) {
+func (u *upCloudService) getStorageByName(ctx context.Context, storageName string) ([]*upcloud.StorageDetails, error) {
 	gsr := &request.GetStoragesRequest{}
 	storages, err := u.svc.GetStorages(ctx, gsr)
 	if err != nil {
@@ -80,7 +73,7 @@ func (u *upcloudClient) getStorageByName(ctx context.Context, storageName string
 	return volumes, nil
 }
 
-func (u *upcloudClient) createStorage(ctx context.Context, csr *request.CreateStorageRequest) (*upcloud.StorageDetails, error) {
+func (u *upCloudService) createStorage(ctx context.Context, csr *request.CreateStorageRequest) (*upcloud.StorageDetails, error) {
 	s, err := u.svc.CreateStorage(ctx, csr)
 	if err != nil {
 		return nil, err
@@ -88,23 +81,40 @@ func (u *upcloudClient) createStorage(ctx context.Context, csr *request.CreateSt
 	return u.svc.WaitForStorageState(ctx, &request.WaitForStorageStateRequest{
 		UUID:         s.Storage.UUID,
 		DesiredState: upcloud.StorageStateOnline,
-		Timeout:      storageStateTimeout * time.Second,
+		Timeout:      storageStateTimeout,
 	})
 }
 
-func (u *upcloudClient) cloneStorage(ctx context.Context, r *request.CloneStorageRequest) (*upcloud.StorageDetails, error) {
+func (u *upCloudService) cloneStorage(ctx context.Context, r *request.CloneStorageRequest, label ...upcloud.Label) (*upcloud.StorageDetails, error) {
 	s, err := u.svc.CloneStorage(ctx, r)
 	if err != nil {
 		return nil, err
 	}
+	s, err = u.svc.WaitForStorageState(ctx, &request.WaitForStorageStateRequest{
+		UUID:         s.Storage.UUID,
+		DesiredState: upcloud.StorageStateOnline,
+		Timeout:      storageStateTimeout,
+	})
+	if err != nil {
+		return s, err
+	}
+	if len(label) > 0 {
+		s, err = u.svc.ModifyStorage(ctx, &request.ModifyStorageRequest{
+			UUID:   s.Storage.UUID,
+			Labels: &label,
+		})
+		if err != nil {
+			return s, err
+		}
+	}
 	return u.svc.WaitForStorageState(ctx, &request.WaitForStorageStateRequest{
 		UUID:         s.Storage.UUID,
 		DesiredState: upcloud.StorageStateOnline,
-		Timeout:      storageStateTimeout * time.Second,
+		Timeout:      storageStateTimeout,
 	})
 }
 
-func (u *upcloudClient) deleteStorage(ctx context.Context, storageUUID string) error {
+func (u *upCloudService) deleteStorage(ctx context.Context, storageUUID string) error {
 	var err error
 	volume, err := u.getStorageByUUID(ctx, storageUUID)
 	if err != nil {
@@ -118,7 +128,7 @@ func (u *upcloudClient) deleteStorage(ctx context.Context, storageUUID string) e
 	return nil
 }
 
-func (u *upcloudClient) attachStorage(ctx context.Context, storageUUID, serverUUID string) error {
+func (u *upCloudService) attachStorage(ctx context.Context, storageUUID, serverUUID string) error {
 	details, err := u.svc.AttachStorage(ctx, &request.AttachStorageRequest{ServerUUID: serverUUID, StorageUUID: storageUUID, Address: "virtio"})
 	if err != nil {
 		return err
@@ -132,7 +142,7 @@ func (u *upcloudClient) attachStorage(ctx context.Context, storageUUID, serverUU
 	return fmt.Errorf("storage device not found after attaching to server")
 }
 
-func (u *upcloudClient) detachStorage(ctx context.Context, storageUUID, serverUUID string) error {
+func (u *upCloudService) detachStorage(ctx context.Context, storageUUID, serverUUID string) error {
 	sd, err := u.svc.GetServerDetails(ctx, &request.GetServerDetailsRequest{UUID: serverUUID})
 	if err != nil {
 		return err
@@ -156,7 +166,7 @@ func (u *upcloudClient) detachStorage(ctx context.Context, storageUUID, serverUU
 	return fmt.Errorf("this shouldnt happen. serverUUID %s storageUUID %s context: %+v", serverUUID, storageUUID, sd)
 }
 
-func (u *upcloudClient) listStorage(ctx context.Context, zone string) ([]upcloud.Storage, error) {
+func (u *upCloudService) listStorage(ctx context.Context, zone string) ([]upcloud.Storage, error) {
 	storages, err := u.svc.GetStorages(ctx, &request.GetStoragesRequest{Access: upcloud.StorageAccessPrivate})
 	if err != nil {
 		return nil, err
@@ -170,18 +180,7 @@ func (u *upcloudClient) listStorage(ctx context.Context, zone string) ([]upcloud
 	return zoneStorage, nil
 }
 
-func (u *upcloudClient) getServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error) {
-	r := request.GetServerDetailsRequest{
-		UUID: uuid,
-	}
-	server, err := u.svc.GetServerDetails(ctx, &r)
-	if err != nil {
-		return nil, err
-	}
-	return server, nil
-}
-
-func (u *upcloudClient) getServerByHostname(ctx context.Context, hostname string) (*upcloud.Server, error) {
+func (u *upCloudService) getServerByHostname(ctx context.Context, hostname string) (*upcloud.Server, error) {
 	servers, err := u.svc.GetServers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch servers: %w", err)
@@ -196,7 +195,7 @@ func (u *upcloudClient) getServerByHostname(ctx context.Context, hostname string
 	return nil, errUpCloudServerNotFound
 }
 
-func (u *upcloudClient) resizeStorage(ctx context.Context, uuid string, newSize int, deleteBackup bool) (*upcloud.StorageDetails, error) {
+func (u *upCloudService) resizeStorage(ctx context.Context, uuid string, newSize int, deleteBackup bool) (*upcloud.StorageDetails, error) {
 	storage, err := u.svc.ModifyStorage(ctx, &request.ModifyStorageRequest{
 		UUID: uuid,
 		Size: newSize,
@@ -219,11 +218,11 @@ func (u *upcloudClient) resizeStorage(ctx context.Context, uuid string, newSize 
 	return u.svc.WaitForStorageState(ctx, &request.WaitForStorageStateRequest{
 		UUID:         storage.Storage.UUID,
 		DesiredState: upcloud.StorageStateOnline,
-		Timeout:      storageStateTimeout * time.Second,
+		Timeout:      storageStateTimeout,
 	})
 }
 
-func (u *upcloudClient) resizeBlockDevice(ctx context.Context, uuid string, newSize int) (*upcloud.StorageDetails, error) {
+func (u *upCloudService) resizeBlockDevice(ctx context.Context, uuid string, newSize int) (*upcloud.StorageDetails, error) {
 	storage, err := u.svc.ModifyStorage(ctx, &request.ModifyStorageRequest{
 		UUID: uuid,
 		Size: newSize,
@@ -234,32 +233,11 @@ func (u *upcloudClient) resizeBlockDevice(ctx context.Context, uuid string, newS
 	return u.svc.WaitForStorageState(ctx, &request.WaitForStorageStateRequest{
 		UUID:         storage.Storage.UUID,
 		DesiredState: upcloud.StorageStateOnline,
-		Timeout:      storageStateTimeout * time.Second,
+		Timeout:      storageStateTimeout,
 	})
 }
 
-func (u *upcloudClient) stopServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error) {
-	server, err := u.svc.StopServer(ctx, &request.StopServerRequest{
-		UUID:    uuid,
-		Timeout: stopServerTimeout,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return server, nil
-}
-
-func (u *upcloudClient) startServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error) {
-	server, err := u.svc.StartServer(ctx, &request.StartServerRequest{
-		UUID: uuid,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return server, nil
-}
-
-func (u *upcloudClient) createStorageBackup(ctx context.Context, uuid, title string) (*upcloud.StorageDetails, error) {
+func (u *upCloudService) createStorageBackup(ctx context.Context, uuid, title string) (*upcloud.StorageDetails, error) {
 	backup, err := u.svc.CreateBackup(ctx, &request.CreateBackupRequest{
 		UUID:  uuid,
 		Title: title,
@@ -270,12 +248,12 @@ func (u *upcloudClient) createStorageBackup(ctx context.Context, uuid, title str
 	return u.svc.WaitForStorageState(ctx, &request.WaitForStorageStateRequest{
 		UUID:         backup.UUID,
 		DesiredState: upcloud.StorageStateOnline,
-		Timeout:      storageStateTimeout * time.Second,
+		Timeout:      storageStateTimeout,
 	})
 }
 
 // listStorageBackups lists strage backups. If `originUUID` is empty all backups are retured.
-func (u *upcloudClient) listStorageBackups(ctx context.Context, originUUID string) ([]upcloud.Storage, error) {
+func (u *upCloudService) listStorageBackups(ctx context.Context, originUUID string) ([]upcloud.Storage, error) {
 	storages, err := u.svc.GetStorages(ctx, &request.GetStoragesRequest{Type: upcloud.StorageTypeBackup})
 	if err != nil {
 		return nil, err
@@ -289,7 +267,7 @@ func (u *upcloudClient) listStorageBackups(ctx context.Context, originUUID strin
 	return backups, nil
 }
 
-func (u *upcloudClient) deleteStorageBackup(ctx context.Context, uuid string) error {
+func (u *upCloudService) deleteStorageBackup(ctx context.Context, uuid string) error {
 	s, err := u.svc.GetStorageDetails(ctx, &request.GetStorageDetailsRequest{UUID: uuid})
 	if err != nil {
 		return err
@@ -300,7 +278,7 @@ func (u *upcloudClient) deleteStorageBackup(ctx context.Context, uuid string) er
 	return u.svc.DeleteStorage(ctx, &request.DeleteStorageRequest{UUID: s.UUID})
 }
 
-func (u *upcloudClient) getStorageBackupByName(ctx context.Context, name string) (*upcloud.Storage, error) {
+func (u *upCloudService) getStorageBackupByName(ctx context.Context, name string) (*upcloud.Storage, error) {
 	storages, err := u.svc.GetStorages(ctx, &request.GetStoragesRequest{Type: upcloud.StorageTypeBackup})
 	if err != nil {
 		return nil, err
@@ -313,7 +291,7 @@ func (u *upcloudClient) getStorageBackupByName(ctx context.Context, name string)
 	return nil, errUpCloudStorageNotFound
 }
 
-func (u *upcloudClient) requireStorageOnline(ctx context.Context, s *upcloud.Storage) error {
+func (u *upCloudService) requireStorageOnline(ctx context.Context, s *upcloud.Storage) error {
 	if s.State != upcloud.StorageStateOnline {
 		if _, err := u.waitForStorageState(ctx, s.UUID, upcloud.StorageStateOnline); err != nil {
 			return err
@@ -322,10 +300,10 @@ func (u *upcloudClient) requireStorageOnline(ctx context.Context, s *upcloud.Sto
 	return nil
 }
 
-func (u *upcloudClient) waitForStorageState(ctx context.Context, uuid, state string) (*upcloud.StorageDetails, error) {
+func (u *upCloudService) waitForStorageState(ctx context.Context, uuid, state string) (*upcloud.StorageDetails, error) {
 	return u.svc.WaitForStorageState(ctx, &request.WaitForStorageStateRequest{
 		UUID:         uuid,
 		DesiredState: state,
-		Timeout:      storageStateTimeout * time.Second,
+		Timeout:      storageStateTimeout,
 	})
 }

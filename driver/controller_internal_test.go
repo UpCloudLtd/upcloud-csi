@@ -1,11 +1,11 @@
-package driver //nolint:testpackage // use conventional naming for now
+package driver
 
 import (
 	"context"
 	"reflect"
 	"testing"
 
-	"github.com/UpCloudLtd/upcloud-go-api/v5/upcloud"
+	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/stretchr/testify/assert"
 )
@@ -194,7 +194,7 @@ func TestControllerService_CreateVolume(t *testing.T) {
 		tt := testCase
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			d := NewMockDriver(&mockUpCloudDriver{
+			d := NewMockDriver(&mockUpCloudService{
 				volumeNameExists: tt.volumeNameExists,
 				volumeUUIDExists: tt.volumeUUIDExists,
 				storageSize:      10,
