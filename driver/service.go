@@ -106,12 +106,13 @@ func (u *upCloudService) cloneStorage(ctx context.Context, r *request.CloneStora
 		if err != nil {
 			return s, err
 		}
+		s, err = u.svc.WaitForStorageState(ctx, &request.WaitForStorageStateRequest{
+			UUID:         s.Storage.UUID,
+			DesiredState: upcloud.StorageStateOnline,
+			Timeout:      storageStateTimeout,
+		})
 	}
-	return u.svc.WaitForStorageState(ctx, &request.WaitForStorageStateRequest{
-		UUID:         s.Storage.UUID,
-		DesiredState: upcloud.StorageStateOnline,
-		Timeout:      storageStateTimeout,
-	})
+	return s, err
 }
 
 func (u *upCloudService) deleteStorage(ctx context.Context, storageUUID string) error {

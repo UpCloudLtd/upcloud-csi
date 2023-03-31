@@ -134,7 +134,7 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 			Title: volumeName,
 		}
 		logWithServiceRequest(log, volumeReq).Info("cloning volume")
-		vol, err = d.svc.cloneStorage(ctx, volumeReq)
+		vol, err = d.svc.cloneStorage(ctx, volumeReq, d.options.StorageLabels...)
 		if err != nil {
 			return nil, status.Error(codes.Internal, err.Error())
 		}
