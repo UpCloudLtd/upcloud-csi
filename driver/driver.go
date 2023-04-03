@@ -23,8 +23,8 @@ import (
 )
 
 const (
-	// DefaultDriverName defines the DriverName that is used in Kubernetes and the CSI
-	// system for the canonical, official DriverName of this plugin.
+	// DefaultDriverName defines the name that is used in Kubernetes and the CSI
+	// system for the canonical, official name of this plugin.
 	DefaultDriverName = "storage.csi.upcloud.com"
 	// DefaultAddress is the default address that the csi plugin will serve its
 	// http handler on.
