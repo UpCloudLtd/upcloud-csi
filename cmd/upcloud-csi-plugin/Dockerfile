@@ -1,5 +1,5 @@
 # Step 1 build
-FROM golang:alpine AS build
+FROM alpine:3.17
 
 RUN apk add ca-certificates \
     e2fsprogs \

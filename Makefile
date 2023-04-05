@@ -3,7 +3,7 @@ PLUGIN_PKG ?= github.com/UpCloudLtd/upcloud-csi/cmd/upcloud-csi-plugin
 MANIFEST_NAME=upcloud-csi-manifest
 MANIFEST_PKG ?= github.com/UpCloudLtd/upcloud-csi/cmd/upcloud-csi-manifest
 OS ?= linux
-GO_VERSION := 1.17.6
+GO_VERSION := 1.19
 ARCH := amd64
 CGO_ENABLED := 1
 
