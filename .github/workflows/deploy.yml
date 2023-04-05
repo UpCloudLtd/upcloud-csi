@@ -40,7 +40,7 @@ jobs:
       - name: Set go environment
         uses: actions/setup-go@v3.0.0
         with:
-          go-version: 1.17.0
+          go-version: 1.19
 
       - name: Build Go binary
         run: GOOS=${{ env.GOOS }} GOARCH=${{ env.GOARCH }} CGO_ENABLED=0 go build -ldflags "-w -s" -o cmd/upcloud-csi-plugin/${{ env.NAME }} ${{ env.PKG }}
