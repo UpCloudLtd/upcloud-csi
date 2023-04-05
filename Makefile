@@ -12,8 +12,8 @@ compile:
 	@echo "==> Building the project"
 	@docker run --rm -e CGO_ENABLED=${CGO_ENABLED} -e GOOS=${OS} -e GOARCH=${ARCH} -v ${PWD}/:/app -w /app golang:${GO_VERSION}-alpine sh -c \
 		'apk add git && \
-		go build -ldflags "-w -s" -o cmd/upcloud-csi-plugin/${PLUGIN_NAME} ${PLUGIN_PKG} && \
-		go build -ldflags "-w -s" -o cmd/upcloud-csi-manifest/${MANIFEST_NAME} ${MANIFEST_PKG}'
+		go build -buildvcs=false -ldflags "-w -s" -o cmd/upcloud-csi-plugin/${PLUGIN_NAME} ${PLUGIN_PKG} && \
+		go build -buildvcs=false -ldflags "-w -s" -o cmd/upcloud-csi-manifest/${MANIFEST_NAME} ${MANIFEST_PKG}'
 
 
 .PHONY: docker-build
