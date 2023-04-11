@@ -124,8 +124,6 @@ spec:
           args:
             - "--endpoint=$(CSI_ENDPOINT)"
             - "--nodehost=$(NODE_ID)"
-            - "--username=$(UPCLOUD_USERNAME)"
-            - "--password=$(UPCLOUD_PASSWORD)"
           env:
             - name: CSI_ENDPOINT
               value: unix:///var/lib/csi/sockets/pluginproxy/csi.sock
@@ -251,8 +249,6 @@ spec:
           args:
             - "--endpoint=$(CSI_ENDPOINT)"
             - "--nodehost=$(NODE_ID)"
-            - "--username=$(UPCLOUD_USERNAME)"
-            - "--password=$(UPCLOUD_PASSWORD)"
           env:
             - name: CSI_ENDPOINT
               value: unix:///csi/csi.sock
