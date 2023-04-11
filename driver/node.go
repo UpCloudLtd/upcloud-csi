@@ -87,7 +87,11 @@ func (d *Driver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRe
 	return &csi.NodeStageVolumeResponse{}, nil
 }
 
-// NodeUnstageVolume unstages the volume from the staging path.
+// NodeUnstageVolume unstages the volume from the staging path and deletes the directory or file.
+//
+// This is a reverse operation of NodeStageVolume.
+// This RPC MUST undo the work by the corresponding NodeStageVolume.
+// This RPC SHALL be called by the CO once for each staging_target_path that was successfully setup via NodeStageVolume.
 func (d *Driver) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume ID must be provided")
@@ -101,14 +105,14 @@ func (d *Driver) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolu
 	log = log.WithField(logMountTargetKey, req.GetStagingTargetPath())
 
 	log.Info("check if target is already mounted")
-	mounted, err := d.fs.IsMounted(ctx, req.StagingTargetPath)
+	mounted, err := d.fs.IsMounted(ctx, req.GetStagingTargetPath())
 	if err != nil {
 		return nil, err
 	}
 
 	if mounted {
 		log.Info("unmounting the staging target path")
-		err := d.fs.Unmount(ctx, req.StagingTargetPath)
+		err := d.fs.Unmount(ctx, req.GetStagingTargetPath())
 		if err != nil {
 			return nil, err
 		}
@@ -116,6 +120,13 @@ func (d *Driver) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolu
 		log.Info("staging target path is already unmounted")
 	}
 
+	// Target path can be directory or file when access type is block
+	if _, err := os.Stat(req.GetStagingTargetPath()); err == nil {
+		log.Info("removing staging target path")
+		if err := os.Remove(req.GetStagingTargetPath()); err != nil {
+			return nil, status.Errorf(codes.Internal, err.Error())
+		}
+	}
 	return &csi.NodeUnstageVolumeResponse{}, nil
 }
 
@@ -187,33 +198,37 @@ func (d *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolu
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 
-// NodeUnpublishVolume unmounts the volume from the target path and deletes the directory.
+// NodeUnpublishVolume unmounts the volume from the target path and deletes the directory or file.
+//
+// This is a reverse operation of NodePublishVolume.
+// This RPC MUST undo the work by the corresponding NodePublishVolume.
+// This RPC SHALL be called by the CO at least once for each target_path that was successfully setup via NodePublishVolume.
 func (d *Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume ID must be provided")
 	}
 	log := logWithServerContext(ctx, d.log).WithField(logVolumeIDKey, req.GetVolumeId())
 
-	if req.TargetPath == "" {
+	if req.GetTargetPath() == "" {
 		return nil, status.Error(codes.InvalidArgument, "target path must be provided")
 	}
 	log = log.WithField(logMountTargetKey, req.GetTargetPath())
 
 	log.Info("check if target is already mounted")
-	mounted, err := d.fs.IsMounted(ctx, req.TargetPath)
+	mounted, err := d.fs.IsMounted(ctx, req.GetTargetPath())
 	if err != nil {
 		return nil, err
 	}
 
 	if mounted {
 		log.Info("unmounting the target path")
-		err := d.fs.Unmount(ctx, req.TargetPath)
+		err := d.fs.Unmount(ctx, req.GetTargetPath())
 		if err != nil {
 			return nil, err
 		}
 	}
-	targetInfo, err := os.Stat(req.GetTargetPath())
-	if err == nil && targetInfo.IsDir() {
+	// Target path can be directory or file when access type is block
+	if _, err := os.Stat(req.GetTargetPath()); err == nil {
 		log.Info("removing target path")
 		if err := os.Remove(req.GetTargetPath()); err != nil {
 			return nil, status.Errorf(codes.Internal, err.Error())
