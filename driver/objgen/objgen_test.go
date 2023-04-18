@@ -1,9 +1,11 @@
-package objgen //nolint:testpackage // use conventional naming for now
+package objgen_test
 
 import (
 	"testing"
 
 	. "github.com/UpCloudLtd/upcloud-csi/deploy/kubernetes"
+	"github.com/UpCloudLtd/upcloud-csi/driver/objgen"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
@@ -11,10 +13,11 @@ import (
 
 func TestGet_Instantination(t *testing.T) {
 	t.Parallel()
-	res, err := Get(map[string]string{
+	res, err := objgen.Get(map[string]string{
 		"UPCLOUD_CSI_USERNAME_B64": "dXNlcg==",
 		"UPCLOUD_CSI_PASSWORD_B64": "cGFzcw==",
 		"UPCLOUD_CSI_VERSION":      "v0.3.1",
+		"CLUSTER_ID":               uuid.New().String(),
 	})
 	require.NoError(t, err)
 	require.Zero(t, len(res.UnstructuredObjects))
@@ -70,7 +73,7 @@ data:
 		"UPCLOUD_CSI_PASSWORD_B64": "dGVzdF9wYXNzd29yZA==",
 	}
 
-	res, err := Get(vars, SecretsTemplate)
+	res, err := objgen.Get(vars, SecretsTemplate)
 	require.NoError(t, err)
 	data, err := res.MarshalYAML()
 	require.NoError(t, err)
@@ -84,6 +87,6 @@ data:
 		"UPCLOUD_CSI_USERNAME_B64": "test_username",
 	}
 	// this should return error "can't parse template #0: variable UPCLOUD_CSI_PASSWORD_B64 is not defined in input variables"
-	_, err = Get(vars, SecretsTemplate)
+	_, err = objgen.Get(vars, SecretsTemplate)
 	require.Error(t, err)
 }
