@@ -183,7 +183,6 @@ func (m *nodeFilesystem) isFormatted(ctx context.Context, source string) (bool, 
 	blkidArgs := []string{source}
 
 	logWithServerContext(ctx, m.log).WithFields(logrus.Fields{logCommandKey: blkidCmd, logCommandArgsKey: blkidArgs}).Debug("executing command")
-	exitCode := 0
 	if err = exec.CommandContext(ctx, blkidCmd, blkidArgs...).Run(); err != nil {
 		var exitError *exec.ExitError
 		if !errors.As(err, &exitError) {
@@ -193,7 +192,7 @@ func (m *nodeFilesystem) isFormatted(ctx context.Context, source string) (bool, 
 		if !ok {
 			return false, fmt.Errorf("checking formatting exit status: %w cmd: %q, args: %q", err, blkidCmd, blkidArgs)
 		}
-		exitCode = ws.ExitStatus()
+		exitCode := ws.ExitStatus()
 		if exitCode == blkidExitStatusNoIdentifiers {
 			return false, nil
 		}
