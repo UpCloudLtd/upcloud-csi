@@ -27,6 +27,7 @@ func main() { //nolint: funlen // TODO: refactor
 		driverVersion           = flagSet.String("driver-version", "main", "Use specific driver version to render setup manifest.")
 		upcloudUsername         = flagSet.String("upcloud-username", "", "Use UpCloud username to render secrets manifest. If empty, 'UPCLOUD_USERNAME' environment variable is used.")
 		upcloudPassword         = flagSet.String("upcloud-password", "", "Use UpCloud password to render secrets manifest. If empty, 'UPCLOUD_PASSWORD' environment variable is used. Note that plaintext password can be decoded from manifest so store it with care.")
+		labelClusterID          = flagSet.String("label-cluster-id", "", "Apply cluster ID label to all storages created by the driver")
 	)
 
 	err := flagSet.Parse(os.Args[1:])
@@ -58,6 +59,7 @@ func main() { //nolint: funlen // TODO: refactor
 	if *setupManifest {
 		templates = append(templates, kubernetes.CSITemplate)
 		vars["UPCLOUD_CSI_VERSION"] = *driverVersion
+		vars["CLUSTER_ID"] = *labelClusterID
 	}
 	if *snapshotWebhookManifest {
 		templates = append(templates, kubernetes.SnapshotTemplate)
