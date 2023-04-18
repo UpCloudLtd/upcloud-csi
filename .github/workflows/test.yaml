@@ -8,8 +8,8 @@ on:
       - driver/**
       - vendor/**
       - go.*
-      - .github/*
-      - test/*
+      - .github/**
+      - test/**
 
 jobs:
   build:
