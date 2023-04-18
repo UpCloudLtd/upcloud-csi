@@ -8,8 +8,8 @@ on:
       - driver/**
       - vendor/**
       - go.*
-      - .github/*
-      - test/*
+      - .github/**
+      - test/**
 
 jobs:
   build:
@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@v4
 
       - name: Test Driver
         run: sudo make test

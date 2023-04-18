@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@v4
       - name: Test Driver Integration
         env:
           UPCLOUD_TEST_USERNAME: ${{ secrets.UPCLOUD_TEST_USERNAME }}
