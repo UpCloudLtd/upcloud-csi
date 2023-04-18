@@ -1,4 +1,4 @@
-package driver //nolint:testpackage // use conventional naming for now
+package driver
 
 import (
 	"context"

@@ -23,7 +23,7 @@ require (
 
 require github.com/kubernetes-csi/csi-test/v5 v5.0.0
 
-require github.com/UpCloudLtd/upcloud-go-api/v5 v5.1.0
+require github.com/UpCloudLtd/upcloud-go-api/v6 v6.0.0
 
 require (
 	github.com/emicklei/go-restful/v3 v3.9.0 // indirect

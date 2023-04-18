@@ -20,10 +20,4 @@ func TestRun(t *testing.T) {
 		log.Printf("%s - %s (%s)\n", driver.GetVersion(), driver.GetCommit(), driver.GetTreeState())
 		os.Exit(0)
 	}
-
-	d := driver.NewMockDriver(nil)
-
-	if err := d.Run(); err != nil {
-		log.Fatalln(err)
-	}
 }

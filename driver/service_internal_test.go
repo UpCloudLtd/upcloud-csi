@@ -1,20 +1,20 @@
-package driver //nolint:testpackage // use conventional naming for now
+package driver
 
 import (
 	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
-	"github.com/UpCloudLtd/upcloud-go-api/v5/upcloud"
-	"github.com/UpCloudLtd/upcloud-go-api/v5/upcloud/client"
-	"github.com/UpCloudLtd/upcloud-go-api/v5/upcloud/service"
+	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud"
+	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud/client"
+	upsvc "github.com/UpCloudLtd/upcloud-go-api/v6/upcloud/service"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestUpcloudClient_listStorage(t *testing.T) { //nolint:paralleltest // uses t.Setenv
+func TestUpCloudService_listStorage(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `
 		{
@@ -54,10 +54,7 @@ func TestUpcloudClient_listStorage(t *testing.T) { //nolint:paralleltest // uses
 		`)
 	}))
 	defer srv.Close()
-	t.Setenv(client.EnvDebugAPIBaseURL, srv.URL)
-	defer os.Setenv(client.EnvDebugAPIBaseURL, "")
-
-	c := upcloudClient{service.New(client.New("", ""))}
+	c := upCloudService{upsvc.New(client.New("", "", client.WithBaseURL(srv.URL)))}
 	storages, err := c.listStorage(context.Background(), "fi-hel2")
 	if err != nil {
 		t.Error(err)
@@ -91,7 +88,8 @@ func TestUpcloudClient_listStorage(t *testing.T) { //nolint:paralleltest // uses
 	}
 }
 
-func TestUpcloudClient_listStorageBackups(t *testing.T) { //nolint:paralleltest // uses t.Setenv
+func TestUpCloudService_listStorageBackups(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `
 		{
@@ -135,7 +133,7 @@ func TestUpcloudClient_listStorageBackups(t *testing.T) { //nolint:paralleltest 
 	}))
 	defer srv.Close()
 
-	c := upcloudClient{service.New(client.New("", "", client.WithBaseURL(srv.URL)))}
+	c := upCloudService{upsvc.New(client.New("", "", client.WithBaseURL(srv.URL)))}
 	storages, err := c.listStorageBackups(context.Background(), "id1")
 	assert.NoError(t, err)
 	want := []*upcloud.Storage{

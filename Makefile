@@ -31,13 +31,9 @@ clean-tests:
 	KUBECONFIG=$(KUBECONFIG) kubectl delete all --all
 	KUBECONFIG=$(KUBECONFIG) kubectl delete persistentvolumeclaims --all
 
-test-driver:
-	go test -v github.com/UpCloudLtd/upcloud-csi/driver
-
-test-objgen:
-	go test -v github.com/UpCloudLtd/upcloud-csi/driver/objgen
-
-test: test-driver test-objgen
+.PHONY: test
+test:
+	go test -race ./...
 
 test-integration:
 	make -C test/integration test

@@ -2,9 +2,10 @@ package driver
 
 import (
 	"context"
+	"net/url"
 
-	"github.com/UpCloudLtd/upcloud-go-api/v5/upcloud"
-	"github.com/UpCloudLtd/upcloud-go-api/v5/upcloud/request"
+	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud"
+	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud/request"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
@@ -13,38 +14,39 @@ type MockDriver struct {
 	Driver
 }
 
-type mockUpCloudDriver struct {
+type mockUpCloudService struct {
 	volumeNameExists bool
 	volumeUUIDExists bool
 	cloneStorageSize int
 	storageSize      int
 }
 
-func NewMockDriver(upcloudDriver upcloudService) *Driver {
-	if upcloudDriver == nil {
-		upcloudDriver = &mockUpCloudDriver{storageSize: 10, cloneStorageSize: 10, volumeUUIDExists: true}
+func NewMockDriver(svc service) *Driver {
+	if svc == nil {
+		svc = &mockUpCloudService{storageSize: 10, cloneStorageSize: 10, volumeUUIDExists: true}
 	}
 
-	endpoint := "unix:///tmp/csi.sock"
+	endpoint, _ := url.Parse("unix:///tmp/csi.sock")
 
 	log := logrus.New().WithField("test_enabled", true)
 
 	return &Driver{
-		options: &driverOptions{
-			zone:     "demoRegion",
-			endpoint: endpoint,
+		svc: svc,
+		options: Options{
+			Zone:     "demoRegion",
+			Endpoint: endpoint,
 		},
-		upclouddriver: upcloudDriver,
-		log:           log,
+		log: log,
 	}
 }
 
-func newMockStorage(size int) *upcloud.Storage {
+func newMockStorage(size int, label ...upcloud.Label) *upcloud.Storage {
 	id, _ := uuid.NewUUID()
 
 	return &upcloud.Storage{
-		Size: size,
-		UUID: id.String(),
+		Size:   size,
+		UUID:   id.String(),
+		Labels: label,
 	}
 }
 
@@ -55,7 +57,7 @@ func newMockBackupStorage(s *upcloud.Storage) *upcloud.Storage {
 	return b
 }
 
-func (m *mockUpCloudDriver) getStorageByUUID(ctx context.Context, storageUUID string) (*upcloud.StorageDetails, error) {
+func (m *mockUpCloudService) getStorageByUUID(ctx context.Context, storageUUID string) (*upcloud.StorageDetails, error) {
 	if !m.volumeUUIDExists {
 		return nil, errUpCloudStorageNotFound
 	}
@@ -66,7 +68,7 @@ func (m *mockUpCloudDriver) getStorageByUUID(ctx context.Context, storageUUID st
 	return s, nil
 }
 
-func (m *mockUpCloudDriver) getStorageByName(ctx context.Context, storageName string) ([]*upcloud.StorageDetails, error) {
+func (m *mockUpCloudService) getStorageByName(ctx context.Context, storageName string) ([]*upcloud.StorageDetails, error) {
 	if !m.volumeNameExists {
 		return nil, nil
 	}
@@ -79,7 +81,7 @@ func (m *mockUpCloudDriver) getStorageByName(ctx context.Context, storageName st
 	return s, nil
 }
 
-func (m *mockUpCloudDriver) createStorage(ctx context.Context, csr *request.CreateStorageRequest) (*upcloud.StorageDetails, error) {
+func (m *mockUpCloudService) createStorage(ctx context.Context, csr *request.CreateStorageRequest) (*upcloud.StorageDetails, error) {
 	id, _ := uuid.NewUUID()
 	s := &upcloud.StorageDetails{
 		Storage:     *newMockStorage(m.storageSize),
@@ -89,63 +91,51 @@ func (m *mockUpCloudDriver) createStorage(ctx context.Context, csr *request.Crea
 	return s, nil
 }
 
-func (m *mockUpCloudDriver) cloneStorage(ctx context.Context, csr *request.CloneStorageRequest) (*upcloud.StorageDetails, error) {
+func (m *mockUpCloudService) cloneStorage(ctx context.Context, csr *request.CloneStorageRequest, label ...upcloud.Label) (*upcloud.StorageDetails, error) {
 	id, _ := uuid.NewUUID()
 	s := &upcloud.StorageDetails{
-		Storage:     *newMockStorage(m.cloneStorageSize),
+		Storage:     *newMockStorage(m.cloneStorageSize, label...),
 		ServerUUIDs: upcloud.ServerUUIDSlice{id.String()}, // TODO change UUID prefix
 	}
 
 	return s, nil
 }
 
-func (m *mockUpCloudDriver) deleteStorage(ctx context.Context, storageUUID string) error {
+func (m *mockUpCloudService) deleteStorage(ctx context.Context, storageUUID string) error {
 	return nil
 }
 
-func (m *mockUpCloudDriver) attachStorage(ctx context.Context, storageUUID, serverUUID string) error {
+func (m *mockUpCloudService) attachStorage(ctx context.Context, storageUUID, serverUUID string) error {
 	return nil
 }
 
-func (m *mockUpCloudDriver) detachStorage(ctx context.Context, storageUUID, serverUUID string) error {
+func (m *mockUpCloudService) detachStorage(ctx context.Context, storageUUID, serverUUID string) error {
 	return nil
 }
 
-func (m *mockUpCloudDriver) listStorage(ctx context.Context, zone string) ([]upcloud.Storage, error) {
+func (m *mockUpCloudService) listStorage(ctx context.Context, zone string) ([]upcloud.Storage, error) {
 	return []upcloud.Storage{
 		*newMockStorage(m.storageSize),
 		*newMockStorage(m.storageSize),
 	}, nil
 }
 
-func (m *mockUpCloudDriver) getServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error) {
-	return &upcloud.ServerDetails{}, nil
-}
-
-func (m *mockUpCloudDriver) getServerByHostname(ctx context.Context, hostname string) (*upcloud.Server, error) {
+func (m *mockUpCloudService) getServerByHostname(ctx context.Context, hostname string) (*upcloud.Server, error) {
 	id, _ := uuid.NewUUID()
 	return &upcloud.Server{UUID: id.String()}, nil
 }
 
-func (m *mockUpCloudDriver) resizeStorage(ctx context.Context, _ string, newSize int, deleteBackup bool) (*upcloud.StorageDetails, error) {
+func (m *mockUpCloudService) resizeStorage(ctx context.Context, _ string, newSize int, deleteBackup bool) (*upcloud.StorageDetails, error) {
 	id, _ := uuid.NewUUID()
 	return &upcloud.StorageDetails{Storage: upcloud.Storage{UUID: id.String(), Size: newSize}}, nil
 }
 
-func (m *mockUpCloudDriver) resizeBlockDevice(ctx context.Context, _ string, newSize int) (*upcloud.StorageDetails, error) {
+func (m *mockUpCloudService) resizeBlockDevice(ctx context.Context, _ string, newSize int) (*upcloud.StorageDetails, error) {
 	id, _ := uuid.NewUUID()
 	return &upcloud.StorageDetails{Storage: upcloud.Storage{UUID: id.String(), Size: newSize}}, nil
 }
 
-func (m *mockUpCloudDriver) startServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error) {
-	return &upcloud.ServerDetails{}, nil
-}
-
-func (m *mockUpCloudDriver) stopServer(ctx context.Context, uuid string) (*upcloud.ServerDetails, error) {
-	return &upcloud.ServerDetails{}, nil
-}
-
-func (m *mockUpCloudDriver) createStorageBackup(ctx context.Context, uuid, title string) (*upcloud.StorageDetails, error) {
+func (m *mockUpCloudService) createStorageBackup(ctx context.Context, uuid, title string) (*upcloud.StorageDetails, error) {
 	s := newMockStorage(m.storageSize)
 	s.UUID = uuid
 	s = newMockBackupStorage(s)
@@ -153,7 +143,7 @@ func (m *mockUpCloudDriver) createStorageBackup(ctx context.Context, uuid, title
 	return &upcloud.StorageDetails{Storage: *s}, nil
 }
 
-func (m *mockUpCloudDriver) listStorageBackups(ctx context.Context, uuid string) ([]upcloud.Storage, error) {
+func (m *mockUpCloudService) listStorageBackups(ctx context.Context, uuid string) ([]upcloud.Storage, error) {
 	s := newMockStorage(m.storageSize)
 	return []upcloud.Storage{
 		*newMockBackupStorage(s),
@@ -161,16 +151,16 @@ func (m *mockUpCloudDriver) listStorageBackups(ctx context.Context, uuid string)
 	}, nil
 }
 
-func (m *mockUpCloudDriver) deleteStorageBackup(ctx context.Context, uuid string) error {
+func (m *mockUpCloudService) deleteStorageBackup(ctx context.Context, uuid string) error {
 	return nil
 }
 
-func (m *mockUpCloudDriver) getStorageBackupByName(ctx context.Context, name string) (*upcloud.Storage, error) {
+func (m *mockUpCloudService) getStorageBackupByName(ctx context.Context, name string) (*upcloud.Storage, error) {
 	s := newMockBackupStorage(newMockStorage(m.storageSize))
 	s.Title = name
 	return s, nil
 }
 
-func (m *mockUpCloudDriver) requireStorageOnline(ctx context.Context, s *upcloud.Storage) error {
+func (m *mockUpCloudService) requireStorageOnline(ctx context.Context, s *upcloud.Storage) error {
 	return nil
 }

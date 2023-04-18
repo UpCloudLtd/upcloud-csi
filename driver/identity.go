@@ -10,7 +10,7 @@ import (
 // GetPluginInfo returns metadata of the plugin.
 func (d *Driver) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
 	return &csi.GetPluginInfoResponse{
-		Name: d.options.driverName,
+		Name: d.options.DriverName,
 	}, nil
 }
 
