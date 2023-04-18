@@ -37,7 +37,7 @@ func main() {
 		address      = flagSet.String("address", driver.DefaultAddress, "Address to serve on")
 		version      = flagSet.Bool("version", false, "Print the version and exit.")
 		isController = flagSet.Bool("is_controller", true, "Run driver with controller included")
-		logLevel     = flagSet.String("log-level", "info", "Loggin level: panic, fatal, error, warn, warning, info, debug or trace")
+		logLevel     = flagSet.String("log-level", "info", "Logging level: panic, fatal, error, warn, warning, info, debug or trace")
 		labels       = flagSet.StringSlice("label", nil, "Apply default labels to all storage devices created by CSI driver, e.g. --label=color=green --label=size=xl")
 	)
 	if err := flagSet.Parse(os.Args[1:]); err != nil {

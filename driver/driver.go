@@ -113,12 +113,12 @@ func NewDriver(svc *upsvc.Service, options Options, logger *logrus.Logger, fs Fi
 		}
 	}
 	if fs == nil {
-		fs = newNodeFilesystem(logEntyFromOptions(logger, options))
+		fs = newNodeFilesystem(logEntryFromOptions(logger, options))
 	}
 	return &Driver{
 		options: options,
 		fs:      fs,
-		log:     logEntyFromOptions(logger, options),
+		log:     logEntryFromOptions(logger, options),
 		svc:     &upCloudService{svc: svc},
 	}, nil
 }
@@ -283,7 +283,7 @@ func getNodeHost(ctx context.Context, svc *upsvc.Service, nodeHost string) (*upc
 	return nil, fmt.Errorf("CSI user account doesn't have node with hostname '%s' defined", nodeHost)
 }
 
-func logEntyFromOptions(logger *logrus.Logger, options Options) *logrus.Entry {
+func logEntryFromOptions(logger *logrus.Logger, options Options) *logrus.Entry {
 	hostname, err := os.Hostname()
 	if err != nil {
 		hostname = "localhost"
