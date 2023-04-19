@@ -39,6 +39,35 @@ Run tests using `make`
 ```shell
 $ make test
 ```
+### Docker image sanity test
+#### Requirements
+- [Sanity Test](https://github.com/kubernetes-csi/csi-test/tree/master/cmd/csi-sanity) binary
+- Docker
+- UpCloud Linux server and root privileges
+
+#### Running test
+Login to server and create temporary directory for CSI socket
+```shell
+$ mkdir tmp
+```
+Start plugin container
+```shell
+$ docker run --privileged -it --rm \
+    --mount type=bind,source=/mnt,target=/mnt,bind-propagation=shared \
+    -v `pwd`/tmp:/tmp \
+    -v /dev:/dev \
+     ghcr.io/upcloudltd/upcloud-csi:latest \
+    --username=$UPCLOUD_USERNAME \
+    --password=$UPCLOUD_PASSWORD \
+    --nodehost=$HOSTNAME \
+    --endpoint=unix:///tmp/csi.sock \
+    --log-level=debug
+```
+Open second terminal to server and run test suite
+```shell
+$ csi-sanity --csi.endpoint=`pwd`/tmp/csi.sock --csi.stagingdir=/mnt/csi-staging --csi.mountdir=/mnt/csi-mount --ginkgo.v --ginkgo.fail-fast
+```
+Use `-csi.testvolumeaccesstype=block` csi-sanity test option to test block devices instead of volumes.
 
 ## Logging
 Driver uses structured logging which level can be set using `--log-level` flag. Only errors are logged by default. OS level commands are logged using `DEBUG` level which also logs gRPC request and response objects. Debug level is only suitable for debugging purposes.  
