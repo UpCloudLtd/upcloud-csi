@@ -65,7 +65,7 @@ $ docker run --privileged -it --rm \
 ```
 Open second terminal to server and run test suite
 ```shell
-$ csi-sanity --csi.endpoint=`pwd`/tmp/csi.sock --csi.stagingdir=/mnt/csi-staging --csi.mountdir=/mnt/csi-mount --ginkgo.v --ginkgo.fail-fast
+$ csi-sanity --csi.endpoint=`pwd`/tmp/csi.sock --csi.stagingdir=/mnt/csi-staging --csi.mountdir=/mnt/csi-mount --ginkgo.v --ginkgo.fail-fast -csi.testnodevolumeattachlimit=true
 ```
 Use `-csi.testvolumeaccesstype=block` csi-sanity test option to test block devices instead of volumes.
 

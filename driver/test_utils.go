@@ -120,9 +120,13 @@ func (m *mockUpCloudService) listStorage(ctx context.Context, zone string) ([]up
 	}, nil
 }
 
-func (m *mockUpCloudService) getServerByHostname(ctx context.Context, hostname string) (*upcloud.Server, error) {
+func (m *mockUpCloudService) getServerByHostname(ctx context.Context, hostname string) (*upcloud.ServerDetails, error) {
 	id, _ := uuid.NewUUID()
-	return &upcloud.Server{UUID: id.String()}, nil
+	return &upcloud.ServerDetails{
+		Server: upcloud.Server{
+			UUID: id.String(),
+		},
+	}, nil
 }
 
 func (m *mockUpCloudService) resizeStorage(ctx context.Context, _ string, newSize int, deleteBackup bool) (*upcloud.StorageDetails, error) {

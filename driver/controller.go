@@ -256,9 +256,20 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 			req.VolumeId, attachedID)
 	}
 
+	log.Info("check that volumes already attached to the node is less than the maximum supported")
+	// Slice server.StorageDevices contains at least one additional root disk device
+	// so if len(server.StorageDevices) is equal to maxVolumesPerNode there is still room for one device.
+	// At the moment there is no reliable way to tell which devices are managed by CSI and which are e.g. additional devices created by user.
+	if len(server.StorageDevices) > maxVolumesPerNode {
+		return nil, status.Error(codes.ResourceExhausted, "volumes already attached to the node is more than the maximum supported")
+	}
 	log.Info("attaching storage to node")
 	err = d.svc.attachStorage(ctx, req.VolumeId, server.UUID)
 	if err != nil {
+		var svcError *upcloud.Problem
+		if errors.As(err, &svcError) && svcError.Status != http.StatusConflict && svcError.ErrorCode() == upcloud.ErrCodeStorageDeviceLimitReached {
+			return nil, status.Error(codes.ResourceExhausted, "The limit of the number of attached devices has been reached")
+		}
 		// already attached to the node
 		return nil, err
 	}
