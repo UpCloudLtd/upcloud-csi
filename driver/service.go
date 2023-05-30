@@ -16,8 +16,9 @@ const (
 )
 
 var (
-	errUpCloudStorageNotFound = errors.New("upcloud: storage not found")
-	errUpCloudServerNotFound  = errors.New("upcloud: server not found")
+	errUpCloudStorageNotFound       = errors.New("upcloud: storage not found")
+	errUpCloudServerNotFound        = errors.New("upcloud: server not found")
+	errUpCloudServerStorageNotFound = errors.New("upcloud: server storage not found")
 )
 
 type service interface { //nolint:interfacebloat // Split this to smaller piece when it makes sense code wise
@@ -163,8 +164,7 @@ func (u *upCloudService) detachStorage(ctx context.Context, storageUUID, serverU
 			return nil
 		}
 	}
-	// TODO: review error - Might this happen if ControllerUnpublishVolume is called twice on same storage UUID?
-	return fmt.Errorf("this shouldnt happen. serverUUID %s storageUUID %s context: %+v", serverUUID, storageUUID, sd)
+	return errUpCloudServerStorageNotFound
 }
 
 func (u *upCloudService) listStorage(ctx context.Context, zone string) ([]upcloud.Storage, error) {
