@@ -21,7 +21,7 @@ var (
 )
 
 type service interface { //nolint:interfacebloat // Split this to smaller piece when it makes sense code wise
-	getServerByHostname(context.Context, string) (*upcloud.Server, error)
+	getServerByHostname(context.Context, string) (*upcloud.ServerDetails, error)
 	getStorageByUUID(context.Context, string) (*upcloud.StorageDetails, error)
 	getStorageByName(context.Context, string) ([]*upcloud.StorageDetails, error)
 	listStorage(context.Context, string) ([]upcloud.Storage, error)
@@ -181,7 +181,7 @@ func (u *upCloudService) listStorage(ctx context.Context, zone string) ([]upclou
 	return zoneStorage, nil
 }
 
-func (u *upCloudService) getServerByHostname(ctx context.Context, hostname string) (*upcloud.Server, error) {
+func (u *upCloudService) getServerByHostname(ctx context.Context, hostname string) (*upcloud.ServerDetails, error) {
 	servers, err := u.svc.GetServers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch servers: %w", err)
@@ -189,7 +189,9 @@ func (u *upCloudService) getServerByHostname(ctx context.Context, hostname strin
 
 	for _, server := range servers.Servers {
 		if server.Hostname == hostname {
-			return &server, nil
+			return u.svc.GetServerDetails(ctx, &request.GetServerDetailsRequest{
+				UUID: server.UUID,
+			})
 		}
 	}
 
