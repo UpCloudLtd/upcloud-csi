@@ -281,13 +281,24 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 	}, nil
 }
 
-// ControllerUnpublishVolume detaches storage from a node via UpCloud Storage service.
+// ControllerUnpublishVolume is a reverse operation of ControllerPublishVolume.
+//
+// The Plugin SHOULD perform the work that is necessary for making the volume ready to be consumed by a different node.
+// The Plugin MUST NOT assume that this RPC will be executed on the node where the volume was previously used.
+//
+// This RPC is typically called by the CO when the workload using the volume is being moved to a different node,
+// or all the workload using the volume on a node has finished.
+//
+// If the volume corresponding to the volume_id or the node corresponding to node_id cannot be found by the Plugin
+// and the volume can be safely regarded as ControllerUnpublished from the node, the plugin SHOULD return 0 OK.
 func (d *Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest) (*csi.ControllerUnpublishVolumeResponse, error) {
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume ID must be provided")
 	}
-	log := logWithServerContext(ctx, d.log).WithField(logVolumeIDKey, req.GetVolumeId())
-
+	log := logWithServerContext(ctx, d.log).WithFields(logrus.Fields{
+		logVolumeIDKey: req.GetVolumeId(),
+		logNodeIDKey:   req.GetNodeId(),
+	})
 	log.Info("getting storage by uuid")
 	// check if volume exist before trying to detach it
 	_, err := d.svc.getStorageByUUID(ctx, req.GetVolumeId())
@@ -298,7 +309,7 @@ func (d *Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.Control
 		return nil, err
 	}
 
-	// TODO:  If node ID is not set, the SP MUST unpublish the volume from all nodes it is published to.
+	// TODO:  If node ID is not set, the SP MUST unpublish the volume from all nodes it is published to (ref. ControllerUnpublishVolumeRequest.NodeId).
 	log.Info("getting server by hostname")
 	server, err := d.svc.getServerByHostname(ctx, req.GetNodeId())
 	if err != nil {
@@ -308,6 +319,10 @@ func (d *Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.Control
 	log.Info("detaching volume")
 	err = d.svc.detachStorage(ctx, req.VolumeId, server.UUID)
 	if err != nil {
+		if errors.Is(err, errUpCloudServerStorageNotFound) {
+			log.Info("volume was already detached from the node")
+			return &csi.ControllerUnpublishVolumeResponse{}, nil
+		}
 		return nil, err
 	}
 
