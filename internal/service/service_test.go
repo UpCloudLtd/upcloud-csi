@@ -1,4 +1,4 @@
-package driver
+package service_test
 
 import (
 	"context"
@@ -7,13 +7,14 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/UpCloudLtd/upcloud-csi/internal/service"
 	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud"
 	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud/client"
 	upsvc "github.com/UpCloudLtd/upcloud-go-api/v6/upcloud/service"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestUpCloudService_listStorage(t *testing.T) {
+func TestUpCloudService_ListStorage(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `
@@ -54,8 +55,8 @@ func TestUpCloudService_listStorage(t *testing.T) {
 		`)
 	}))
 	defer srv.Close()
-	c := upCloudService{upsvc.New(client.New("", "", client.WithBaseURL(srv.URL)))}
-	storages, err := c.listStorage(context.Background(), "fi-hel2")
+	c := service.NewUpCloudService(upsvc.New(client.New("", "", client.WithBaseURL(srv.URL))))
+	storages, err := c.ListStorage(context.Background(), "fi-hel2")
 	if err != nil {
 		t.Error(err)
 	}
@@ -88,7 +89,7 @@ func TestUpCloudService_listStorage(t *testing.T) {
 	}
 }
 
-func TestUpCloudService_listStorageBackups(t *testing.T) {
+func TestUpCloudService_ListStorageBackups(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `
@@ -133,8 +134,8 @@ func TestUpCloudService_listStorageBackups(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := upCloudService{upsvc.New(client.New("", "", client.WithBaseURL(srv.URL)))}
-	storages, err := c.listStorageBackups(context.Background(), "id1")
+	c := service.NewUpCloudService(upsvc.New(client.New("", "", client.WithBaseURL(srv.URL))))
+	storages, err := c.ListStorageBackups(context.Background(), "id1")
 	assert.NoError(t, err)
 	want := []*upcloud.Storage{
 		{
@@ -163,7 +164,7 @@ func TestUpCloudService_listStorageBackups(t *testing.T) {
 		}
 	}
 
-	storages, err = c.listStorageBackups(context.Background(), "")
+	storages, err = c.ListStorageBackups(context.Background(), "")
 	assert.NoError(t, err)
 	assert.Len(t, storages, 3)
 }

@@ -1,4 +1,4 @@
-package driver
+package filesystem
 
 import (
 	"context"
@@ -11,41 +11,35 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/UpCloudLtd/upcloud-csi/internal/logger"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
 
-type VolumeStatistics struct {
-	AvailableBytes,
-	TotalBytes,
-	UsedBytes,
-	AvailableInodes,
-	TotalInodes,
-	UsedInodes int64
-}
+const (
+	udevDiskByIDPath  = "/dev/disk/by-id"
+	diskPrefix        = "virtio-"
+	maxVolumesPerNode = 14
+	fileSystemExt4    = "ext4"
 
-type Filesystem interface {
-	Format(ctx context.Context, source, fsType string, mkfsArgs []string) error
-	IsMounted(ctx context.Context, target string) (bool, error)
-	Mount(ctx context.Context, source, target, fsType string, opts ...string) error
-	Unmount(ctx context.Context, path string) error
-	Statistics(volumePath string) (VolumeStatistics, error)
-	GetDeviceByID(ctx context.Context, ID string) (string, error)
-	GetDeviceLastPartition(ctx context.Context, source string) (string, error)
-}
+	// udevDiskTimeout specifies a time limit for waiting disk appear under /dev/disk/by-id.
+	udevDiskTimeout = 60
+	// udevSettleTimeout specifies a time limit for waiting udev event queue to become empty.
+	udevSettleTimeout = 20
+)
 
-type nodeFilesystem struct {
+type LinuxFilesystem struct {
 	log *logrus.Entry
 }
 
-func newNodeFilesystem(log *logrus.Entry) *nodeFilesystem {
-	return &nodeFilesystem{
+func NewLinuxFilesystem(log *logrus.Entry) *LinuxFilesystem {
+	return &LinuxFilesystem{
 		log: log,
 	}
 }
 
 // Format formats the source with the given filesystem type.
-func (m *nodeFilesystem) Format(ctx context.Context, source, fsType string, mkfsArgs []string) error {
+func (m *LinuxFilesystem) Format(ctx context.Context, source, fsType string, mkfsArgs []string) error {
 	if fsType == "" {
 		return errors.New("fs type is not specified for formatting the volume")
 	}
@@ -74,7 +68,7 @@ func (m *nodeFilesystem) Format(ctx context.Context, source, fsType string, mkfs
 	return m.createFilesystem(ctx, lastPartition, fsType, mkfsArgs)
 }
 
-func (m *nodeFilesystem) createFilesystem(ctx context.Context, partition, fsType string, mkfsArgs []string) error {
+func (m *LinuxFilesystem) createFilesystem(ctx context.Context, partition, fsType string, mkfsArgs []string) error {
 	if fsType == fileSystemExt4 || fsType == "ext3" {
 		mkfsArgs = append(mkfsArgs, "-F", partition)
 	}
@@ -89,13 +83,13 @@ func (m *nodeFilesystem) createFilesystem(ctx context.Context, partition, fsType
 		return err
 	}
 
-	logWithServerContext(ctx, m.log).WithFields(logrus.Fields{logCommandKey: mkfsCmd, logCommandArgsKey: mkfsArgs}).Debug("executing command")
+	logger.WithServerContext(ctx, m.log).WithFields(logrus.Fields{logger.CommandKey: mkfsCmd, logger.CommandArgsKey: mkfsArgs}).Debug("executing command")
 
 	return exec.CommandContext(ctx, mkfsCmd, mkfsArgs...).Run()
 }
 
 // Mount mounts source to target with the given fstype and options.
-func (m *nodeFilesystem) Mount(ctx context.Context, source, target, fsType string, opts ...string) error {
+func (m *LinuxFilesystem) Mount(ctx context.Context, source, target, fsType string, opts ...string) error {
 	mountCmd := "mount"
 	mountArgs := make([]string, 0)
 
@@ -135,14 +129,14 @@ func (m *nodeFilesystem) Mount(ctx context.Context, source, target, fsType strin
 
 	mountArgs = append(mountArgs, source, target)
 
-	logWithServerContext(ctx, m.log).WithFields(logrus.Fields{logCommandKey: mountCmd, logCommandArgsKey: mountArgs}).Debug("executing command")
+	logger.WithServerContext(ctx, m.log).WithFields(logrus.Fields{logger.CommandKey: mountCmd, logger.CommandArgsKey: mountArgs}).Debug("executing command")
 
 	return exec.CommandContext(ctx, mountCmd, mountArgs...).Run()
 }
 
 // Unmount unmounts the given target.
-func (m *nodeFilesystem) Unmount(ctx context.Context, target string) error {
-	log := logWithServerContext(ctx, m.log)
+func (m *LinuxFilesystem) Unmount(ctx context.Context, target string) error {
+	log := logger.WithServerContext(ctx, m.log)
 	if target == "" {
 		return errors.New("target is not specified for unmounting the volume")
 	}
@@ -155,14 +149,14 @@ func (m *nodeFilesystem) Unmount(ctx context.Context, target string) error {
 	umountCmd := "umount"
 	umountArgs := []string{target}
 
-	logWithServerContext(ctx, m.log).WithFields(logrus.Fields{logCommandKey: umountCmd, logCommandArgsKey: umountArgs}).Debug("executing command")
+	logger.WithServerContext(ctx, m.log).WithFields(logrus.Fields{logger.CommandKey: umountCmd, logger.CommandArgsKey: umountArgs}).Debug("executing command")
 
 	return exec.CommandContext(ctx, umountCmd, umountArgs...).Run()
 }
 
 // IsFormatted checks whether the source device is formatted or not. It
 // returns true if the source device is already formatted.
-func (m *nodeFilesystem) isFormatted(ctx context.Context, source string) (bool, error) {
+func (m *LinuxFilesystem) isFormatted(ctx context.Context, source string) (bool, error) {
 	// blkidExitStatusNoIdentifiers defines the exit code returned from blkid indicating that no devices have been found.
 	// See http://www.polarhome.com/service/man/?qf=blkid&tf=2&of=Alpinelinux for details.
 	const blkidExitStatusNoIdentifiers = 2
@@ -182,7 +176,7 @@ func (m *nodeFilesystem) isFormatted(ctx context.Context, source string) (bool, 
 
 	blkidArgs := []string{source}
 
-	logWithServerContext(ctx, m.log).WithFields(logrus.Fields{logCommandKey: blkidCmd, logCommandArgsKey: blkidArgs}).Debug("executing command")
+	logger.WithServerContext(ctx, m.log).WithFields(logrus.Fields{logger.CommandKey: blkidCmd, logger.CommandArgsKey: blkidArgs}).Debug("executing command")
 	if err = exec.CommandContext(ctx, blkidCmd, blkidArgs...).Run(); err != nil {
 		var exitError *exec.ExitError
 		if !errors.As(err, &exitError) {
@@ -205,7 +199,7 @@ func (m *nodeFilesystem) isFormatted(ctx context.Context, source string) (bool, 
 // IsMounted checks whether the target path is a correct mount (i.e:
 // propagated). It returns true if it's mounted. An error is returned in
 // case of system errors or if it's mounted incorrectly.
-func (m *nodeFilesystem) IsMounted(ctx context.Context, target string) (bool, error) {
+func (m *LinuxFilesystem) IsMounted(ctx context.Context, target string) (bool, error) {
 	if target == "" {
 		return false, errors.New("target is not specified for checking the mount")
 	}
@@ -213,7 +207,7 @@ func (m *nodeFilesystem) IsMounted(ctx context.Context, target string) (bool, er
 	findmntCmd := "findmnt"
 	findmntArgs := []string{"-o", "TARGET,PROPAGATION,FSTYPE,OPTIONS", "-M", target, "-J"}
 
-	logWithServerContext(ctx, m.log).WithFields(logrus.Fields{logCommandKey: findmntCmd, logCommandArgsKey: findmntArgs}).Debug("executing command")
+	logger.WithServerContext(ctx, m.log).WithFields(logrus.Fields{logger.CommandKey: findmntCmd, logger.CommandArgsKey: findmntArgs}).Debug("executing command")
 
 	out, err := exec.CommandContext(ctx, findmntCmd, findmntArgs...).CombinedOutput()
 	if err != nil {
@@ -263,10 +257,10 @@ func (m *nodeFilesystem) IsMounted(ctx context.Context, target string) (bool, er
 	return targetFound, nil
 }
 
-func (m *nodeFilesystem) createPartition(ctx context.Context, device string) error {
+func (m *LinuxFilesystem) createPartition(ctx context.Context, device string) error {
 	cmd := "parted"
 	args := []string{device, "mklabel", "gpt"}
-	log := logWithServerContext(ctx, m.log).WithFields(logrus.Fields{logCommandKey: cmd, logCommandArgsKey: args})
+	log := logger.WithServerContext(ctx, m.log).WithFields(logrus.Fields{logger.CommandKey: cmd, logger.CommandArgsKey: args})
 	log.Debug("executing command")
 	partedMklabel := exec.CommandContext(ctx, cmd, args...)
 	if err := partedMklabel.Run(); err != nil {
@@ -274,12 +268,12 @@ func (m *nodeFilesystem) createPartition(ctx context.Context, device string) err
 	}
 
 	args = []string{"-a", "opt", device, "mkpart", "primary", "2048s", "100%"}
-	logWithServerContext(ctx, m.log).WithFields(logrus.Fields{logCommandKey: cmd, logCommandArgsKey: args}).Debug("executing command")
+	logger.WithServerContext(ctx, m.log).WithFields(logrus.Fields{logger.CommandKey: cmd, logger.CommandArgsKey: args}).Debug("executing command")
 	return exec.CommandContext(ctx, cmd, args...).Run()
 }
 
 // filesystemStatistics returns capacity-related volume statistics for the given volume path.
-func (m *nodeFilesystem) Statistics(volumePath string) (VolumeStatistics, error) {
+func (m *LinuxFilesystem) Statistics(volumePath string) (VolumeStatistics, error) {
 	var statfs unix.Statfs_t
 	// See http://man7.org/linux/man-pages/man2/statfs.2.html for details.
 	err := unix.Statfs(volumePath, &statfs)
@@ -300,7 +294,7 @@ func (m *nodeFilesystem) Statistics(volumePath string) (VolumeStatistics, error)
 }
 
 // getBlockDeviceByVolumeID returns the absolute path of the attached block device for the given volumeID.
-func (m *nodeFilesystem) GetDeviceByID(ctx context.Context, id string) (string, error) {
+func (m *LinuxFilesystem) GetDeviceByID(ctx context.Context, id string) (string, error) {
 	diskID, err := volumeIDToDiskID(id)
 	if err != nil {
 		return diskID, err
@@ -308,7 +302,7 @@ func (m *nodeFilesystem) GetDeviceByID(ctx context.Context, id string) (string, 
 	return getBlockDeviceByDiskID(ctx, diskID)
 }
 
-func (m *nodeFilesystem) GetDeviceLastPartition(ctx context.Context, source string) (string, error) {
+func (m *LinuxFilesystem) GetDeviceLastPartition(ctx context.Context, source string) (string, error) {
 	sfdisk, err := exec.CommandContext(ctx, "sfdisk", "-q", "--list", "-o", "device", source).CombinedOutput()
 	if err != nil {
 		return "", err

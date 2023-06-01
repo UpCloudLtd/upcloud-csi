@@ -1,21 +1,32 @@
-package driver
+package identity
 
 import (
 	"context"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/protobuf/ptypes/wrappers"
+	"github.com/sirupsen/logrus"
 )
 
+type Identity struct {
+	driverName string
+	ready      bool
+	log        *logrus.Entry
+}
+
+func NewIdentity(driverName string, l *logrus.Entry) *Identity {
+	return &Identity{driverName: driverName, ready: true, log: l}
+}
+
 // GetPluginInfo returns metadata of the plugin.
-func (d *Driver) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
+func (i *Identity) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
 	return &csi.GetPluginInfoResponse{
-		Name: d.options.DriverName,
+		Name: i.driverName,
 	}, nil
 }
 
 // GetPluginCapabilities returns available capabilities of the plugin.
-func (d *Driver) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCapabilitiesRequest) (*csi.GetPluginCapabilitiesResponse, error) {
+func (i *Identity) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCapabilitiesRequest) (*csi.GetPluginCapabilitiesResponse, error) {
 	return &csi.GetPluginCapabilitiesResponse{
 		Capabilities: []*csi.PluginCapability{
 			{
@@ -44,14 +55,13 @@ func (d *Driver) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCa
 }
 
 // Probe returns the health and readiness of the plugin.
-func (d *Driver) Probe(ctx context.Context, req *csi.ProbeRequest) (*csi.ProbeResponse, error) {
-	d.log.WithField("method", "probe").Info("check whether the plugin is ready")
-	d.readyMu.Lock()
-	defer d.readyMu.Unlock()
+func (i *Identity) Probe(ctx context.Context, req *csi.ProbeRequest) (*csi.ProbeResponse, error) {
+	i.log.WithField("method", "probe").Info("check whether the plugin is ready")
 
 	return &csi.ProbeResponse{
 		Ready: &wrappers.BoolValue{
-			Value: d.ready,
+			// TODO: should we check e.g. that network is available or that all the cli tools are available ?
+			Value: i.ready,
 		},
 	}, nil
 }
