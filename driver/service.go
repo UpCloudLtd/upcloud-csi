@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	storageStateTimeout time.Duration = time.Hour
+	storageStateTimeout time.Duration = time.Millisecond
 )
 
 var (
@@ -38,6 +38,7 @@ type service interface { //nolint:interfacebloat // Split this to smaller piece 
 	resizeBlockDevice(ctx context.Context, uuid string, newSize int) (*upcloud.StorageDetails, error)
 	createStorageBackup(ctx context.Context, uuid, title string) (*upcloud.StorageDetails, error)
 	deleteStorageBackup(ctx context.Context, uuid string) error
+	checkIfBackingUp(ctx context.Context, storageUUID string) (bool, error)
 }
 
 type upCloudService struct {
@@ -245,9 +246,11 @@ func (u *upCloudService) createStorageBackup(ctx context.Context, uuid, title st
 		UUID:  uuid,
 		Title: title,
 	})
+
 	if err != nil {
 		return nil, err
 	}
+
 	return u.svc.WaitForStorageState(ctx, &request.WaitForStorageStateRequest{
 		UUID:         backup.UUID,
 		DesiredState: upcloud.StorageStateOnline,
@@ -309,4 +312,17 @@ func (u *upCloudService) waitForStorageState(ctx context.Context, uuid, state st
 		DesiredState: state,
 		Timeout:      storageStateTimeout,
 	})
+}
+
+func (u *upCloudService) checkIfBackingUp(ctx context.Context, storageUUID string) (bool, error) {
+	storage, err := u.getStorageByUUID(ctx, storageUUID)
+	if err != nil {
+		return false, err
+	}
+
+	if storage.State == upcloud.StorageStateBackuping {
+		return true, nil
+	}
+
+	return false, nil
 }

@@ -2,12 +2,11 @@ package driver
 
 import (
 	"context"
-	"net/url"
-
 	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud"
 	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud/request"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"net/url"
 )
 
 type MockDriver struct {
@@ -19,6 +18,15 @@ type mockUpCloudService struct {
 	volumeUUIDExists bool
 	cloneStorageSize int
 	storageSize      int
+	storageBackingUp bool
+}
+
+var defaultStorageBackup = &upcloud.Storage{
+	Size:   10,
+	Title:  "defaultBackup",
+	Type:   "backup",
+	UUID:   "d471010e-14ba-11ee-8c6e-fe2faec4b636",
+	Origin: "d470fcb8-14ba-11ee-8c6e-fe2faec4b636",
 }
 
 func NewMockDriver(svc service) *Driver {
@@ -27,14 +35,19 @@ func NewMockDriver(svc service) *Driver {
 	}
 
 	endpoint, _ := url.Parse("unix:///tmp/csi.sock")
+	address, _ := url.Parse("http://127.0.0.1:1234")
 
 	log := logrus.New().WithField("test_enabled", true)
 
 	return &Driver{
 		svc: svc,
 		options: Options{
-			Zone:     "demoRegion",
-			Endpoint: endpoint,
+			Zone:         "demoRegion",
+			Endpoint:     endpoint,
+			DriverName:   DefaultDriverName,
+			Address:      address,
+			NodeHost:     "hostname",
+			IsController: true,
 		},
 		log: log,
 	}
@@ -144,6 +157,7 @@ func (m *mockUpCloudService) createStorageBackup(ctx context.Context, uuid, titl
 	s.UUID = uuid
 	s = newMockBackupStorage(s)
 	s.Title = title
+
 	return &upcloud.StorageDetails{Storage: *s}, nil
 }
 
@@ -160,11 +174,25 @@ func (m *mockUpCloudService) deleteStorageBackup(ctx context.Context, uuid strin
 }
 
 func (m *mockUpCloudService) getStorageBackupByName(ctx context.Context, name string) (*upcloud.Storage, error) {
-	s := newMockBackupStorage(newMockStorage(m.storageSize))
-	s.Title = name
+	var s *upcloud.Storage
+	if !m.volumeUUIDExists {
+		return nil, nil
+	} else {
+		s = defaultStorageBackup
+		s.Title = name
+	}
+
 	return s, nil
 }
 
 func (m *mockUpCloudService) requireStorageOnline(ctx context.Context, s *upcloud.Storage) error {
 	return nil
+}
+
+func (m *mockUpCloudService) checkIfBackingUp(ctx context.Context, storageUUID string) (bool, error) {
+	if m.storageBackingUp {
+		return true, nil
+	}
+
+	return false, nil
 }

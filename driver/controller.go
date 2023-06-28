@@ -4,10 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
-	"strconv"
-	"strings"
-
 	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud"
 	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud/request"
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -15,6 +11,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"net/http"
+	"strconv"
+	"strings"
 )
 
 var supportedCapabilities = []csi.ControllerServiceCapability_RPC_Type{ //nolint: gochecknoglobals // readonly variable
@@ -441,21 +440,34 @@ func (d *Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequ
 	if req.GetSourceVolumeId() == "" {
 		return nil, status.Error(codes.InvalidArgument, "snapshot source volume ID must be provided")
 	}
+
 	log := logWithServerContext(ctx, d.log)
 	log.Info("getting storage backup by name")
+
 	s, err := d.svc.getStorageBackupByName(ctx, req.GetName())
 	if err != nil && !errors.Is(err, errUpCloudStorageNotFound) {
-		return nil, status.Errorf(codes.Internal, "createsnapshot failed with: %s", err.Error())
+		return nil, status.Errorf(codes.Internal, "CreateSnapshot failed with: %s", err.Error())
 	}
 
 	if s != nil && s.Origin != req.GetSourceVolumeId() {
 		return nil, status.Error(codes.AlreadyExists, "snapshot already exists with different source volume ID")
 	}
+
 	if s == nil {
-		log.Info("creating strorage backup")
+		// check that a backup creation is not currently in progress
+		backupInProgress, err := d.svc.checkIfBackingUp(ctx, req.GetSourceVolumeId())
+		if err != nil {
+			return nil, err
+		}
+		if backupInProgress {
+			return nil, status.Errorf(codes.Aborted, "cannot create snapshot for volume with backup in progress")
+		}
+
+		log.Info("creating storage backup")
+
 		sd, err := d.svc.createStorageBackup(ctx, req.GetSourceVolumeId(), req.GetName())
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "createsnapshot failed with: %s", err.Error())
+			return nil, status.Errorf(codes.Internal, "CreateSnapshot failed with: %s", err.Error())
 		}
 		s = &sd.Storage
 	}
