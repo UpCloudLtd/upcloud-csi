@@ -480,3 +480,72 @@ func TestIsValidStorageUUID(t *testing.T) {
 	assert.True(t, isValidUUID("1160ffc3-58ec-4670-bdc9-27fe385d281d"))
 	assert.True(t, isValidUUID("0160ffc3-58ec-4670-bdc9-27fe385d281d"))
 }
+
+func TestDriver_CreateSnapshot(t *testing.T) {
+	t.Parallel()
+
+	type args struct {
+		req          *csi.CreateSnapshotRequest
+		volExists    bool
+		volBackingUp bool
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    *csi.CreateSnapshotResponse
+		wantErr bool
+	}{
+		{
+			name: "test",
+			args: args{
+				req: &csi.CreateSnapshotRequest{
+					SourceVolumeId: "d470fcb8-14ba-11ee-8c6e-fe2faec4b636",
+					Name:           "snappy",
+				},
+				volExists:    false,
+				volBackingUp: false,
+			},
+			wantErr: false,
+		},
+		{
+			name: "test with vol",
+			args: args{
+				req: &csi.CreateSnapshotRequest{
+					SourceVolumeId: "d470fcb8-14ba-11ee-8c6e-fe2faec4b636",
+					Name:           "snappy",
+				},
+				volExists:    true,
+				volBackingUp: false,
+			},
+			wantErr: false,
+		},
+		{
+			name: "test with vol",
+			args: args{
+				req: &csi.CreateSnapshotRequest{
+					SourceVolumeId: "d470fcb8-14ba-11ee-8c6e-fe2faec4b636",
+					Name:           "snappy",
+				},
+				volExists:    true,
+				volBackingUp: true,
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc := &mockUpCloudService{storageSize: 10, cloneStorageSize: 10, volumeUUIDExists: tt.args.volExists}
+			d := NewMockDriver(svc)
+
+			_, err := d.CreateSnapshot(context.Background(), tt.args.req)
+			if !tt.wantErr && err != nil {
+				t.Fatalf("CreateSnapshot(%v) failed with %v", tt.args.req, err)
+				return
+			}
+		})
+	}
+}

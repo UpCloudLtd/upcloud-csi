@@ -246,7 +246,6 @@ func (u *upCloudService) createStorageBackup(ctx context.Context, uuid, title st
 		UUID:  uuid,
 		Title: title,
 	})
-
 	if err != nil {
 		return nil, err
 	}

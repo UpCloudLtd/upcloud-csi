@@ -2,11 +2,12 @@ package driver
 
 import (
 	"context"
+	"net/url"
+
 	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud"
 	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud/request"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"net/url"
 )
 
 type MockDriver struct {
@@ -19,14 +20,6 @@ type mockUpCloudService struct {
 	cloneStorageSize int
 	storageSize      int
 	storageBackingUp bool
-}
-
-var defaultStorageBackup = &upcloud.Storage{
-	Size:   10,
-	Title:  "defaultBackup",
-	Type:   "backup",
-	UUID:   "d471010e-14ba-11ee-8c6e-fe2faec4b636",
-	Origin: "d470fcb8-14ba-11ee-8c6e-fe2faec4b636",
 }
 
 func NewMockDriver(svc service) *Driver {
@@ -176,9 +169,9 @@ func (m *mockUpCloudService) deleteStorageBackup(ctx context.Context, uuid strin
 func (m *mockUpCloudService) getStorageBackupByName(ctx context.Context, name string) (*upcloud.Storage, error) {
 	var s *upcloud.Storage
 	if !m.volumeUUIDExists {
-		return nil, nil
+		return s, nil
 	} else {
-		s = defaultStorageBackup
+		s = defaultStorageBackup()
 		s.Title = name
 	}
 
@@ -195,4 +188,14 @@ func (m *mockUpCloudService) checkIfBackingUp(ctx context.Context, storageUUID s
 	}
 
 	return false, nil
+}
+
+func defaultStorageBackup() *upcloud.Storage {
+	return &upcloud.Storage{
+		Size:   10,
+		Title:  "defaultBackup",
+		Type:   "backup",
+		UUID:   "d471010e-14ba-11ee-8c6e-fe2faec4b636",
+		Origin: "d470fcb8-14ba-11ee-8c6e-fe2faec4b636",
+	}
 }

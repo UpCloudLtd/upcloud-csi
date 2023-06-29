@@ -4,6 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"strconv"
+	"strings"
+
 	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud"
 	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud/request"
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -11,9 +15,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"net/http"
-	"strconv"
-	"strings"
 )
 
 var supportedCapabilities = []csi.ControllerServiceCapability_RPC_Type{ //nolint: gochecknoglobals // readonly variable
