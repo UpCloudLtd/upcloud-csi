@@ -496,7 +496,7 @@ func TestDriver_CreateSnapshot(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "test",
+			name: "test without volume",
 			args: args{
 				req: &csi.CreateSnapshotRequest{
 					SourceVolumeId: "d470fcb8-14ba-11ee-8c6e-fe2faec4b636",
@@ -508,7 +508,7 @@ func TestDriver_CreateSnapshot(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "test with vol",
+			name: "test with volume",
 			args: args{
 				req: &csi.CreateSnapshotRequest{
 					SourceVolumeId: "d470fcb8-14ba-11ee-8c6e-fe2faec4b636",
@@ -520,7 +520,7 @@ func TestDriver_CreateSnapshot(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "test with vol",
+			name: "test with volume",
 			args: args{
 				req: &csi.CreateSnapshotRequest{
 					SourceVolumeId: "d470fcb8-14ba-11ee-8c6e-fe2faec4b636",
@@ -530,6 +530,30 @@ func TestDriver_CreateSnapshot(t *testing.T) {
 				volBackingUp: true,
 			},
 			wantErr: false,
+		},
+		{
+			name: "test without volume want err",
+			args: args{
+				req: &csi.CreateSnapshotRequest{
+					SourceVolumeId: "d470fcb8-14ba-11ee-8c6e-fe2faec4b637",
+					Name:           "",
+				},
+				volExists:    false,
+				volBackingUp: true,
+			},
+			wantErr: true,
+		},
+		{
+			name: "test with volume want err",
+			args: args{
+				req: &csi.CreateSnapshotRequest{
+					SourceVolumeId: "d470fcb8-14ba-11ee-8c6e-fe2faec4b637",
+					Name:           "snappy",
+				},
+				volExists:    true,
+				volBackingUp: true,
+			},
+			wantErr: true,
 		},
 	}
 
@@ -544,6 +568,9 @@ func TestDriver_CreateSnapshot(t *testing.T) {
 			_, err := d.CreateSnapshot(context.Background(), tt.args.req)
 			if !tt.wantErr && err != nil {
 				t.Fatalf("CreateSnapshot(%v) failed with %v", tt.args.req, err)
+				return
+			} else if tt.wantErr && err == nil {
+				t.Fatalf("wanted err, but received nil")
 				return
 			}
 		})

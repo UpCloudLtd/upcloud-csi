@@ -183,11 +183,7 @@ func (m *mockUpCloudService) requireStorageOnline(ctx context.Context, s *upclou
 }
 
 func (m *mockUpCloudService) checkIfBackingUp(ctx context.Context, storageUUID string) (bool, error) {
-	if m.storageBackingUp {
-		return true, nil
-	}
-
-	return false, nil
+	return m.storageBackingUp, nil
 }
 
 func defaultStorageBackup() *upcloud.Storage {
