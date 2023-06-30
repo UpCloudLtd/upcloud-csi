@@ -319,9 +319,5 @@ func (u *upCloudService) checkIfBackingUp(ctx context.Context, storageUUID strin
 		return false, err
 	}
 
-	if storage.State == upcloud.StorageStateBackuping {
-		return true, nil
-	}
-
-	return false, nil
+	return storage.State == upcloud.StorageStateBackuping, nil
 }

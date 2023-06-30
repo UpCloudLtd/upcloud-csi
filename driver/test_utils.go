@@ -170,10 +170,10 @@ func (m *mockUpCloudService) getStorageBackupByName(ctx context.Context, name st
 	var s *upcloud.Storage
 	if !m.volumeUUIDExists {
 		return s, nil
-	} else {
-		s = defaultStorageBackup()
-		s.Title = name
 	}
+
+	s = defaultStorageBackup()
+	s.Title = name
 
 	return s, nil
 }
