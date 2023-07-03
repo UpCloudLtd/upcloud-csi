@@ -37,6 +37,7 @@ func (o *Output) MarshalYAML() ([]byte, error) {
 			Strict: true,
 		},
 	)
+
 	var buf bytes.Buffer
 	for _, obj := range o.Objects {
 		if err := serializer.Encode(obj, &buf); err != nil {
@@ -44,6 +45,7 @@ func (o *Output) MarshalYAML() ([]byte, error) {
 		}
 		buf.Write([]byte("---\n"))
 	}
+
 	return buf.Bytes(), nil
 }
 
@@ -110,6 +112,7 @@ func (o *Output) UnmarshalYAML(data []byte) error { //nolint: funlen // TODO: re
 
 		o.Objects = append(o.Objects, obj)
 	}
+
 	return nil
 }
 
@@ -123,6 +126,7 @@ func Get(vars map[string]string, template ...string) (*Output, error) {
 		return nil, fmt.Errorf("can't substitute variables in cluster template: %w", err)
 	}
 	output := Output{}
+
 	return &output, output.UnmarshalYAML(data)
 }
 
@@ -136,5 +140,6 @@ func renderYAML(template string, vars map[string]string) ([]byte, error) {
 		}
 		return val, nil
 	}
+
 	return processor.Process([]byte(template), variableValueGetter)
 }

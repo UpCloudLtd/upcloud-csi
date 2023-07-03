@@ -510,18 +510,19 @@ func (d *Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsReques
 
 	backups := make([]upcloud.Storage, 0)
 
-	if snapID := req.GetSnapshotId(); snapID != "" { //nolint: nestif // TODO: refactor
+	if snapID := req.GetSnapshotId(); snapID != "" {
 		log = log.WithField("snapshot_id", snapID)
 		log.Info("getting storage snapshots by ID")
+
 		s, err := d.svc.getStorageByUUID(ctx, snapID)
-		if err != nil {
-			if errors.Is(err, errUpCloudStorageNotFound) {
-				return &csi.ListSnapshotsResponse{
-					Entries: make([]*csi.ListSnapshotsResponse_Entry, 0),
-				}, nil
-			}
+		if err != nil && errors.Is(err, errUpCloudStorageNotFound) {
+			return &csi.ListSnapshotsResponse{
+				Entries: make([]*csi.ListSnapshotsResponse_Entry, 0),
+			}, nil
+		} else if err != nil {
 			return nil, status.Error(codes.Internal, err.Error())
 		}
+
 		backups = append(backups, s.Storage)
 	} else {
 		log.Info("getting list of storage snapshots")
@@ -531,8 +532,10 @@ func (d *Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsReques
 			return nil, status.Errorf(codes.Internal, "listsnapshots failed with: %s", err.Error())
 		}
 	}
+
 	backups, listNext := paginateStorage(backups, listStart, int(req.GetMaxEntries()))
 	entries := make([]*csi.ListSnapshotsResponse_Entry, 0)
+
 	for _, s := range backups {
 		entries = append(entries, &csi.ListSnapshotsResponse_Entry{
 			Snapshot: &csi.Snapshot{
@@ -544,7 +547,9 @@ func (d *Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsReques
 			},
 		})
 	}
+
 	log.Infof("found %d snapshots", len(entries))
+
 	return &csi.ListSnapshotsResponse{
 		Entries:   entries,
 		NextToken: fmt.Sprint(listNext),

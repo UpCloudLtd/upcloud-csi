@@ -125,7 +125,7 @@ func contextualPublisherCorrelationID(ctx contextualPublisher) string {
 }
 
 // correlationID generates random correlation ID string.
-// Currently ID is used only to distinguish actions from log so returned value doesn't have to be e.g globally unique.
+// Currently, ID is used only to distinguish actions from log so returned value doesn't have to be e.g globally unique.
 // If this isn't enough use UUID or some lib to generate more unique value.
 func correlationID() string {
 	b := make([]byte, 6)

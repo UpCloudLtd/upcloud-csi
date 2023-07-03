@@ -112,11 +112,14 @@ func newLogger(logLevel string) *logrus.Logger {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	logger := logrus.New()
 	logger.SetLevel(lv)
+
 	if logger.GetLevel() > logrus.InfoLevel {
 		logger.WithField("level", logger.GetLevel().String()).Warn("using log level higher than INFO is not recommended in production")
 	}
+
 	return logger
 }
 
@@ -124,6 +127,7 @@ func newLabels(labels []string) []upcloud.Label {
 	if len(labels) == 0 {
 		labels = strings.Split(os.Getenv(envStorageLabels), ",")
 	}
+
 	r := make([]upcloud.Label, 0)
 	for _, l := range labels {
 		if l == "" {
@@ -134,5 +138,6 @@ func newLabels(labels []string) []upcloud.Label {
 			r = append(r, upcloud.Label{Key: c[0], Value: c[1]})
 		}
 	}
+
 	return r
 }

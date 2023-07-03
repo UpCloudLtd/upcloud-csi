@@ -115,6 +115,7 @@ func NewDriver(svc *upsvc.Service, options Options, logger *logrus.Logger, fs Fi
 	if fs == nil {
 		fs = newNodeFilesystem(logEntryFromOptions(logger, options))
 	}
+
 	return &Driver{
 		options: options,
 		fs:      fs,
@@ -180,6 +181,7 @@ func (d *Driver) runHTTP(checks ...HealthCheck) error {
 		Handler:           mux,
 		ReadHeaderTimeout: healthTimeout * time.Second,
 	}
+
 	return d.httpSrv.Serve(httpListener)
 }
 

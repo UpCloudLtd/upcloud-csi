@@ -40,7 +40,6 @@ type storageRange struct {
 	limitSet      bool
 }
 
-// TODO reword/rework
 // getStorageRange extracts the storage size in bytes from the given capacity
 // range. If the capacity range is not satisfied it returns the default volume
 // size. If the capacity range is below or above supported sizes, it returns an
@@ -123,9 +122,8 @@ func displayByteString(bytes int64) string {
 	return result + unit
 }
 
-// TODO reword...
 // validateCapabilities validates the requested capabilities. It returns a list
-// of violations which may be empty if no violatons were found.
+// of violations which may be empty if no violations were found.
 func validateCapabilities(capacities []*csi.VolumeCapability) []string {
 	violations := sets.NewString()
 	for _, capacity := range capacities {
