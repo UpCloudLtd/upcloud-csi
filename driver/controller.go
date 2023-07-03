@@ -455,15 +455,6 @@ func (d *Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequ
 	}
 
 	if s == nil {
-		// check that a backup creation is not currently in progress
-		backupInProgress, err := d.svc.checkIfBackingUp(ctx, req.GetSourceVolumeId())
-		if err != nil {
-			return nil, err
-		}
-		if backupInProgress {
-			return nil, status.Errorf(codes.Aborted, "cannot create snapshot for volume with backup in progress")
-		}
-
 		log.Info("creating storage backup")
 
 		sd, err := d.svc.createStorageBackup(ctx, req.GetSourceVolumeId(), req.GetName())

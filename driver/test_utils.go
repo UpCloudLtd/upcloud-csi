@@ -2,6 +2,8 @@ package driver
 
 import (
 	"context"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"net/url"
 
 	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud"
@@ -146,6 +148,10 @@ func (m *mockUpCloudService) resizeBlockDevice(ctx context.Context, _ string, ne
 }
 
 func (m *mockUpCloudService) createStorageBackup(ctx context.Context, uuid, title string) (*upcloud.StorageDetails, error) {
+	if m.storageBackingUp {
+		return nil, status.Errorf(codes.Aborted, "cannot create snapshot for volume with backup in progress")
+	}
+
 	s := newMockStorage(m.storageSize)
 	s.UUID = uuid
 	s = newMockBackupStorage(s)
@@ -180,10 +186,6 @@ func (m *mockUpCloudService) getStorageBackupByName(ctx context.Context, name st
 
 func (m *mockUpCloudService) requireStorageOnline(ctx context.Context, s *upcloud.Storage) error {
 	return nil
-}
-
-func (m *mockUpCloudService) checkIfBackingUp(ctx context.Context, storageUUID string) (bool, error) {
-	return m.storageBackingUp, nil
 }
 
 func defaultStorageBackup() *upcloud.Storage {

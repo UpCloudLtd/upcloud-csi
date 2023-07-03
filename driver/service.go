@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"time"
 
 	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud"
@@ -12,7 +14,7 @@ import (
 )
 
 const (
-	storageStateTimeout time.Duration = time.Millisecond
+	storageStateTimeout time.Duration = time.Hour
 )
 
 var (
@@ -38,7 +40,6 @@ type service interface { //nolint:interfacebloat // Split this to smaller piece 
 	resizeBlockDevice(ctx context.Context, uuid string, newSize int) (*upcloud.StorageDetails, error)
 	createStorageBackup(ctx context.Context, uuid, title string) (*upcloud.StorageDetails, error)
 	deleteStorageBackup(ctx context.Context, uuid string) error
-	checkIfBackingUp(ctx context.Context, storageUUID string) (bool, error)
 }
 
 type upCloudService struct {
@@ -242,6 +243,16 @@ func (u *upCloudService) resizeBlockDevice(ctx context.Context, uuid string, new
 }
 
 func (u *upCloudService) createStorageBackup(ctx context.Context, uuid, title string) (*upcloud.StorageDetails, error) {
+	// check that a backup creation is not currently in progress
+	storage, err := u.getStorageByUUID(ctx, uuid)
+	if err != nil {
+		return nil, err
+	}
+
+	if storage.State == upcloud.StorageStateBackuping {
+		return nil, status.Errorf(codes.Aborted, "cannot create snapshot for volume with backup in progress")
+	}
+
 	backup, err := u.svc.CreateBackup(ctx, &request.CreateBackupRequest{
 		UUID:  uuid,
 		Title: title,
@@ -311,13 +322,4 @@ func (u *upCloudService) waitForStorageState(ctx context.Context, uuid, state st
 		DesiredState: state,
 		Timeout:      storageStateTimeout,
 	})
-}
-
-func (u *upCloudService) checkIfBackingUp(ctx context.Context, storageUUID string) (bool, error) {
-	storage, err := u.getStorageByUUID(ctx, storageUUID)
-	if err != nil {
-		return false, err
-	}
-
-	return storage.State == upcloud.StorageStateBackuping, nil
 }
