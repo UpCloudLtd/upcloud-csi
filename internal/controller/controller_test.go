@@ -9,6 +9,7 @@ import (
 	"github.com/UpCloudLtd/upcloud-csi/internal/service"
 	"github.com/UpCloudLtd/upcloud-csi/internal/service/mock"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
 
@@ -415,5 +416,92 @@ func TestController_ExpandVolume(t *testing.T) {
 	}
 	if r.CapacityBytes != wantBytes {
 		t.Errorf("CapacityBytes failed want %d got %d", wantBytes, r.CapacityBytes)
+	}
+}
+
+func TestDriver_CreateSnapshot(t *testing.T) {
+	t.Parallel()
+
+	type args struct {
+		req          *csi.CreateSnapshotRequest
+		volExists    bool
+		volBackingUp bool
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    *csi.CreateSnapshotResponse
+		wantErr bool
+	}{
+		{
+			name: "test without volume",
+			args: args{
+				req: &csi.CreateSnapshotRequest{
+					SourceVolumeId: uuid.NewString(),
+					Name:           "snappy",
+				},
+				volExists:    false,
+				volBackingUp: false,
+			},
+			wantErr: false,
+		},
+		{
+			name: "test with volume",
+			args: args{
+				req: &csi.CreateSnapshotRequest{
+					SourceVolumeId: uuid.NewString(),
+					Name:           "snappy",
+				},
+				volExists:    true,
+				volBackingUp: false,
+			},
+			wantErr: false,
+		},
+		{
+			name: "test with volume",
+			args: args{
+				req: &csi.CreateSnapshotRequest{
+					SourceVolumeId: uuid.NewString(),
+					Name:           "snappy",
+				},
+				volExists:    true,
+				volBackingUp: true,
+			},
+			wantErr: false,
+		},
+		{
+			name: "test without volume want err",
+			args: args{
+				req: &csi.CreateSnapshotRequest{
+					SourceVolumeId: uuid.NewString(),
+					Name:           "",
+				},
+				volExists:    false,
+				volBackingUp: true,
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			d := newController(&mock.UpCloudServiceMock{
+				VolumeUUIDExists: tt.args.volExists,
+				StorageBackingUp: tt.args.volBackingUp,
+				SourceVolumeID:   tt.args.req.SourceVolumeId,
+			})
+
+			_, err := d.CreateSnapshot(context.Background(), tt.args.req)
+			if !tt.wantErr && err != nil {
+				t.Fatalf("CreateSnapshot(%v) failed with %v", tt.args.req, err)
+				return
+			} else if tt.wantErr && err == nil {
+				t.Fatalf("CreateSnapshot(%v) wanted err, but received nil", tt.args.req)
+				return
+			}
+		})
 	}
 }

@@ -14,6 +14,9 @@ type UpCloudServiceMock struct {
 	VolumeUUIDExists bool
 	CloneStorageSize int
 	StorageSize      int
+	StorageBackingUp bool
+
+	SourceVolumeID string
 }
 
 func newMockStorage(size int, label ...upcloud.Label) *upcloud.Storage {
@@ -116,10 +119,14 @@ func (m *UpCloudServiceMock) ResizeBlockDevice(ctx context.Context, _ string, ne
 }
 
 func (m *UpCloudServiceMock) CreateStorageBackup(ctx context.Context, uuid, title string) (*upcloud.StorageDetails, error) {
+	if m.StorageBackingUp {
+		return nil, service.ErrBackupInProgress
+	}
 	s := newMockStorage(m.StorageSize)
 	s.UUID = uuid
 	s = newMockBackupStorage(s)
 	s.Title = title
+
 	return &upcloud.StorageDetails{Storage: *s}, nil
 }
 
@@ -136,8 +143,15 @@ func (m *UpCloudServiceMock) DeleteStorageBackup(ctx context.Context, uuid strin
 }
 
 func (m *UpCloudServiceMock) GetStorageBackupByName(ctx context.Context, name string) (*upcloud.Storage, error) {
-	s := newMockBackupStorage(newMockStorage(m.StorageSize))
+	var s *upcloud.Storage
+	if !m.VolumeUUIDExists || name == "" {
+		return nil, service.ErrStorageNotFound
+	}
+	s = newMockBackupStorage(newMockStorage(m.StorageSize))
 	s.Title = name
+	if m.SourceVolumeID != "" {
+		s.Origin = m.SourceVolumeID
+	}
 	return s, nil
 }
 

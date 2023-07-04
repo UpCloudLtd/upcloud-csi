@@ -466,22 +466,31 @@ func (c *Controller) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshot
 	if req.GetSourceVolumeId() == "" {
 		return nil, status.Error(codes.InvalidArgument, "snapshot source volume ID must be provided")
 	}
+
 	log := logger.WithServerContext(ctx, c.log)
 	log.Info("getting storage backup by name")
+
 	s, err := c.svc.GetStorageBackupByName(ctx, req.GetName())
 	if err != nil && !errors.Is(err, service.ErrStorageNotFound) {
-		return nil, status.Errorf(codes.Internal, "createsnapshot failed with: %s", err.Error())
+		return nil, status.Errorf(codes.Internal, "CreateSnapshot failed with: %s", err.Error())
 	}
 
 	if s != nil && s.Origin != req.GetSourceVolumeId() {
 		return nil, status.Error(codes.AlreadyExists, "snapshot already exists with different source volume ID")
 	}
+
 	if s == nil {
-		log.Info("creating strorage backup")
+		log.Info("creating storage backup")
+
 		sd, err := c.svc.CreateStorageBackup(ctx, req.GetSourceVolumeId(), req.GetName())
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "createsnapshot failed with: %s", err.Error())
+			if errors.Is(err, service.ErrBackupInProgress) {
+				return nil, status.Errorf(codes.Aborted, "cannot create snapshot for volume with backup in progress")
+			}
+
+			return nil, status.Errorf(codes.Internal, "CreateSnapshot failed with: %s", err.Error())
 		}
+
 		s = &sd.Storage
 	}
 

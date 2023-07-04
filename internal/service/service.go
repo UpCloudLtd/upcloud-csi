@@ -12,6 +12,7 @@ var (
 	ErrStorageNotFound       = errors.New("upcloud: storage not found")
 	ErrServerNotFound        = errors.New("upcloud: server not found")
 	ErrServerStorageNotFound = errors.New("upcloud: server storage not found")
+	ErrBackupInProgress      = errors.New("upcloud: cannot take snapshot while storage is in state backup")
 )
 
 type Service interface { //nolint:interfacebloat // Split this to smaller piece when it makes sense code wise

@@ -242,6 +242,16 @@ func (u *UpCloudService) ResizeBlockDevice(ctx context.Context, uuid string, new
 }
 
 func (u *UpCloudService) CreateStorageBackup(ctx context.Context, uuid, title string) (*upcloud.StorageDetails, error) {
+	// check that a backup creation is not currently in progress
+	storage, err := u.GetStorageByUUID(ctx, uuid)
+	if err != nil {
+		return nil, err
+	}
+
+	if storage.State == upcloud.StorageStateBackuping {
+		return nil, ErrBackupInProgress
+	}
+
 	backup, err := u.client.CreateBackup(ctx, &request.CreateBackupRequest{
 		UUID:  uuid,
 		Title: title,
