@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"time"
 
 	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud"
@@ -21,6 +19,7 @@ var (
 	errUpCloudStorageNotFound       = errors.New("upcloud: storage not found")
 	errUpCloudServerNotFound        = errors.New("upcloud: server not found")
 	errUpCloudServerStorageNotFound = errors.New("upcloud: server storage not found")
+	errUpCloudBackupInProgress      = errors.New("upcloud: cannot take snapshot while storage is in state backup")
 )
 
 type service interface { //nolint:interfacebloat // Split this to smaller piece when it makes sense code wise
@@ -250,7 +249,7 @@ func (u *upCloudService) createStorageBackup(ctx context.Context, uuid, title st
 	}
 
 	if storage.State == upcloud.StorageStateBackuping {
-		return nil, status.Errorf(codes.Aborted, "cannot create snapshot for volume with backup in progress")
+		return nil, errUpCloudBackupInProgress
 	}
 
 	backup, err := u.svc.CreateBackup(ctx, &request.CreateBackupRequest{

@@ -458,9 +458,15 @@ func (d *Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequ
 		log.Info("creating storage backup")
 
 		sd, err := d.svc.createStorageBackup(ctx, req.GetSourceVolumeId(), req.GetName())
+
 		if err != nil {
+			if errors.Is(err, errUpCloudBackupInProgress) {
+				return nil, status.Errorf(codes.Aborted, "cannot create snapshot for volume with backup in progress")
+			}
+
 			return nil, status.Errorf(codes.Internal, "CreateSnapshot failed with: %s", err.Error())
 		}
+
 		s = &sd.Storage
 	}
 
