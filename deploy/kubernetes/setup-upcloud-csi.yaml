@@ -83,7 +83,7 @@ spec:
           args:
             - "--v=5"
             - "--csi-address=$(ADDRESS)"
-            - "--timeout=120s"
+            - "--timeout=600s"
           env:
             - name: ADDRESS
               value: /var/lib/csi/sockets/pluginproxy/csi.sock
@@ -95,7 +95,7 @@ spec:
           image: k8s.gcr.io/sig-storage/csi-resizer:v1.4.0
           args:
             - "--v=5"
-            - "--timeout=120s"
+            - "--timeout=600s"
             - "--csi-address=$(ADDRESS)"
             - "--handle-volume-inuse-error=true"
           env:
@@ -110,7 +110,7 @@ spec:
           args:
             - "--csi-address=$(ADDRESS)"
             - "--v=5"
-            - "--timeout=120s"
+            - "--timeout=600s"
             - "--leader-election=false"
           env:
             - name: ADDRESS

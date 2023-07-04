@@ -2,6 +2,8 @@ package driver
 
 import (
 	"context"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"net/url"
 
 	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud"
@@ -19,6 +21,7 @@ type mockUpCloudService struct {
 	volumeUUIDExists bool
 	cloneStorageSize int
 	storageSize      int
+	storageBackingUp bool
 }
 
 func NewMockDriver(svc service) *Driver {
@@ -27,14 +30,19 @@ func NewMockDriver(svc service) *Driver {
 	}
 
 	endpoint, _ := url.Parse("unix:///tmp/csi.sock")
+	address, _ := url.Parse("http://127.0.0.1:1234")
 
 	log := logrus.New().WithField("test_enabled", true)
 
 	return &Driver{
 		svc: svc,
 		options: Options{
-			Zone:     "demoRegion",
-			Endpoint: endpoint,
+			Zone:         "demoRegion",
+			Endpoint:     endpoint,
+			DriverName:   DefaultDriverName,
+			Address:      address,
+			NodeHost:     "hostname",
+			IsController: true,
 		},
 		log: log,
 	}
@@ -140,10 +148,15 @@ func (m *mockUpCloudService) resizeBlockDevice(ctx context.Context, _ string, ne
 }
 
 func (m *mockUpCloudService) createStorageBackup(ctx context.Context, uuid, title string) (*upcloud.StorageDetails, error) {
+	if m.storageBackingUp {
+		return nil, status.Errorf(codes.Aborted, "cannot create snapshot for volume with backup in progress")
+	}
+
 	s := newMockStorage(m.storageSize)
 	s.UUID = uuid
 	s = newMockBackupStorage(s)
 	s.Title = title
+
 	return &upcloud.StorageDetails{Storage: *s}, nil
 }
 
@@ -160,11 +173,27 @@ func (m *mockUpCloudService) deleteStorageBackup(ctx context.Context, uuid strin
 }
 
 func (m *mockUpCloudService) getStorageBackupByName(ctx context.Context, name string) (*upcloud.Storage, error) {
-	s := newMockBackupStorage(newMockStorage(m.storageSize))
+	var s *upcloud.Storage
+	if !m.volumeUUIDExists {
+		return s, nil
+	}
+
+	s = defaultStorageBackup()
 	s.Title = name
+
 	return s, nil
 }
 
 func (m *mockUpCloudService) requireStorageOnline(ctx context.Context, s *upcloud.Storage) error {
 	return nil
+}
+
+func defaultStorageBackup() *upcloud.Storage {
+	return &upcloud.Storage{
+		Size:   10,
+		Title:  "defaultBackup",
+		Type:   "backup",
+		UUID:   "d471010e-14ba-11ee-8c6e-fe2faec4b636",
+		Origin: "d470fcb8-14ba-11ee-8c6e-fe2faec4b636",
+	}
 }

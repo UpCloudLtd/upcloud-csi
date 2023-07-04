@@ -18,7 +18,7 @@ import (
 
 const (
 	// clientTimeout helps to tune for timeout on requests to UpCloud API. Measurement: seconds.
-	clientTimeout time.Duration = 120 * time.Second
+	clientTimeout = 600 * time.Second
 
 	envUpcloudUsername string = "UPCLOUD_USERNAME"
 	envUpcloudPassword string = "UPCLOUD_PASSWORD"

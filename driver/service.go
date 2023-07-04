@@ -19,6 +19,7 @@ var (
 	errUpCloudStorageNotFound       = errors.New("upcloud: storage not found")
 	errUpCloudServerNotFound        = errors.New("upcloud: server not found")
 	errUpCloudServerStorageNotFound = errors.New("upcloud: server storage not found")
+	errUpCloudBackupInProgress      = errors.New("upcloud: cannot take snapshot while storage is in state backup")
 )
 
 type service interface { //nolint:interfacebloat // Split this to smaller piece when it makes sense code wise
@@ -241,6 +242,16 @@ func (u *upCloudService) resizeBlockDevice(ctx context.Context, uuid string, new
 }
 
 func (u *upCloudService) createStorageBackup(ctx context.Context, uuid, title string) (*upcloud.StorageDetails, error) {
+	// check that a backup creation is not currently in progress
+	storage, err := u.getStorageByUUID(ctx, uuid)
+	if err != nil {
+		return nil, err
+	}
+
+	if storage.State == upcloud.StorageStateBackuping {
+		return nil, errUpCloudBackupInProgress
+	}
+
 	backup, err := u.svc.CreateBackup(ctx, &request.CreateBackupRequest{
 		UUID:  uuid,
 		Title: title,
@@ -248,6 +259,7 @@ func (u *upCloudService) createStorageBackup(ctx context.Context, uuid, title st
 	if err != nil {
 		return nil, err
 	}
+
 	return u.svc.WaitForStorageState(ctx, &request.WaitForStorageStateRequest{
 		UUID:         backup.UUID,
 		DesiredState: upcloud.StorageStateOnline,
