@@ -6,7 +6,9 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"path"
 	"testing"
+	"time"
 
 	"github.com/UpCloudLtd/upcloud-csi/internal/filesystem/mock"
 	"github.com/UpCloudLtd/upcloud-csi/internal/plugin"
@@ -22,10 +24,10 @@ func TestDriverSanity(t *testing.T) {
 	if os.Getenv("UPCLOUD_TEST_USERNAME") == "" || os.Getenv("UPCLOUD_TEST_PASSWORD") == "" || os.Getenv("UPCLOUD_TEST_HOSTNAME") == "" {
 		t.Skip("required environment variables are not set to test CSI sanity")
 	}
-	socket, err := os.CreateTemp(os.TempDir(), "csi-socket-*.sock")
-	require.NoError(t, err)
-	defer os.Remove(socket.Name())
-	endpoint, _ := url.Parse(fmt.Sprintf("unix:///%s", socket.Name()))
+	socket := path.Join(os.TempDir(), fmt.Sprintf("csi-socket-%d.sock", time.Now().Unix()))
+	defer os.Remove(socket)
+
+	endpoint, _ := url.Parse(fmt.Sprintf("unix://%s", socket))
 
 	require.NoError(t, runTestDriver(endpoint))
 
@@ -35,6 +37,15 @@ func TestDriverSanity(t *testing.T) {
 		os.RemoveAll(cfg.StagingPath)
 		os.RemoveAll(cfg.TargetPath)
 	}()
+
+	// wait server to start
+	for i := 0; i < 5; i++ {
+		t.Logf("waiting plugin server to create socket %s (%d)", socket, i)
+		if _, err := os.Stat(socket); err == nil {
+			break
+		}
+		time.Sleep(time.Second)
+	}
 
 	sanity.Test(t, cfg)
 }
@@ -51,7 +62,7 @@ func runTestDriver(endpoint *url.URL) error {
 	}
 
 	logger := logrus.New()
-	logger.SetLevel(logrus.PanicLevel)
+	logger.SetLevel(logrus.InfoLevel)
 	logger.SetOutput(io.Discard)
 
 	go func() {
@@ -64,6 +75,8 @@ func runTestDriver(endpoint *url.URL) error {
 			NodeHost:            hostname,
 			Zone:                "",
 			Filesystem:          mock.NewFilesystem(logger),
+			LogLevel:            logger.Level.String(),
+			Mode:                config.DriverModeMonolith,
 		}); err != nil {
 			log.Fatal(err)
 		}

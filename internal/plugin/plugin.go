@@ -20,6 +20,9 @@ import (
 func Run(c config.Config) error {
 	l := logger.New(c.LogLevel).WithField(logger.HostKey, hostname())
 
+	if c.Filesystem == nil {
+		c.Filesystem = filesystem.NewLinuxFilesystem(l)
+	}
 	healthServer, err := server.NewHealthServer(c.HealtServerAddress, l)
 	if err != nil {
 		return err
@@ -42,7 +45,7 @@ func runNode(c config.Config, healthServer *server.HealthServer, l *logrus.Entry
 		l = l.WithField(logger.ZoneKey, c.Zone)
 	}
 
-	csiNode, err := node.NewNode(c.NodeHost, c.Zone, int64(config.MaxVolumesPerNode), filesystem.NewLinuxFilesystem(l), l)
+	csiNode, err := node.NewNode(c.NodeHost, c.Zone, int64(config.MaxVolumesPerNode), c.Filesystem, l)
 	if err != nil {
 		return err
 	}
@@ -85,7 +88,7 @@ func runMonolith(c config.Config, healthServer *server.HealthServer, l *logrus.E
 	if err != nil {
 		return err
 	}
-	csiNode, err := node.NewNode(c.NodeHost, c.Zone, int64(config.MaxVolumesPerNode), filesystem.NewLinuxFilesystem(l), l)
+	csiNode, err := node.NewNode(c.NodeHost, c.Zone, int64(config.MaxVolumesPerNode), c.Filesystem, l)
 	if err != nil {
 		return err
 	}
