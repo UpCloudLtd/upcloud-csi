@@ -1,4 +1,9 @@
-package driver
+package plugin
+
+import (
+	"fmt"
+	"os"
+)
 
 // When building any packages that import version, pass the build/install cmd
 // ldflags like so:
@@ -24,4 +29,8 @@ func GetCommit() string {
 // "dirty".
 func GetTreeState() string {
 	return gitTreeState
+}
+
+func PrintVersion() {
+	fmt.Fprintf(os.Stdout, "%s - %s (%s)\n", GetVersion(), GetCommit(), GetTreeState())
 }

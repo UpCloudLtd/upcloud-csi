@@ -1,4 +1,4 @@
-package driver
+package filesystem
 
 import (
 	"context"
@@ -11,8 +11,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+const driverName = "storage.csi.upclous.com"
 
 func TestSfdiskOutputGetLastPartition(t *testing.T) {
 	t.Parallel()
@@ -94,9 +99,9 @@ func TestFilesystemFilesystem(t *testing.T) {
 	}
 }
 
-func testFilesystemMountFilesystem(t *testing.T, m *nodeFilesystem, partition string) error {
+func testFilesystemMountFilesystem(t *testing.T, m *LinuxFilesystem, partition string) error {
 	t.Helper()
-	mountPath := filepath.Join(os.TempDir(), fmt.Sprintf("%s-mount-path-%d", DefaultDriverName, time.Now().Unix()))
+	mountPath := filepath.Join(os.TempDir(), fmt.Sprintf("%s-mount-path-%d", driverName, time.Now().Unix()))
 	defer os.RemoveAll(mountPath)
 
 	if err := m.Mount(context.Background(), partition, mountPath, "ext4"); err != nil {
@@ -118,9 +123,9 @@ func testFilesystemMountFilesystem(t *testing.T, m *nodeFilesystem, partition st
 	return nil
 }
 
-func testFilesystemMountBlockDevice(t *testing.T, m *nodeFilesystem, partition string) error {
+func testFilesystemMountBlockDevice(t *testing.T, m *LinuxFilesystem, partition string) error {
 	t.Helper()
-	mountPath := filepath.Join(os.TempDir(), fmt.Sprintf("%s-mount-path-%d", DefaultDriverName, time.Now().Unix()))
+	mountPath := filepath.Join(os.TempDir(), fmt.Sprintf("%s-mount-path-%d", driverName, time.Now().Unix()))
 	defer os.RemoveAll(mountPath)
 
 	if err := m.Mount(context.Background(), partition, mountPath, "", "bind"); err != nil {
@@ -189,7 +194,7 @@ func TestFilesystemDisk(t *testing.T) {
 }
 
 func createDeviceFile(size int64) (string, error) {
-	f, err := os.CreateTemp(os.TempDir(), fmt.Sprintf("%s-disk-*", DefaultDriverName))
+	f, err := os.CreateTemp(os.TempDir(), fmt.Sprintf("%s-disk-*", driverName))
 	if err != nil {
 		return "", err
 	}
@@ -215,12 +220,85 @@ func checkSystemRequirements() error {
 	return nil
 }
 
-func newTestFilesystem() *nodeFilesystem {
+func newTestFilesystem() *LinuxFilesystem {
 	logger := logrus.New()
 	logger.SetOutput(io.Discard)
-	return newNodeFilesystem(logger.WithFields(nil))
+	return NewLinuxFilesystem(logger.WithFields(nil))
 }
 
 func canMount() bool {
 	return os.Getuid() == 0
+}
+
+func TestVolumeIDToDiskID(t *testing.T) {
+	t.Parallel()
+	volID := "f67db1ca-825b-40aa-a6f4-390ac6ff1b91"
+	want := "virtio-f67db1ca825b40aaa6f4"
+	got, err := volumeIDToDiskID(volID)
+	require.NoError(t, err)
+	if want != got {
+		t.Errorf("volumeIDToDiskID('%s') failed want %s got %s", volID, want, got)
+	}
+}
+
+func TestGetBlockDeviceByDiskID(t *testing.T) {
+	t.Parallel()
+	tempDir, err := os.MkdirTemp(os.TempDir(), fmt.Sprintf("test-%s-*", driverName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+	t.Logf("using temp dir %s", tempDir)
+
+	tempDevPath := filepath.Join(tempDir, "dev")
+	t.Logf("using dev path %s", tempDevPath)
+
+	idPath := filepath.Join(tempDir, udevDiskByIDPath)
+	t.Logf("using disk id path %s", idPath)
+
+	if err := os.MkdirAll(idPath, os.ModePerm); err != nil {
+		t.Fatal(err)
+	}
+
+	// Test relative path
+	vda, err := createTempFile(tempDevPath, "vda")
+	require.NoError(t, err)
+
+	vdaUUID := uuid.NewString()
+	diskID, err := volumeIDToDiskID(vdaUUID)
+	require.NoError(t, err)
+
+	vdaSymLink := filepath.Join(idPath, diskID)
+
+	// using ln command instead of Go's built-in so that link has relative path
+	if err := exec.Command("ln", "-s", fmt.Sprintf("../../%s", filepath.Base(vda)), vdaSymLink).Run(); err != nil { //nolint: gosec // test
+		t.Fatal(err)
+	}
+
+	want := vda
+	got, err := getBlockDeviceByDiskID(context.TODO(), vdaSymLink)
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+
+	// Test absolute path
+	vdb, _ := createTempFile(tempDevPath, "vdb")
+	vdbUUID := uuid.NewString()
+	diskID, err = volumeIDToDiskID(vdbUUID)
+	require.NoError(t, err)
+	vdbSymLink := filepath.Join(idPath, diskID)
+	if err := os.Symlink(vdb, vdbSymLink); err != nil {
+		t.Fatal(err)
+	}
+	want = vdb
+	got, err = getBlockDeviceByDiskID(context.TODO(), vdbSymLink)
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+}
+
+func createTempFile(dir, pattern string) (string, error) {
+	f, err := os.CreateTemp(dir, pattern)
+	if err != nil {
+		return "", err
+	}
+	return f.Name(), f.Close()
 }

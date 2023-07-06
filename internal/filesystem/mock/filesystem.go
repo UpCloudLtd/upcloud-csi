@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/UpCloudLtd/upcloud-csi/driver"
+	"github.com/UpCloudLtd/upcloud-csi/internal/filesystem"
 	"github.com/sirupsen/logrus"
 )
 
@@ -15,7 +15,7 @@ type MockFilesystem struct {
 	log *logrus.Logger
 }
 
-func NewFilesystem(log *logrus.Logger) driver.Filesystem {
+func NewFilesystem(log *logrus.Logger) filesystem.Filesystem {
 	return &MockFilesystem{log: log}
 }
 
@@ -48,8 +48,8 @@ func (m *MockFilesystem) Unmount(ctx context.Context, path string) error {
 }
 
 //nolint:gosec // Use of weak random number generator (math/rand instead of crypto/rand) (gosec)
-func (m *MockFilesystem) Statistics(volumePath string) (driver.VolumeStatistics, error) {
-	stats := driver.VolumeStatistics{
+func (m *MockFilesystem) Statistics(volumePath string) (filesystem.VolumeStatistics, error) {
+	stats := filesystem.VolumeStatistics{
 		AvailableBytes:  int64(rand.Intn(1000)),
 		TotalBytes:      int64(rand.Intn(1000)),
 		UsedBytes:       int64(rand.Intn(1000)),

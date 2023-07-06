@@ -6,20 +6,16 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"path"
 	"testing"
 	"time"
 
-	"github.com/UpCloudLtd/upcloud-csi/driver"
-	"github.com/UpCloudLtd/upcloud-csi/test/integration/sanity/mock"
-	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud/client"
-	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud/service"
+	"github.com/UpCloudLtd/upcloud-csi/internal/filesystem/mock"
+	"github.com/UpCloudLtd/upcloud-csi/internal/plugin"
+	"github.com/UpCloudLtd/upcloud-csi/internal/plugin/config"
 	"github.com/kubernetes-csi/csi-test/v5/pkg/sanity"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
-)
-
-const (
-	clientTimeout = 120
 )
 
 func TestDriverSanity(t *testing.T) {
@@ -28,13 +24,12 @@ func TestDriverSanity(t *testing.T) {
 	if os.Getenv("UPCLOUD_TEST_USERNAME") == "" || os.Getenv("UPCLOUD_TEST_PASSWORD") == "" || os.Getenv("UPCLOUD_TEST_HOSTNAME") == "" {
 		t.Skip("required environment variables are not set to test CSI sanity")
 	}
-	socket, err := os.CreateTemp(os.TempDir(), "csi-socket-*.sock")
-	require.NoError(t, err)
-	defer os.Remove(socket.Name())
-	endpoint, _ := url.Parse(fmt.Sprintf("unix:///%s", socket.Name()))
+	socket := path.Join(os.TempDir(), fmt.Sprintf("csi-socket-%d.sock", time.Now().Unix()))
+	defer os.Remove(socket)
 
-	_, err = runTestDriver(endpoint)
-	require.NoError(t, err)
+	endpoint, _ := url.Parse(fmt.Sprintf("unix://%s", socket))
+
+	require.NoError(t, runTestDriver(endpoint))
 
 	cfg, err := newTestConfig(endpoint.String())
 	require.NoError(t, err)
@@ -43,50 +38,50 @@ func TestDriverSanity(t *testing.T) {
 		os.RemoveAll(cfg.TargetPath)
 	}()
 
+	// wait server to start
+	for i := 0; i < 5; i++ {
+		t.Logf("waiting plugin server to create socket %s (%d)", socket, i)
+		if _, err := os.Stat(socket); err == nil {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+
 	sanity.Test(t, cfg)
 }
 
-func runTestDriver(endpoint *url.URL) (*driver.Driver, error) {
+func runTestDriver(endpoint *url.URL) error {
 	var err error
 
 	hostname := os.Getenv("UPCLOUD_TEST_HOSTNAME")
 	if hostname == "" {
 		hostname, err = os.Hostname()
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
 	logger := logrus.New()
-	logger.SetLevel(logrus.PanicLevel)
+	logger.SetLevel(logrus.InfoLevel)
 	logger.SetOutput(io.Discard)
-	c := client.New(
-		os.Getenv("UPCLOUD_TEST_USERNAME"),
-		os.Getenv("UPCLOUD_TEST_PASSWORD"),
-		client.WithTimeout((time.Second * clientTimeout)))
 
-	drv, err := driver.NewDriver(
-		service.New(c),
-		driver.Options{
-			DriverName:   driver.DefaultDriverName,
-			Endpoint:     endpoint,
-			Address:      nil,
-			NodeHost:     hostname,
-			Zone:         "",
-			IsController: true,
-		},
-		logger,
-		mock.NewFilesystem(logger),
-	)
-	if err != nil {
-		return nil, err
-	}
 	go func() {
-		if err := drv.Run(); err != nil {
+		if err := plugin.Run(config.Config{
+			Username:            os.Getenv("UPCLOUD_TEST_USERNAME"),
+			Password:            os.Getenv("UPCLOUD_TEST_PASSWORD"),
+			DriverName:          config.DefaultDriverName,
+			PluginServerAddress: endpoint.String(),
+			HealtServerAddress:  "http://127.0.0.1:8080",
+			NodeHost:            hostname,
+			Zone:                "",
+			Filesystem:          mock.NewFilesystem(logger),
+			LogLevel:            logger.Level.String(),
+			Mode:                config.DriverModeMonolith,
+		}); err != nil {
 			log.Fatal(err)
 		}
 	}()
-	return drv, err
+	return err
 }
 
 func newTestConfig(endpoint string) (sanity.TestConfig, error) {

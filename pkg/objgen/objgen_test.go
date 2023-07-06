@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	. "github.com/UpCloudLtd/upcloud-csi/deploy/kubernetes"
-	"github.com/UpCloudLtd/upcloud-csi/driver/objgen"
+	"github.com/UpCloudLtd/upcloud-csi/pkg/objgen"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,6 +17,7 @@ func TestGet_Instantination(t *testing.T) {
 		"UPCLOUD_CSI_USERNAME_B64": "dXNlcg==",
 		"UPCLOUD_CSI_PASSWORD_B64": "cGFzcw==",
 		"UPCLOUD_CSI_VERSION":      "v0.3.1",
+		"UPCLOUD_ZONE":             "de-fra1",
 		"CLUSTER_ID":               uuid.New().String(),
 	})
 	require.NoError(t, err)

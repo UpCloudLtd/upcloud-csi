@@ -1,4 +1,4 @@
-package driver
+package controller
 
 import (
 	"context"
@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/UpCloudLtd/upcloud-csi/internal/logger"
+	"github.com/UpCloudLtd/upcloud-csi/internal/service"
 	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud"
 	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud/request"
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -27,9 +29,32 @@ var supportedCapabilities = []csi.ControllerServiceCapability_RPC_Type{ //nolint
 	csi.ControllerServiceCapability_RPC_CLONE_VOLUME,
 }
 
+type Controller struct {
+	zone              string
+	maxVolumesPerNode int
+
+	svc service.Service
+	log *logrus.Entry
+
+	storageLabels []upcloud.Label
+}
+
+func NewController(svc service.Service, zone string, maxVolumesPerNode int, l *logrus.Entry, labels ...string) (*Controller, error) {
+	if zone == "" {
+		return nil, errors.New("controller zone is required field")
+	}
+	return &Controller{
+		zone:              zone,
+		svc:               svc,
+		log:               l,
+		storageLabels:     upcloudLabels(labels),
+		maxVolumesPerNode: maxVolumesPerNode,
+	}, nil
+}
+
 // CreateVolume provisions storage via UpCloud Storage service.
-func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (resp *csi.CreateVolumeResponse, err error) { //nolint: funlen // TODO: refactor
-	log := logWithServerContext(ctx, d.log).WithField(logVolumeNameKey, req.GetName())
+func (c *Controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (resp *csi.CreateVolumeResponse, err error) { //nolint: funlen // TODO: refactor
+	log := logger.WithServerContext(ctx, c.log).WithField(logger.VolumeNameKey, req.GetName())
 
 	if req.Name == "" {
 		return nil, status.Error(codes.InvalidArgument, "CreateVolume Name cannot be empty")
@@ -57,8 +82,8 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 				continue // nothing to do
 			}
 
-			if region != d.options.Zone {
-				return nil, status.Errorf(codes.ResourceExhausted, "volume can be only created in region: %q, got: %q", d.options.Zone, region)
+			if region != c.zone {
+				return nil, status.Errorf(codes.ResourceExhausted, "volume can be only created in region: %q, got: %q", c.zone, region)
 			}
 		}
 	}
@@ -66,7 +91,7 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 	volumeName := req.Name
 
 	// get volume first, and skip if exists
-	volumes, err := d.svc.getStorageByName(ctx, volumeName)
+	volumes, err := c.svc.GetStorageByName(ctx, volumeName)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -81,7 +106,7 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 			return nil, status.Errorf(codes.AlreadyExists, "invalid storage size requested: %d", storageSize)
 		}
 
-		log.WithField(logVolumeIDKey, vol.UUID).Info("volume already exists")
+		log.WithField(logger.VolumeIDKey, vol.UUID).Info("volume already exists")
 		return &csi.CreateVolumeResponse{
 			Volume: &csi.Volume{
 				VolumeId:      vol.UUID,
@@ -114,50 +139,50 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 		default:
 			return nil, status.Errorf(codes.InvalidArgument, "%v not a proper volume source", volContentSrc)
 		}
-		log := log.WithField(logVolumeSourceKey, sourceID)
+		log := log.WithField(logger.VolumeSourceKey, sourceID)
 		log.Info("getting source storage by uuid")
-		src, err := d.svc.getStorageByUUID(ctx, sourceID)
+		src, err := c.svc.GetStorageByUUID(ctx, sourceID)
 		if err != nil {
-			if errors.Is(err, errUpCloudStorageNotFound) {
+			if errors.Is(err, service.ErrStorageNotFound) {
 				return nil, status.Errorf(codes.NotFound, "could not retrieve source volume by ID: %s", err.Error())
 			}
 			return nil, status.Errorf(codes.InvalidArgument, err.Error())
 		}
 		log.Info("checking that source storage is online")
-		if err := d.svc.requireStorageOnline(ctx, &src.Storage); err != nil {
+		if err := c.svc.RequireStorageOnline(ctx, &src.Storage); err != nil {
 			return nil, status.Error(codes.Internal, err.Error())
 		}
 		volumeReq := &request.CloneStorageRequest{
 			UUID:  src.Storage.UUID,
-			Zone:  d.options.Zone,
+			Zone:  c.zone,
 			Tier:  tier,
 			Title: volumeName,
 		}
-		logWithServiceRequest(log, volumeReq).Info("cloning volume")
-		vol, err = d.svc.cloneStorage(ctx, volumeReq, d.options.StorageLabels...)
+		logger.WithServiceRequest(log, volumeReq).Info("cloning volume")
+		vol, err = c.svc.CloneStorage(ctx, volumeReq, c.storageLabels...)
 		if err != nil {
 			return nil, status.Error(codes.Internal, err.Error())
 		}
 
-		log = log.WithField(logVolumeIDKey, vol.Storage.UUID).WithField("size", vol.Storage.Size)
+		log = log.WithField(logger.VolumeIDKey, vol.Storage.UUID).WithField("size", vol.Storage.Size)
 		if storageSizeGB > vol.Storage.Size {
 			log.WithField("new_size", storageSizeGB).Info("resizing volume")
 			// resize cloned storage and delete backup taken during resize operation as this is newly created storage
-			if vol, err = d.svc.resizeStorage(ctx, vol.Storage.UUID, storageSizeGB, true); err != nil {
+			if vol, err = c.svc.ResizeStorage(ctx, vol.Storage.UUID, storageSizeGB, true); err != nil {
 				return nil, status.Error(codes.Internal, err.Error())
 			}
 		}
 	} else {
 		volumeReq := &request.CreateStorageRequest{
-			Zone:   d.options.Zone,
+			Zone:   c.zone,
 			Title:  volumeName,
 			Size:   storageSizeGB,
 			Tier:   tier,
-			Labels: d.options.StorageLabels,
+			Labels: c.storageLabels,
 		}
 
-		logWithServiceRequest(log, volumeReq).Info("creating volume")
-		if vol, err = d.svc.createStorage(ctx, volumeReq); err != nil {
+		logger.WithServiceRequest(log, volumeReq).Info("creating volume")
+		if vol, err = c.svc.CreateStorage(ctx, volumeReq); err != nil {
 			return nil, status.Error(codes.Internal, err.Error())
 		}
 	}
@@ -169,7 +194,7 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 			AccessibleTopology: []*csi.Topology{
 				{
 					Segments: map[string]string{
-						"region": d.options.Zone,
+						"region": c.zone,
 					},
 				},
 			},
@@ -181,30 +206,30 @@ func (d *Driver) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 }
 
 // DeleteVolume deletes storage via UpCloud Storage service.
-func (d *Driver) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
+func (c *Controller) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "DeleteVolume Volume ID must be provided")
 	}
 
-	logWithServerContext(ctx, d.log).WithField(logVolumeIDKey, req.GetVolumeId()).Info("deleting volume")
-	err := d.svc.deleteStorage(ctx, req.VolumeId)
-	if err != nil && !errors.Is(err, errUpCloudStorageNotFound) {
+	logger.WithServerContext(ctx, c.log).WithField(logger.VolumeIDKey, req.GetVolumeId()).Info("deleting volume")
+	err := c.svc.DeleteStorage(ctx, req.VolumeId)
+	if err != nil && !errors.Is(err, service.ErrStorageNotFound) {
 		return &csi.DeleteVolumeResponse{}, err
 	}
 	return &csi.DeleteVolumeResponse{}, nil
 }
 
 // ControllerPublishVolume attaches storage to a node via UpCloud Storage service.
-func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.ControllerPublishVolumeRequest) (*csi.ControllerPublishVolumeResponse, error) { //nolint: funlen // TODO: refactor
+func (c *Controller) ControllerPublishVolume(ctx context.Context, req *csi.ControllerPublishVolumeRequest) (*csi.ControllerPublishVolumeResponse, error) { //nolint: funlen // TODO: refactor
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume ID must be provided")
 	}
-	log := logWithServerContext(ctx, d.log).WithField(logVolumeIDKey, req.GetVolumeId())
+	log := logger.WithServerContext(ctx, c.log).WithField(logger.VolumeIDKey, req.GetVolumeId())
 
 	if req.NodeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "node ID must be provided")
 	}
-	log = log.WithField(logNodeIDKey, req.GetNodeId())
+	log = log.WithField(logger.NodeIDKey, req.GetNodeId())
 
 	if req.VolumeCapability == nil {
 		return nil, status.Error(codes.InvalidArgument, "volume capability must be provided")
@@ -213,9 +238,9 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 		return nil, status.Error(codes.Unimplemented, "read only Volumes are not supported")
 	}
 
-	server, err := d.svc.getServerByHostname(ctx, req.NodeId)
+	server, err := c.svc.GetServerByHostname(ctx, req.NodeId)
 	if err != nil {
-		if errors.Is(err, errUpCloudServerNotFound) {
+		if errors.Is(err, service.ErrServerNotFound) {
 			return nil, status.Error(codes.NotFound, err.Error())
 		}
 		return nil, status.Error(codes.Internal, err.Error())
@@ -223,16 +248,16 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 
 	// check if volume exist before trying to attach it
 	log.Info("getting storage by uuid")
-	volume, err := d.svc.getStorageByUUID(ctx, req.VolumeId)
+	volume, err := c.svc.GetStorageByUUID(ctx, req.VolumeId)
 	if err != nil {
-		if errors.Is(err, errUpCloudStorageNotFound) {
+		if errors.Is(err, service.ErrStorageNotFound) {
 			return nil, status.Error(codes.NotFound, err.Error())
 		}
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	log.Info("checking that storage is online")
-	if err = d.svc.requireStorageOnline(ctx, &volume.Storage); err != nil {
+	if err = c.svc.RequireStorageOnline(ctx, &volume.Storage); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
@@ -243,7 +268,7 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 			log.Info("volume is already attached")
 			return &csi.ControllerPublishVolumeResponse{
 				PublishContext: map[string]string{
-					string(ctxCorrelationIDKey): contextCorrelationID(ctx),
+					string(logger.CtxCorrelationIDKey): logger.ContextCorrelationID(ctx),
 				},
 			}, nil
 		}
@@ -260,11 +285,11 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 	// Slice server.StorageDevices contains at least one additional root disk device
 	// so if len(server.StorageDevices) is equal to maxVolumesPerNode there is still room for one device.
 	// At the moment there is no reliable way to tell which devices are managed by CSI and which are e.g. additional devices created by user.
-	if len(server.StorageDevices) > maxVolumesPerNode {
+	if len(server.StorageDevices) > c.maxVolumesPerNode {
 		return nil, status.Error(codes.ResourceExhausted, "volumes already attached to the node is more than the maximum supported")
 	}
 	log.Info("attaching storage to node")
-	err = d.svc.attachStorage(ctx, req.VolumeId, server.UUID)
+	err = c.svc.AttachStorage(ctx, req.VolumeId, server.UUID)
 	if err != nil {
 		var svcError *upcloud.Problem
 		if errors.As(err, &svcError) && svcError.Status != http.StatusConflict && svcError.ErrorCode() == upcloud.ErrCodeStorageDeviceLimitReached {
@@ -276,7 +301,7 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 
 	return &csi.ControllerPublishVolumeResponse{
 		PublishContext: map[string]string{
-			string(ctxCorrelationIDKey): contextCorrelationID(ctx),
+			string(logger.CtxCorrelationIDKey): logger.ContextCorrelationID(ctx),
 		},
 	}, nil
 }
@@ -291,19 +316,19 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 //
 // If the volume corresponding to the volume_id or the node corresponding to node_id cannot be found by the Plugin
 // and the volume can be safely regarded as ControllerUnpublished from the node, the plugin SHOULD return 0 OK.
-func (d *Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest) (*csi.ControllerUnpublishVolumeResponse, error) {
+func (c *Controller) ControllerUnpublishVolume(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest) (*csi.ControllerUnpublishVolumeResponse, error) {
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume ID must be provided")
 	}
-	log := logWithServerContext(ctx, d.log).WithFields(logrus.Fields{
-		logVolumeIDKey: req.GetVolumeId(),
-		logNodeIDKey:   req.GetNodeId(),
+	log := logger.WithServerContext(ctx, c.log).WithFields(logrus.Fields{
+		logger.VolumeIDKey: req.GetVolumeId(),
+		logger.NodeIDKey:   req.GetNodeId(),
 	})
 	log.Info("getting storage by uuid")
 	// check if volume exist before trying to detach it
-	_, err := d.svc.getStorageByUUID(ctx, req.GetVolumeId())
+	_, err := c.svc.GetStorageByUUID(ctx, req.GetVolumeId())
 	if err != nil {
-		if errors.Is(err, errUpCloudStorageNotFound) {
+		if errors.Is(err, service.ErrStorageNotFound) {
 			return &csi.ControllerUnpublishVolumeResponse{}, nil
 		}
 		return nil, err
@@ -311,15 +336,15 @@ func (d *Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.Control
 
 	// TODO:  If node ID is not set, the SP MUST unpublish the volume from all nodes it is published to (ref. ControllerUnpublishVolumeRequest.NodeId).
 	log.Info("getting server by hostname")
-	server, err := d.svc.getServerByHostname(ctx, req.GetNodeId())
+	server, err := c.svc.GetServerByHostname(ctx, req.GetNodeId())
 	if err != nil {
 		return nil, err
 	}
 
 	log.Info("detaching volume")
-	err = d.svc.detachStorage(ctx, req.VolumeId, server.UUID)
+	err = c.svc.DetachStorage(ctx, req.VolumeId, server.UUID)
 	if err != nil {
-		if errors.Is(err, errUpCloudServerStorageNotFound) {
+		if errors.Is(err, service.ErrServerStorageNotFound) {
 			log.Info("volume was already detached from the node")
 			return &csi.ControllerUnpublishVolumeResponse{}, nil
 		}
@@ -329,7 +354,7 @@ func (d *Driver) ControllerUnpublishVolume(ctx context.Context, req *csi.Control
 	return &csi.ControllerUnpublishVolumeResponse{}, nil
 }
 
-func (d *Driver) ControllerGetVolume(ctx context.Context, req *csi.ControllerGetVolumeRequest) (*csi.ControllerGetVolumeResponse, error) {
+func (c *Controller) ControllerGetVolume(ctx context.Context, req *csi.ControllerGetVolumeRequest) (*csi.ControllerGetVolumeResponse, error) {
 	// ALPHA FEATURE
 	// This optional RPC MAY be called by the CO to fetch current information about a volume.
 	// A Controller Plugin MUST implement this ControllerGetVolume RPC call if it has GET_VOLUME capability.
@@ -338,11 +363,11 @@ func (d *Driver) ControllerGetVolume(ctx context.Context, req *csi.ControllerGet
 }
 
 // ValidateVolumeCapabilities checks if the volume capabilities are valid.
-func (d *Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
+func (c *Controller) ValidateVolumeCapabilities(ctx context.Context, req *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
 	if req.VolumeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume ID must be provided")
 	}
-	log := logWithServerContext(ctx, d.log).WithField(logVolumeIDKey, req.GetVolumeId())
+	log := logger.WithServerContext(ctx, c.log).WithField(logger.VolumeIDKey, req.GetVolumeId())
 
 	if req.VolumeCapabilities == nil {
 		return nil, status.Error(codes.InvalidArgument, "volume vapabilities must be provided")
@@ -350,8 +375,8 @@ func (d *Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Valida
 
 	log.Info("getting storage by uuid")
 	// check if volume exist before trying to validate it
-	if _, err := d.svc.getStorageByUUID(ctx, req.VolumeId); err != nil {
-		if errors.Is(err, errUpCloudStorageNotFound) {
+	if _, err := c.svc.GetStorageByUUID(ctx, req.VolumeId); err != nil {
+		if errors.Is(err, service.ErrStorageNotFound) {
 			return nil, status.Error(codes.NotFound, err.Error())
 		}
 		return nil, status.Error(codes.Internal, err.Error())
@@ -374,17 +399,17 @@ func (d *Driver) ValidateVolumeCapabilities(ctx context.Context, req *csi.Valida
 
 // ListVolumes returns a list of all requested volumes.
 // TODO OPTIONAL: implement starting token / pagination.
-func (d *Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
-	log := logWithServerContext(ctx, d.log).WithFields(logrus.Fields{
-		logListStartingTokenKey: req.GetStartingToken(),
-		logListMaxEntriesKey:    req.GetMaxEntries(),
+func (c *Controller) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
+	log := logger.WithServerContext(ctx, c.log).WithFields(logrus.Fields{
+		logger.ListStartingTokenKey: req.GetStartingToken(),
+		logger.ListMaxEntriesKey:    req.GetMaxEntries(),
 	})
 	listStart, err := parseToken(req.GetStartingToken())
 	if err != nil {
 		return nil, status.Error(codes.Aborted, "failed to parse starting_token")
 	}
 	log.Info("getting list of storages")
-	volumes, err := d.svc.listStorage(ctx, d.options.Zone)
+	volumes, err := c.svc.ListStorage(ctx, c.zone)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "listvolumes failed with: %s", err.Error())
 	}
@@ -409,12 +434,12 @@ func (d *Driver) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (
 }
 
 // GetCapacity returns the capacity of the storage pool.
-func (d *Driver) GetCapacity(ctx context.Context, req *csi.GetCapacityRequest) (*csi.GetCapacityResponse, error) {
+func (c *Controller) GetCapacity(ctx context.Context, req *csi.GetCapacityRequest) (*csi.GetCapacityResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "")
 }
 
 // ControllerGetCapabilities returns the capacity of the storage pool.
-func (d *Driver) ControllerGetCapabilities(ctx context.Context, req *csi.ControllerGetCapabilitiesRequest) (*csi.ControllerGetCapabilitiesResponse, error) {
+func (c *Controller) ControllerGetCapabilities(ctx context.Context, req *csi.ControllerGetCapabilitiesRequest) (*csi.ControllerGetCapabilitiesResponse, error) {
 	caps := make([]*csi.ControllerServiceCapability, 0)
 	for _, capability := range supportedCapabilities {
 		caps = append(caps, &csi.ControllerServiceCapability{
@@ -426,7 +451,7 @@ func (d *Driver) ControllerGetCapabilities(ctx context.Context, req *csi.Control
 		})
 	}
 
-	logWithServerContext(ctx, d.log).WithField("caps", caps).Info("reporting capabilities")
+	logger.WithServerContext(ctx, c.log).WithField("caps", caps).Info("reporting capabilities")
 	return &csi.ControllerGetCapabilitiesResponse{
 		Capabilities: caps,
 	}, nil
@@ -434,7 +459,7 @@ func (d *Driver) ControllerGetCapabilities(ctx context.Context, req *csi.Control
 
 // CreateSnapshot will be called by the CO to create a new snapshot from a
 // source volume on behalf of a user.
-func (d *Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
+func (c *Controller) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
 	if req.GetName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "snapshot name must be provided")
 	}
@@ -442,11 +467,11 @@ func (d *Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequ
 		return nil, status.Error(codes.InvalidArgument, "snapshot source volume ID must be provided")
 	}
 
-	log := logWithServerContext(ctx, d.log)
+	log := logger.WithServerContext(ctx, c.log)
 	log.Info("getting storage backup by name")
 
-	s, err := d.svc.getStorageBackupByName(ctx, req.GetName())
-	if err != nil && !errors.Is(err, errUpCloudStorageNotFound) {
+	s, err := c.svc.GetStorageBackupByName(ctx, req.GetName())
+	if err != nil && !errors.Is(err, service.ErrStorageNotFound) {
 		return nil, status.Errorf(codes.Internal, "CreateSnapshot failed with: %s", err.Error())
 	}
 
@@ -457,10 +482,9 @@ func (d *Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequ
 	if s == nil {
 		log.Info("creating storage backup")
 
-		sd, err := d.svc.createStorageBackup(ctx, req.GetSourceVolumeId(), req.GetName())
-
+		sd, err := c.svc.CreateStorageBackup(ctx, req.GetSourceVolumeId(), req.GetName())
 		if err != nil {
-			if errors.Is(err, errUpCloudBackupInProgress) {
+			if errors.Is(err, service.ErrBackupInProgress) {
 				return nil, status.Errorf(codes.Aborted, "cannot create snapshot for volume with backup in progress")
 			}
 
@@ -482,14 +506,14 @@ func (d *Driver) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequ
 }
 
 // DeleteSnapshot will be called by the CO to delete a snapshot.
-func (d *Driver) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
+func (c *Controller) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
 	snapID := req.GetSnapshotId()
 	if snapID == "" {
 		return nil, status.Error(codes.InvalidArgument, "snapshot ID must be provided")
 	}
 	// Delete should succeed if snapshot is not found or an invalid snapshot id is used.
 	if isValidStorageUUID(snapID) {
-		if err := d.svc.deleteStorageBackup(ctx, snapID); err != nil {
+		if err := c.svc.DeleteStorageBackup(ctx, snapID); err != nil {
 			var svcError *upcloud.Problem
 			if errors.As(err, &svcError) && svcError.Status != http.StatusNotFound {
 				return nil, status.Errorf(codes.Internal, err.Error())
@@ -505,12 +529,12 @@ func (d *Driver) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotRequ
 // been cut successfully yet.
 //
 // TODO OPTIONAL: implement starting token / pagination.
-func (d *Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest) (*csi.ListSnapshotsResponse, error) {
-	log := logWithServerContext(ctx, d.log).WithFields(logrus.Fields{
-		logListStartingTokenKey: req.GetStartingToken(),
-		logListMaxEntriesKey:    req.GetMaxEntries(),
-		logVolumeSourceKey:      req.GetSourceVolumeId(),
-		logSnapshotIDKey:        req.GetSnapshotId(),
+func (c *Controller) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest) (*csi.ListSnapshotsResponse, error) {
+	log := logger.WithServerContext(ctx, c.log).WithFields(logrus.Fields{
+		logger.ListStartingTokenKey: req.GetStartingToken(),
+		logger.ListMaxEntriesKey:    req.GetMaxEntries(),
+		logger.VolumeSourceKey:      req.GetSourceVolumeId(),
+		logger.SnapshotIDKey:        req.GetSnapshotId(),
 	})
 
 	listStart, err := parseToken(req.GetStartingToken())
@@ -523,9 +547,9 @@ func (d *Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsReques
 	if snapID := req.GetSnapshotId(); snapID != "" { //nolint: nestif // TODO: refactor
 		log = log.WithField("snapshot_id", snapID)
 		log.Info("getting storage snapshots by ID")
-		s, err := d.svc.getStorageByUUID(ctx, snapID)
+		s, err := c.svc.GetStorageByUUID(ctx, snapID)
 		if err != nil {
-			if errors.Is(err, errUpCloudStorageNotFound) {
+			if errors.Is(err, service.ErrStorageNotFound) {
 				return &csi.ListSnapshotsResponse{
 					Entries: make([]*csi.ListSnapshotsResponse_Entry, 0),
 				}, nil
@@ -536,7 +560,7 @@ func (d *Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsReques
 	} else {
 		log.Info("getting list of storage snapshots")
 		// NOTE: SourceVolumeId can also be empty
-		backups, err = d.svc.listStorageBackups(ctx, req.GetSourceVolumeId())
+		backups, err = c.svc.ListStorageBackups(ctx, req.GetSourceVolumeId())
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "listsnapshots failed with: %s", err.Error())
 		}
@@ -562,16 +586,16 @@ func (d *Driver) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsReques
 }
 
 // ControllerExpandVolume is called from the resizer to increase the volume size.
-func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
+func (c *Controller) ControllerExpandVolume(ctx context.Context, req *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
 	volumeID := req.GetVolumeId()
 
 	if volumeID == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume ID missing in request")
 	}
-	log := logWithServerContext(ctx, d.log).WithField(logVolumeIDKey, req.GetVolumeId())
+	log := logger.WithServerContext(ctx, c.log).WithField(logger.VolumeIDKey, req.GetVolumeId())
 
 	log.Info("getting storage by uuid")
-	volume, err := d.svc.getStorageByUUID(ctx, volumeID)
+	volume, err := c.svc.GetStorageByUUID(ctx, volumeID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "could not retrieve existing volumes: %v", err)
 	}
@@ -605,15 +629,15 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 
 	if isBlockDevice {
 		log.Info("resizing block device")
-		_, err = d.svc.resizeBlockDevice(ctx, volume.UUID, int(resizeGigaBytes))
+		_, err = c.svc.ResizeBlockDevice(ctx, volume.UUID, int(resizeGigaBytes))
 		if err != nil {
-			d.log.Errorf("cannot resizeBlockDevice volume %s: %s", volumeID, err.Error())
+			c.log.Errorf("cannot resizeBlockDevice volume %s: %s", volumeID, err.Error())
 		}
 	} else {
 		log.Info("resizing volume")
-		_, err = d.svc.resizeStorage(ctx, volume.UUID, int(resizeGigaBytes), false)
+		_, err = c.svc.ResizeStorage(ctx, volume.UUID, int(resizeGigaBytes), false)
 		if err != nil {
-			d.log.Errorf("cannot resizeStorage volume %s: %s", volumeID, err.Error())
+			c.log.Errorf("cannot resizeStorage volume %s: %s", volumeID, err.Error())
 		}
 	}
 
