@@ -1,13 +1,7 @@
 project_name: upcloud-csi
 before:
   hooks:
-    - make build-manifest
-    - mkdir -p ./temp
-    - ./cmd/upcloud-csi-manifest/upcloud-csi-manifest --crd=true --rbac=false --setup=false --output=./temp/{{ .ProjectName }}-crd.yaml --driver-version={{ if .IsSnapshot }}main{{ else }}v{{ .Version }}{{ end }}
-    - ./cmd/upcloud-csi-manifest/upcloud-csi-manifest --crd=false --rbac=true --setup=true --zone=de-fra1 --output=./temp/{{ .ProjectName }}-setup-de-fra1.yaml --driver-version={{ if .IsSnapshot }}main{{ else }}v{{ .Version }}{{ end }}
-    - ./cmd/upcloud-csi-manifest/upcloud-csi-manifest --crd=false --rbac=true --setup=true --zone=fi-hel2 --output=./temp/{{ .ProjectName }}-setup-fi-hel2.yaml --driver-version={{ if .IsSnapshot }}main{{ else }}v{{ .Version }}{{ end }}
-    - ./cmd/upcloud-csi-manifest/upcloud-csi-manifest --crd=false --rbac=true --setup=true --zone=sg-sin1 --output=./temp/{{ .ProjectName }}-setup-sg-sin1.yaml --driver-version={{ if .IsSnapshot }}main{{ else }}v{{ .Version }}{{ end }}
-    - ./cmd/upcloud-csi-manifest/upcloud-csi-manifest --crd=false --rbac=true --setup=true --zone=uk-lon1 --output=./temp/{{ .ProjectName }}-setup-uk-lon1.yaml --driver-version={{ if .IsSnapshot }}main{{ else }}v{{ .Version }}{{ end }}
+    - make render-manifests PROJECT_NAME={{ .ProjectName}} VERSION={{ if .IsSnapshot }}main{{ else }}v{{ .Version }}{{ end }}
 builds:
   - id: upcloud-csi-plugin
     env:

@@ -6,6 +6,7 @@ OS ?= linux
 GO_VERSION := 1.19
 ARCH := amd64
 CGO_ENABLED := 1
+MANIFEST_ZONES := de-fra1 fi-hel2 sg-sin1 uk-lon1 nl-ams1 us-chi1
 
 .PHONY: compile
 compile:
@@ -48,3 +49,16 @@ build-manifest:
 .PHONY: build
 build: build-plugin build-manifest
 
+render-manifests: build-manifest
+	test $${PROJECT_NAME?PROJECT_NAME not set}
+	test $${VERSION?VERSION not set}
+	mkdir -p ./temp
+	for zone in ${MANIFEST_ZONES}; do \
+		./cmd/upcloud-csi-manifest/upcloud-csi-manifest \
+			--crd=false \
+			--rbac=true \
+			--setup=true \
+			--zone=$${zone} \
+			--output=./temp/${PROJECT_NAME}-setup-$${zone}.yaml \
+			--driver-version=${VERSION} ; \
+	done
