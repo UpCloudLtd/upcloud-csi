@@ -15,8 +15,8 @@ type Config struct {
 	CRDManifest             bool
 	SnapshotWebhookManifest bool
 	DriverVersion           string
-	UpcloudUsername         string
-	UupcloudPassword        string
+	UpCloudUsername         string
+	UpCloudPassword         string
 	LabelClusterID          string
 	Zone                    string
 }
@@ -34,8 +34,8 @@ func Parse(osArgs []string) (Config, error) {
 	flagSet.BoolVar(&c.CRDManifest, "crd", false, "Include CRD manifest.")
 	flagSet.BoolVar(&c.SnapshotWebhookManifest, "snapshot-webhook", false, "Include snapshot webhook manifest.")
 	flagSet.StringVar(&c.DriverVersion, "driver-version", "main", "Use specific driver version to render setup manifest.")
-	flagSet.StringVar(&c.UpcloudUsername, "upcloud-username", "", "Use UpCloud username to render secrets manifest. If empty, 'UPCLOUD_USERNAME' environment variable is used.")
-	flagSet.StringVar(&c.UupcloudPassword, "upcloud-password", "", "Use UpCloud password to render secrets manifest. If empty, 'UPCLOUD_PASSWORD' environment variable is used. Note that plaintext password can be decoded from manifest so store it with care.")
+	flagSet.StringVar(&c.UpCloudUsername, "upcloud-username", "", "Use UpCloud username to render secrets manifest. If empty, 'UPCLOUD_USERNAME' environment variable is used.")
+	flagSet.StringVar(&c.UpCloudPassword, "upcloud-password", "", "Use UpCloud password to render secrets manifest. If empty, 'UPCLOUD_PASSWORD' environment variable is used. Note that plaintext password can be decoded from manifest so store it with care.")
 	flagSet.StringVar(&c.LabelClusterID, "label-cluster-id", "", "Apply cluster ID label to all storages created by the driver")
 	flagSet.StringVar(&c.Zone, "zone", "de-fra1", "UpCloud zone")
 
@@ -43,12 +43,12 @@ func Parse(osArgs []string) (Config, error) {
 		return c, err
 	}
 
-	if c.UpcloudUsername == "" {
-		c.UpcloudUsername = os.Getenv("UPCLOUD_USERNAME")
+	if c.UpCloudUsername == "" {
+		c.UpCloudUsername = os.Getenv("UPCLOUD_USERNAME")
 	}
 
-	if c.UupcloudPassword == "" {
-		c.UupcloudPassword = os.Getenv("UPCLOUD_PASSWORD")
+	if c.UpCloudPassword == "" {
+		c.UpCloudPassword = os.Getenv("UPCLOUD_PASSWORD")
 	}
 	return c, nil
 }
