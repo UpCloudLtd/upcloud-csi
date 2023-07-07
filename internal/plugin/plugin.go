@@ -24,11 +24,11 @@ func Run(c config.Config) error {
 		return err
 	}
 
-	srv, err := newPluginServer(c, l)
+	pluginServer, err := newPluginServer(c, l)
 	if err != nil {
 		return err
 	}
-	return server.Run(srv, healthServer)
+	return server.Run(pluginServer, healthServer)
 }
 
 func newPluginServer(c config.Config, l *logrus.Entry) (*server.PluginServer, error) {
