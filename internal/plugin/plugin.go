@@ -19,27 +19,44 @@ import (
 
 func Run(c config.Config) error {
 	l := logger.New(c.LogLevel).WithField(logger.HostKey, hostname())
-
-	if c.Filesystem == nil {
-		c.Filesystem = filesystem.NewLinuxFilesystem(l)
-	}
 	healthServer, err := server.NewHealthServer(c.HealtServerAddress, l)
 	if err != nil {
 		return err
 	}
 
-	switch c.Mode {
-	case config.DriverModeController:
-		return runController(c, healthServer, l)
-	case config.DriverModeNode:
-		return runNode(c, healthServer, l)
-	case config.DriverModeMonolith:
-		return runMonolith(c, healthServer, l)
+	srv, err := newPluginServer(c, l)
+	if err != nil {
+		return err
 	}
-	return fmt.Errorf("unknow driver mode '%s'", c.Mode)
+	return server.Run(srv, healthServer)
 }
 
-func runNode(c config.Config, healthServer *server.HealthServer, l *logrus.Entry) error {
+func newPluginServer(c config.Config, l *logrus.Entry) (*server.PluginServer, error) {
+	var srv *server.PluginServer
+	var err error
+	if c.Filesystem == nil {
+		c.Filesystem = filesystem.NewLinuxFilesystem(l)
+	}
+	switch c.Mode {
+	case config.DriverModeController:
+		if srv, err = newControllerPluginServer(c, l); err != nil {
+			return srv, err
+		}
+	case config.DriverModeNode:
+		if srv, err = newNodePluginServer(c, l); err != nil {
+			return srv, err
+		}
+	case config.DriverModeMonolith:
+		if srv, err = newMonolithPluginServer(c, l); err != nil {
+			return srv, err
+		}
+	default:
+		return srv, fmt.Errorf("unknow driver mode '%s'", c.Mode)
+	}
+	return srv, nil
+}
+
+func newNodePluginServer(c config.Config, l *logrus.Entry) (*server.PluginServer, error) {
 	l = l.WithField(logger.NodeIDKey, c.NodeHost)
 	if c.Zone != "" {
 		l = l.WithField(logger.ZoneKey, c.Zone)
@@ -47,57 +64,57 @@ func runNode(c config.Config, healthServer *server.HealthServer, l *logrus.Entry
 
 	csiNode, err := node.NewNode(c.NodeHost, c.Zone, int64(config.MaxVolumesPerNode), c.Filesystem, l)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	identity := identity.NewIdentity(c.DriverName, l)
 	pluginServer, err := server.NewNodePluginServer(c.PluginServerAddress, csiNode, identity, l)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return server.Run(pluginServer, healthServer)
+	return pluginServer, nil
 }
 
-func runController(c config.Config, healthServer *server.HealthServer, l *logrus.Entry) error {
+func newControllerPluginServer(c config.Config, l *logrus.Entry) (*server.PluginServer, error) {
 	svc, err := service.NewUpCloudServiceFromCredentials(c.Username, c.Password)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	autoConfigureZone(svc, &c)
 	l = l.WithField(logger.ZoneKey, c.Zone)
 	csiController, err := controller.NewController(svc, c.Zone, config.MaxVolumesPerNode, l, c.Labels...)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	identity := identity.NewIdentity(c.DriverName, l)
 	pluginServer, err := server.NewControllerPluginServer(c.PluginServerAddress, csiController, identity, l)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return server.Run(pluginServer, healthServer)
+	return pluginServer, nil
 }
 
-func runMonolith(c config.Config, healthServer *server.HealthServer, l *logrus.Entry) error {
+func newMonolithPluginServer(c config.Config, l *logrus.Entry) (*server.PluginServer, error) {
 	svc, err := service.NewUpCloudServiceFromCredentials(c.Username, c.Password)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	autoConfigureZone(svc, &c)
 	l = l.WithField(logger.NodeIDKey, c.NodeHost).WithField(logger.ZoneKey, c.Zone)
 	csiController, err := controller.NewController(svc, c.Zone, config.MaxVolumesPerNode, l, c.Labels...)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	csiNode, err := node.NewNode(c.NodeHost, c.Zone, int64(config.MaxVolumesPerNode), c.Filesystem, l)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	identity := identity.NewIdentity(c.DriverName, l)
 	pluginServer, err := server.NewPluginServer(c.PluginServerAddress, csiController, csiNode, identity, l)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return server.Run(pluginServer, healthServer)
+	return pluginServer, nil
 }
 
 func autoConfigureZone(svc *service.UpCloudService, c *config.Config) {

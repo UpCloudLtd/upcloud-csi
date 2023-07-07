@@ -101,3 +101,7 @@ func (s *PluginServer) Stop(sig os.Signal) {
 		}
 	}
 }
+
+func (s *PluginServer) GetServiceInfo() map[string]grpc.ServiceInfo {
+	return s.srv.GetServiceInfo()
+}
