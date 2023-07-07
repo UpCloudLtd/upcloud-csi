@@ -17,8 +17,8 @@ func Render(c config.Config) error {
 
 	if c.SecretsManifest {
 		templates = append(templates, kubernetes.SecretsTemplate)
-		vars["UPCLOUD_CSI_USERNAME_B64"] = base64.StdEncoding.EncodeToString([]byte(c.UpcloudUsername))
-		vars["UPCLOUD_CSI_PASSWORD_B64"] = base64.StdEncoding.EncodeToString([]byte(c.UpcloudUsername))
+		vars["UPCLOUD_CSI_USERNAME_B64"] = base64.StdEncoding.EncodeToString([]byte(c.UpCloudUsername))
+		vars["UPCLOUD_CSI_PASSWORD_B64"] = base64.StdEncoding.EncodeToString([]byte(c.UpCloudPassword))
 	}
 	if c.CRDManifest {
 		templates = append(templates, kubernetes.CRDTemplate)
