@@ -84,3 +84,18 @@ func sfdiskOutputGetLastPartition(source, sfdiskOutput string) (string, error) {
 	}
 	return lastPartition, nil
 }
+
+func createBlockDevice(target string) error {
+	err := os.MkdirAll(filepath.Dir(target), 0o750)
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(target, os.O_CREATE, 0o660)
+	if err != nil {
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return nil
+}

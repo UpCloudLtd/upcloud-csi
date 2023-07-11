@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -102,16 +101,9 @@ func (m *LinuxFilesystem) Mount(ctx context.Context, source, target, fsType stri
 	}
 
 	// block device requires that target is file instead of directory
-	if fsType == "" { //nolint: nestif // TODO: refactor
-		err := os.MkdirAll(filepath.Dir(target), 0o750)
+	if fsType == "" {
+		err := createBlockDevice(target)
 		if err != nil {
-			return err
-		}
-		f, err := os.OpenFile(target, os.O_CREATE, 0o660)
-		if err != nil {
-			return err
-		}
-		if err := f.Close(); err != nil {
 			return err
 		}
 	} else {
