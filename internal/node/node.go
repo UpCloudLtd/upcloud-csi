@@ -154,23 +154,11 @@ func (n *Node) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolume
 }
 
 // NodePublishVolume mounts the volume mounted to the staging path to the target path.
-func (n *Node) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) { //nolint: funlen // TODO: refactor
-	if req.VolumeId == "" {
-		return nil, status.Error(codes.InvalidArgument, "volume ID must be provided")
+func (n *Node) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
+	if err := validateNodePublishVolumeRequest(req); err != nil {
+		return nil, err
 	}
 	log := logger.WithServerContext(ctx, n.log).WithField(logger.VolumeIDKey, req.GetVolumeId())
-
-	if req.StagingTargetPath == "" {
-		return nil, status.Error(codes.InvalidArgument, "staging target path must be provided")
-	}
-
-	if req.TargetPath == "" {
-		return nil, status.Error(codes.InvalidArgument, "target path must be provided")
-	}
-
-	if req.VolumeCapability == nil {
-		return nil, status.Error(codes.InvalidArgument, "volume capability must be provided")
-	}
 
 	var err error
 	source := req.GetStagingTargetPath()
@@ -354,4 +342,20 @@ func (n *Node) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeSta
 
 func (n *Node) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method NodeExpandVolume not implemented")
+}
+
+func validateNodePublishVolumeRequest(r *csi.NodePublishVolumeRequest) error {
+	if r.GetVolumeId() == "" {
+		return status.Error(codes.InvalidArgument, "volume ID must be provided")
+	}
+	if r.GetStagingTargetPath() == "" {
+		return status.Error(codes.InvalidArgument, "staging target path must be provided")
+	}
+	if r.GetTargetPath() == "" {
+		return status.Error(codes.InvalidArgument, "target path must be provided")
+	}
+	if r.GetVolumeCapability() == nil {
+		return status.Error(codes.InvalidArgument, "volume capability must be provided")
+	}
+	return nil
 }
