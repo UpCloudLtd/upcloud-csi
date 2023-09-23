@@ -82,6 +82,9 @@ func sfdiskOutputGetLastPartition(source, sfdiskOutput string) (string, error) {
 			break
 		}
 	}
+	if lastPartition == "" {
+		return "", fmt.Errorf("unable to read last partition from sfdisk output [%s]", strings.Join(outLines, ", "))
+	}
 	return lastPartition, nil
 }
 

@@ -120,12 +120,11 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: csi-upcloud-plugin
-          image: ghcr.io/upcloudltd/upcloud-csi:${UPCLOUD_CSI_VERSION}
+          image: ghcr.io/upcloudltd/upcloud-csi:latest
           args:
             - "--endpoint=$(CSI_ENDPOINT)"
-            - "--zone=${UPCLOUD_ZONE}"
-            - "--label=csi_cluster_id=${CLUSTER_ID}"
-            - "--mode=controller"
+            - "--nodehost=$(NODE_ID)"
+            - "--mode=monolith"
           env:
             - name: CSI_ENDPOINT
               value: unix:///var/lib/csi/sockets/pluginproxy/csi.sock
@@ -247,15 +246,24 @@ spec:
             - name: registration-dir
               mountPath: /registration/
         - name: csi-upcloud-plugin
-          image: ghcr.io/upcloudltd/upcloud-csi:${UPCLOUD_CSI_VERSION}
+          image: ghcr.io/upcloudltd/upcloud-csi:latest
           args:
             - "--endpoint=$(CSI_ENDPOINT)"
             - "--nodehost=$(NODE_ID)"
-            - "--mode=node"
-            - "--zone=${UPCLOUD_ZONE}"
+            - "--mode=monolith"
           env:
             - name: CSI_ENDPOINT
               value: unix:///csi/csi.sock
+            - name: UPCLOUD_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: upcloud
+                  key: username
+            - name: UPCLOUD_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: upcloud
+                  key: password
             - name: NODE_ID
               valueFrom:
                 fieldRef:

@@ -1,0 +1,26 @@
+# Example shows how to use XFS filesystem with mount options noatime and nodiratime
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: upcloud-block-storage-xfs
+mountOptions:
+- noatime
+- nodiratime
+parameters:
+  fsType: xfs
+provisioner: storage.csi.upcloud.com
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: xfs-pvc
+spec:
+  storageClassName: upcloud-block-storage-xfs
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
