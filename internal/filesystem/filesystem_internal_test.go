@@ -53,7 +53,7 @@ func TestSfdiskOutputGetLastPartition(t *testing.T) {
 	}
 }
 
-func TestFilesystemFilesystem(t *testing.T) {
+func TestLinuxFilesystem_Mount(t *testing.T) {
 	t.Parallel()
 	if err := checkSystemRequirements(); err != nil {
 		t.Skipf("skipping test: %s", err.Error())
@@ -67,7 +67,7 @@ func TestFilesystemFilesystem(t *testing.T) {
 	defer os.Remove(part)
 	t.Logf("create fake partition %s", part)
 
-	m := newTestFilesystem()
+	m := newTestLinuxFilesystem()
 
 	if err := m.createFilesystem(context.Background(), part, "ext4", nil); err != nil {
 		t.Errorf("Format failed with error: %s", err.Error())
@@ -86,11 +86,11 @@ func TestFilesystemFilesystem(t *testing.T) {
 	}
 
 	if canMount() {
-		if err := testFilesystemMountFilesystem(t, m, part); err != nil {
+		if err := mountFilesystem(t, m, part); err != nil {
 			t.Error(err)
 			return
 		}
-		if err := testFilesystemMountBlockDevice(t, m, part); err != nil {
+		if err := mountBlockDevice(t, m, part); err != nil {
 			t.Error(err)
 			return
 		}
@@ -99,55 +99,7 @@ func TestFilesystemFilesystem(t *testing.T) {
 	}
 }
 
-func testFilesystemMountFilesystem(t *testing.T, m *LinuxFilesystem, partition string) error {
-	t.Helper()
-	mountPath := filepath.Join(os.TempDir(), fmt.Sprintf("%s-mount-path-%d", driverName, time.Now().Unix()))
-	defer os.RemoveAll(mountPath)
-
-	if err := m.Mount(context.Background(), partition, mountPath, "ext4"); err != nil {
-		return fmt.Errorf("Mount failed with error: %w", err)
-	}
-	isMounted, err := m.IsMounted(context.Background(), mountPath)
-	if err != nil {
-		return fmt.Errorf("IsMounted failed with error: %w", err)
-	}
-	if !isMounted {
-		return errors.New("IsMounted returned false")
-	}
-
-	t.Logf("mounted %s to %s", partition, mountPath)
-	if err := m.Unmount(context.Background(), mountPath); err != nil {
-		return fmt.Errorf("Unmount failed with error: %w", err)
-	}
-	t.Logf("unmounted %s", mountPath)
-	return nil
-}
-
-func testFilesystemMountBlockDevice(t *testing.T, m *LinuxFilesystem, partition string) error {
-	t.Helper()
-	mountPath := filepath.Join(os.TempDir(), fmt.Sprintf("%s-mount-path-%d", driverName, time.Now().Unix()))
-	defer os.RemoveAll(mountPath)
-
-	if err := m.Mount(context.Background(), partition, mountPath, "", "bind"); err != nil {
-		return fmt.Errorf("Mount failed with error: %w", err)
-	}
-	isMounted, err := m.IsMounted(context.Background(), mountPath)
-	if err != nil {
-		return fmt.Errorf("IsMounted failed with error: %w", err)
-	}
-	if !isMounted {
-		return errors.New("IsMounted returned false")
-	}
-
-	t.Logf("mounted %s to %s", partition, mountPath)
-	if err := m.Unmount(context.Background(), mountPath); err != nil {
-		return fmt.Errorf("Unmount failed with error: %w", err)
-	}
-	t.Logf("unmounted %s", mountPath)
-	return nil
-}
-
-func TestFilesystemDisk(t *testing.T) {
+func TestLinuxFilesystem_CreateAndReadPartition(t *testing.T) {
 	t.Parallel()
 	if err := checkSystemRequirements(); err != nil {
 		t.Skipf("skipping test: %s", err.Error())
@@ -160,7 +112,7 @@ func TestFilesystemDisk(t *testing.T) {
 	}
 	defer os.Remove(disk)
 	t.Logf("create fake disk device %s", disk)
-	m := newTestFilesystem()
+	m := newTestLinuxFilesystem()
 
 	// Create partition equivalent to creating /dev/sda1 to device /dev/sda
 	if err := m.createPartition(context.Background(), disk); err != nil {
@@ -191,43 +143,6 @@ func TestFilesystemDisk(t *testing.T) {
 		return
 	}
 	t.Logf("created new partition %s", wantPartition)
-}
-
-func createDeviceFile(size int64) (string, error) {
-	f, err := os.CreateTemp(os.TempDir(), fmt.Sprintf("%s-disk-*", driverName))
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	if err := f.Truncate(size); err != nil {
-		return f.Name(), err
-	}
-	return f.Name(), err
-}
-
-func checkSystemRequirements() error {
-	tools := []string{
-		"mkfs.ext4", "mount", "umount", "blkid", "wipefs", "findmnt", "parted", "sfdisk", "tune2fs", "udevadm",
-	}
-	for _, t := range tools {
-		if _, err := exec.LookPath(t); err != nil {
-			if errors.Is(err, exec.ErrNotFound) {
-				return fmt.Errorf("%s executable not found in $PATH", t)
-			}
-			return err
-		}
-	}
-	return nil
-}
-
-func newTestFilesystem() *LinuxFilesystem {
-	logger := logrus.New()
-	logger.SetOutput(io.Discard)
-	return NewLinuxFilesystem(logger.WithFields(nil))
-}
-
-func canMount() bool {
-	return os.Getuid() == 0
 }
 
 func TestVolumeIDToDiskID(t *testing.T) {
@@ -295,10 +210,100 @@ func TestGetBlockDeviceByDiskID(t *testing.T) {
 	assert.Equal(t, want, got)
 }
 
+func TestLinuxFilesystem_FormatValidation(t *testing.T) {
+	t.Parallel()
+	fs := newTestLinuxFilesystem()
+	require.ErrorContains(t, fs.Format(context.TODO(), "/foo", "ext5", nil), "filesystem type 'ext5' is not supported")
+	require.ErrorContains(t, fs.Format(context.TODO(), "/foo", "", nil), "fs type is not specified for formatting the volume")
+	require.ErrorContains(t, fs.Format(context.TODO(), "", "ext4", nil), "source is not specified for formatting the volume")
+}
+
+func TestLinuxFilesystem_isSupportedFilesystem(t *testing.T) {
+	t.Parallel()
+	fs := newTestLinuxFilesystem()
+	require.NoError(t, fs.isSupportedFilesystem("ext4"))
+	require.Error(t, fs.isSupportedFilesystem("extX"))
+}
+
+func createDeviceFile(size int64) (string, error) {
+	f, err := os.CreateTemp(os.TempDir(), fmt.Sprintf("%s-disk-*", driverName))
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	if err := f.Truncate(size); err != nil {
+		return f.Name(), err
+	}
+	return f.Name(), err
+}
+
+func checkSystemRequirements() error {
+	tools := []string{
+		"mkfs.ext4", "mount", "umount", "blkid", "wipefs", "findmnt", "parted", "sfdisk", "tune2fs", "udevadm",
+	}
+	for _, t := range tools {
+		if _, err := exec.LookPath(t); err != nil {
+			if errors.Is(err, exec.ErrNotFound) {
+				return fmt.Errorf("%s executable not found in $PATH", t)
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+func newTestLinuxFilesystem() *LinuxFilesystem {
+	logger := logrus.New()
+	logger.SetOutput(io.Discard)
+	return NewLinuxFilesystem([]string{"ext3", "ext4", "xfs"}, logger.WithFields(nil))
+}
+
+func canMount() bool {
+	return os.Getuid() == 0
+}
+
 func createTempFile(dir, pattern string) (string, error) {
 	f, err := os.CreateTemp(dir, pattern)
 	if err != nil {
 		return "", err
 	}
 	return f.Name(), f.Close()
+}
+
+func mountFilesystem(t *testing.T, m *LinuxFilesystem, partition string) error {
+	t.Helper()
+	mountPath := filepath.Join(os.TempDir(), fmt.Sprintf("%s-mount-path-%d", driverName, time.Now().Unix()))
+	defer os.RemoveAll(mountPath)
+
+	return mount(t, m, partition, mountPath, "ext4")
+}
+
+func mountBlockDevice(t *testing.T, m *LinuxFilesystem, partition string) error {
+	t.Helper()
+	mountPath := filepath.Join(os.TempDir(), fmt.Sprintf("%s-mount-path-%d", driverName, time.Now().Unix()))
+	defer os.RemoveAll(mountPath)
+
+	return mount(t, m, partition, mountPath, "bind")
+}
+
+func mount(t *testing.T, m *LinuxFilesystem, source, target, fsType string) error {
+	t.Helper()
+
+	if err := m.Mount(context.Background(), source, target, fsType); err != nil {
+		return fmt.Errorf("Mount failed with error: %w", err)
+	}
+	isMounted, err := m.IsMounted(context.Background(), target)
+	if err != nil {
+		return fmt.Errorf("IsMounted failed with error: %w", err)
+	}
+	if !isMounted {
+		return errors.New("IsMounted returned false")
+	}
+
+	t.Logf("mounted %s to %s", source, target)
+	if err := m.Unmount(context.Background(), target); err != nil {
+		return fmt.Errorf("Unmount failed with error: %w", err)
+	}
+	t.Logf("unmounted %s", target)
+	return nil
 }
