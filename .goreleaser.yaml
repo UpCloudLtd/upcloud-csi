@@ -1,7 +1,4 @@
 project_name: upcloud-csi
-before:
-  hooks:
-    - make render-manifests PROJECT_NAME={{ .ProjectName}} VERSION={{ if .IsSnapshot }}main{{ else }}v{{ .Version }}{{ end }}
 builds:
   - id: upcloud-csi-plugin
     env:
@@ -22,26 +19,7 @@ builds:
     goarch:
       - amd64
       - arm64
-  - id: upcloud-csi-manifest
-    env:
-      - CGO_ENABLED=0
-    dir: .
-    flags:
-      - -trimpath
-    ldflags:
-      - -s -w
-      - -X github.com/UpCloudLtd/upcloud-csi/driver.version={{ if .IsSnapshot }}main{{ else }}{{ .Version }}{{ end }}
-      - -X github.com/UpCloudLtd/upcloud-csi/driver.commit={{ .ShortCommit }}
-      - -X github.com/UpCloudLtd/upcloud-csi/driver.gitTreeState={{ if .IsSnapshot }}dirty{{ else }}clean{{ end }}
-    main: ./cmd/upcloud-csi-manifest
-    binary: "upcloud-csi-manifest_v{{ .Version }}"
-    goos:
-      - linux
-      - darwin
-    goarch:
-      - amd64
-      - arm64
 release:
   draft: true
   extra_files:
-    - glob: ./temp/{{ .ProjectName }}-*.yaml
+    - glob: ./deploy/kubernetes/*.yaml

@@ -3,6 +3,8 @@
 UpCloud CSI driver deployment is bundled with [sidecar containers](#sidecars) and optional [snapshot validation webhook](#deploy-snapshot-validation-webhook) service.  
 Version specific deployment manifests `upcloud-csi-crd.yaml` and `upcloud-csi-setup.yaml` can be found under [release assets](https://github.com/UpCloudLtd/upcloud-csi/releases/latest/).
 
+UpCloud's Managed Kubernetes service (UKS) includes a pre-installed CSI driver, and it does not need to be installed separately.
+
 ## Deployment
 
 ### Requirements
@@ -29,9 +31,10 @@ upcloud          Opaque                                2         18h
 
 ### Deploy CSI Driver
 
-Deploy custom resources definitions required by CSI driver:
+Deploy custom resources definitions and roles required by CSI driver:
 ```shell
 $ kubectl apply -f https://github.com/UpCloudLtd/upcloud-csi/releases/latest/download/upcloud-csi-crd.yaml
+$ kubectl apply -f https://github.com/UpCloudLtd/upcloud-csi/releases/latest/download/upcloud-csi-rbac.yaml
 ```
 
 Deploy the CSI driver with the related Kubernetes volume attachment, driver registration, and provisioning sidecars:

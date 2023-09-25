@@ -1,4 +1,3 @@
-# Step 1 build
 FROM alpine:3.17
 
 RUN apk add ca-certificates \

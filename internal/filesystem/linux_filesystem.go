@@ -68,10 +68,7 @@ func (m *LinuxFilesystem) Format(ctx context.Context, source, fsType string, mkf
 }
 
 func (m *LinuxFilesystem) createFilesystem(ctx context.Context, partition, fsType string, mkfsArgs []string) error {
-	if fsType == fileSystemExt4 || fsType == "ext3" {
-		mkfsArgs = append(mkfsArgs, "-F", partition)
-	}
-
+	mkfsArgs = append(mkfsArgs, partition)
 	mkfsCmd := fmt.Sprintf("mkfs.%s", fsType)
 
 	_, err := exec.LookPath(mkfsCmd)
@@ -299,5 +296,6 @@ func (m *LinuxFilesystem) GetDeviceLastPartition(ctx context.Context, source str
 	if err != nil {
 		return "", err
 	}
+
 	return sfdiskOutputGetLastPartition(source, string(sfdisk))
 }
