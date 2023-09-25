@@ -16,10 +16,8 @@ import (
 )
 
 const (
-	udevDiskByIDPath  = "/dev/disk/by-id"
-	diskPrefix        = "virtio-"
-	maxVolumesPerNode = 14
-	fileSystemExt4    = "ext4"
+	udevDiskByIDPath = "/dev/disk/by-id"
+	diskPrefix       = "virtio-"
 
 	// udevDiskTimeout specifies a time limit for waiting disk appear under /dev/disk/by-id.
 	udevDiskTimeout = 60
@@ -28,12 +26,14 @@ const (
 )
 
 type LinuxFilesystem struct {
-	log *logrus.Entry
+	log             *logrus.Entry
+	filesystemTypes []string
 }
 
-func NewLinuxFilesystem(log *logrus.Entry) *LinuxFilesystem {
+func NewLinuxFilesystem(filesystemTypes []string, log *logrus.Entry) *LinuxFilesystem {
 	return &LinuxFilesystem{
-		log: log,
+		log:             log,
+		filesystemTypes: filesystemTypes,
 	}
 }
 
@@ -45,6 +45,11 @@ func (m *LinuxFilesystem) Format(ctx context.Context, source, fsType string, mkf
 
 	if source == "" {
 		return errors.New("source is not specified for formatting the volume")
+	}
+
+	fsType = strings.ToLower(fsType)
+	if err := m.isSupportedFilesystem(fsType); err != nil {
+		return err
 	}
 
 	formatted, err := m.isFormatted(ctx, source)
@@ -67,6 +72,15 @@ func (m *LinuxFilesystem) Format(ctx context.Context, source, fsType string, mkf
 	return m.createFilesystem(ctx, lastPartition, fsType, mkfsArgs)
 }
 
+func (m *LinuxFilesystem) isSupportedFilesystem(fsType string) error {
+	for i := range m.filesystemTypes {
+		if strings.Compare(m.filesystemTypes[i], fsType) == 0 {
+			return nil
+		}
+	}
+	return fmt.Errorf("filesystem type '%s' is not supported", fsType)
+}
+
 func (m *LinuxFilesystem) createFilesystem(ctx context.Context, partition, fsType string, mkfsArgs []string) error {
 	mkfsArgs = append(mkfsArgs, partition)
 	mkfsCmd := fmt.Sprintf("mkfs.%s", fsType)
@@ -81,7 +95,10 @@ func (m *LinuxFilesystem) createFilesystem(ctx context.Context, partition, fsTyp
 
 	logger.WithServerContext(ctx, m.log).WithFields(logrus.Fields{logger.CommandKey: mkfsCmd, logger.CommandArgsKey: mkfsArgs}).Debug("executing command")
 
-	return exec.CommandContext(ctx, mkfsCmd, mkfsArgs...).Run()
+	if err = exec.CommandContext(ctx, mkfsCmd, mkfsArgs...).Run(); err != nil {
+		return fmt.Errorf("failed to create filesystem %s %s; %w", mkfsCmd, strings.Join(mkfsArgs, " "), err)
+	}
+	return nil
 }
 
 // Mount mounts source to target with the given fstype and options.

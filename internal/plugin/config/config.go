@@ -35,15 +35,16 @@ const (
 )
 
 type Config struct {
-	NodeHost     string
-	Zone         string
-	Username     string
-	Password     string
-	DriverName   string
-	PrintVersion bool
-	Mode         string
-	LogLevel     string
-	Labels       []string
+	NodeHost        string
+	Zone            string
+	Username        string
+	Password        string
+	DriverName      string
+	PrintVersion    bool
+	Mode            string
+	LogLevel        string
+	Labels          []string
+	FilesystemTypes []string
 
 	PluginServerAddress string
 	HealtServerAddress  string
@@ -65,6 +66,7 @@ func Parse(osArgs []string) (Config, error) {
 	flagSet.StringVar(&c.Mode, "mode", DefaultDriverMode, "Driver mode, one of node, controller, or monolith.")
 	flagSet.StringVar(&c.LogLevel, "log-level", "info", "Logging level: panic, fatal, error, warn, warning, info, debug or trace")
 	flagSet.StringSliceVar(&c.Labels, "label", nil, "Apply default labels to all storage devices created by CSI driver, e.g. --label=color=green --label=size=xl")
+	flagSet.StringSliceVar(&c.FilesystemTypes, "fs-types", []string{"ext3", "ext4", "xfs"}, "Filesystem types supported by the system")
 
 	if err := flagSet.Parse(osArgs); err != nil {
 		return c, err
