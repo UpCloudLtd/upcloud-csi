@@ -33,13 +33,13 @@ upcloud          Opaque                                2         18h
 
 Deploy custom resources definitions and roles required by CSI driver:
 ```shell
-$ kubectl apply -f https://github.com/UpCloudLtd/upcloud-csi/releases/latest/download/upcloud-csi-crd.yaml
-$ kubectl apply -f https://github.com/UpCloudLtd/upcloud-csi/releases/latest/download/upcloud-csi-rbac.yaml
+$ kubectl apply -f https://github.com/UpCloudLtd/upcloud-csi/releases/latest/download/crd-upcloud-csi.yaml
+$ kubectl apply -f https://github.com/UpCloudLtd/upcloud-csi/releases/latest/download/rbac-upcloud-csi.yaml
 ```
 
 Deploy the CSI driver with the related Kubernetes volume attachment, driver registration, and provisioning sidecars:
 ```shell
-$ kubectl apply -f https://github.com/UpCloudLtd/upcloud-csi/releases/latest/download/upcloud-csi-setup.yaml
+$ kubectl apply -f https://github.com/UpCloudLtd/upcloud-csi/releases/latest/download/setup-upcloud-csi.yaml
 ```
 
 #### Deploy snapshot validation webhook
@@ -64,7 +64,22 @@ For setting desired type you can set a `storageClassName` field in `PVC` to:
 * `upcloud-block-storage-maxiops`
 * `upcloud-block-storage-hdd`
 
-If `storageClassName` field is not set, the default provisioned option will be `upcloud-block-storage-maxiops`.
+If `storageClassName` field is not set, the default provisioned option will be `upcloud-block-storage-maxiops`. 
+
+These storage classes use `Retain` as `reclaimPolicy`, which causes CSI driver to preserve underlying storage, when PVC object is deleted. 
+To clean up also the storage, one needs to define new storage class using `Delete` as `reclaimPolicy`, e.g.:
+```yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: upcloud-block-storage-custom
+parameters:
+  tier: maxiops
+provisioner: storage.csi.upcloud.com
+reclaimPolicy: Delete 
+allowVolumeExpansion: true
+```
+*storage class name is just an example, it can be anything*
 
 ### Example Usage
 
@@ -72,37 +87,51 @@ In `example` directory you may find 2 manifests for deploying a pod and persiste
 operations
 
 ```shell
-$ kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/main/example/test-pod.yaml
 $ kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/main/example/test-pvc.yaml
+$ kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/main/example/test-pod.yaml
 ```
 
 Check if pod is deployed with Running status and already using the PVC:
 
 ```shell
-$ kubectl get pvc/csi-pvc pods/csi-app
-$ kubectl describe pvc/csi-pvc pods/csi-app | less
+$ kubectl get pods -l app=csi-app
 ```
+
+if pod is not running, you can check possible causes for problem from PVC and deployment events
+```shell
+$ kubectl describe deployments.apps csi-app
+$ kubectl describe pvc csi-pvc
+```
+
 
 To check the persistence feature - you may create the sample file in Pod, later, delete the pod and re-create it from yaml manifest and notice that the file is still in mounted directory 
 
 ```shell
-$ kubectl exec -it csi-app -- /bin/sh -c "touch /data/persistent-file.txt"
-total 24K
--rw-r--r--    1 root     root           0 Feb 22 12:29 persistent-file.txt
-drwx------    2 root     root       16.0K Feb 22 12:25 lost+found
+$ kubectl exec -it deployments/csi-app -- /bin/sh -c "touch /data/persistent-file.txt"
+deployments/csi-app
+$ kubectl exec -it deployments/csi-app -- /bin/sh -c "ls -1 /data/"
+lost+found
+persistent-file.txt
+```
 
-$ kubectl delete pods/csi-app
+Delete pod deployment and wait until it's deleted
+```shell
+$ kubectl delete deployments/csi-app
 pod "csi-app" deleted
+$ kubectl get pods -l app=csi-app -w
+```
 
+Recreate pod, wait until it's running and check contents of `/data` folder
+```shell
 $ kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/main/example/test-pod.yaml
 pod/csi-app created
-
-$ kubectl exec -it csi-app -- /bin/sh -c "ls -l /data"
-total 20
--rw-r--r--    1 root     root           0 Feb 22 12:29 persistent-file.txt
-drwx------    2 root     root       16.0K Feb 22 12:25 lost+found
-
+$ kubectl get pods -l app=csi-app -w
+$ kubectl exec -it deployments/csi-app -- /bin/sh -c "ls -1 /data/"
+lost+found
+persistent-file.txt
 ```
+
+More examples are available at [UKS instructions](https://github.com/UpCloudLtd/uks-instructions/tree/main/storage) repository. 
 
 ## Sidecars
 
