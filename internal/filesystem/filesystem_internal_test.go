@@ -283,14 +283,14 @@ func mountBlockDevice(t *testing.T, m *LinuxFilesystem, partition string) error 
 	mountPath := filepath.Join(os.TempDir(), fmt.Sprintf("%s-mount-path-%d", driverName, time.Now().Unix()))
 	defer os.RemoveAll(mountPath)
 
-	return mount(t, m, partition, mountPath, "bind")
+	return mount(t, m, partition, mountPath, "", "bind")
 }
 
-func mount(t *testing.T, m *LinuxFilesystem, source, target, fsType string) error {
+func mount(t *testing.T, m *LinuxFilesystem, source, target, fsType string, opts ...string) error {
 	t.Helper()
 
-	if err := m.Mount(context.Background(), source, target, fsType); err != nil {
-		return fmt.Errorf("Mount failed with error: %w", err)
+	if err := m.Mount(context.Background(), source, target, fsType, opts...); err != nil {
+		return fmt.Errorf("Mount %s %s => %s failed with error: %w", fsType, source, target, err)
 	}
 	isMounted, err := m.IsMounted(context.Background(), target)
 	if err != nil {
