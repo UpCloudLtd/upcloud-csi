@@ -4,7 +4,7 @@ CSI driver's primary goal is to conform to [Container Storage Interface (CSI)](h
 Depending on [CO](https://www.vmware.com/topics/glossary/content/container-orchestration.html), endpoints are called directly or by [sidecar containers](deploy/kubernetes/README.md#sidecars).
 
 ## Requirements
-- [Go](https://golang.org/doc/install) > 1.17
+- [Go](https://golang.org/doc/install) >= 1.20
 
 Get the source code:
 
@@ -21,9 +21,8 @@ $ make build-plugin
 
 ## Project layout
 ### Applications
-Project applications can be found under `cmd` directory:
+Project's application can be found under `cmd` directory:
 - `upcloud-csi-plugin` is monolith CSI driver that can be run as controller or node driver (or both).
-- `upcloud-csi-manifest` is for rendering version specific Kubernetes deployment manifests
 
 ### Driver
 Required interfaces are implemented by `Driver` type in `driver` package. For clarity, interface implementations are separated based on their role to files `controller.go`, `node.go` and `identity.go`.  
