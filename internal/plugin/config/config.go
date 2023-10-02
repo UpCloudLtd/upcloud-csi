@@ -1,7 +1,6 @@
 package config
 
 import (
-	"errors"
 	"os"
 	"strings"
 
@@ -79,22 +78,9 @@ func Parse(osArgs []string) (Config, error) {
 	if c.Username == "" {
 		c.Username = os.Getenv(envUpcloudUsername)
 	}
+
 	if c.Password == "" {
 		c.Password = os.Getenv(envUpcloudPassword)
 	}
-
-	switch c.Mode {
-	case DriverModeController, DriverModeMonolith:
-		if err := validateControllerConfig(c); err != nil {
-			return c, err
-		}
-	}
 	return c, nil
-}
-
-func validateControllerConfig(c Config) error {
-	if c.Zone == "" && c.NodeHost == "" {
-		return errors.New("controller required that zone or valid node host is set")
-	}
-	return nil
 }

@@ -7,7 +7,7 @@ import (
 
 // When building any packages that import version, pass the build/install cmd
 // ldflags like so:
-//   go build -ldflags "-X github.com/UpCloudLtd/upcloud-csi/driver.version=0.0.1"
+//   go build -ldflags "-X github.com/UpCloudLtd/upcloud-csi/internal/plugin.version=0.0.1"
 
 // TODO look at cleaner way to set these :(.
 var (

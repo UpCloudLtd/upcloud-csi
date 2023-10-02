@@ -8,9 +8,9 @@ builds:
       - -trimpath
     ldflags:
       - -s -w
-      - -X github.com/UpCloudLtd/upcloud-csi/driver.version={{ if .IsSnapshot }}main{{ else }}{{ .Version }}{{ end }}
-      - -X github.com/UpCloudLtd/upcloud-csi/driver.commit={{ .ShortCommit }}
-      - -X github.com/UpCloudLtd/upcloud-csi/driver.gitTreeState={{ if .IsSnapshot }}dirty{{ else }}clean{{ end }}
+      - -X github.com/UpCloudLtd/upcloud-csi/internal/plugin.version={{ if .IsSnapshot }}main{{ else }}{{ .Version }}{{ end }}
+      - -X github.com/UpCloudLtd/upcloud-csi/internal/plugin.commit={{ .ShortCommit }}
+      - -X github.com/UpCloudLtd/upcloud-csi/internal/plugin.gitTreeState={{ if .IsSnapshot }}dirty{{ else }}clean{{ end }}
     main: ./cmd/upcloud-csi-plugin
     binary: "upcloud-csi-plugin_v{{ .Version }}"
     goos:
