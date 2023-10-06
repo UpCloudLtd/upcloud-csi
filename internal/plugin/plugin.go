@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -39,6 +40,9 @@ func newPluginServer(c config.Config, l *logrus.Entry) (*server.PluginServer, er
 	}
 	switch c.Mode {
 	case config.DriverModeController:
+		if err := validateControllerConfig(c); err != nil {
+			return srv, err
+		}
 		if srv, err = newControllerPluginServer(c, l); err != nil {
 			return srv, err
 		}
@@ -47,6 +51,9 @@ func newPluginServer(c config.Config, l *logrus.Entry) (*server.PluginServer, er
 			return srv, err
 		}
 	case config.DriverModeMonolith:
+		if err := validateControllerConfig(c); err != nil {
+			return srv, err
+		}
 		if srv, err = newMonolithPluginServer(c, l); err != nil {
 			return srv, err
 		}
@@ -133,4 +140,11 @@ func hostname() string {
 		return n
 	}
 	return ""
+}
+
+func validateControllerConfig(c config.Config) error {
+	if c.Zone == "" && c.NodeHost == "" {
+		return errors.New("controller required that zone or valid node host is set")
+	}
+	return nil
 }
