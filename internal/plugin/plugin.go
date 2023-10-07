@@ -36,7 +36,10 @@ func newPluginServer(c config.Config, l *logrus.Entry) (*server.PluginServer, er
 	var srv *server.PluginServer
 	var err error
 	if c.Filesystem == nil {
-		c.Filesystem = filesystem.NewLinuxFilesystem(c.FilesystemTypes, l)
+		c.Filesystem, err = filesystem.NewLinuxFilesystem(c.FilesystemTypes, l)
+		if err != nil {
+			return nil, err
+		}
 	}
 	switch c.Mode {
 	case config.DriverModeController:

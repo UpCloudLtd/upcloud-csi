@@ -11,7 +11,11 @@ import (
 	"time"
 )
 
-var errNodeDiskNotFound = errors.New("disk not found")
+var (
+	errNodeDiskNotFound  = errors.New("disk not found")
+	errPartitionNotFound = errors.New("partition not found")
+	ErrToolNotFound      = errors.New("tool not found")
+)
 
 // getBlockDeviceByDiskID returns actual block device path (e.g. /dev/vda) that correspond to disk ID (hardware serial number).
 // diskID can be udev disk ID or path to disk ID symbolic link e.g. /dev/disk/by-id/virtio-014e425736724563ab83.
@@ -83,7 +87,7 @@ func sfdiskOutputGetLastPartition(source, sfdiskOutput string) (string, error) {
 		}
 	}
 	if lastPartition == "" {
-		return "", fmt.Errorf("unable to read last partition from sfdisk output [%s]", strings.Join(outLines, ", "))
+		return "", fmt.Errorf("unable to read last partition from sfdisk output [%s]; %w", strings.Join(outLines, ", "), errPartitionNotFound)
 	}
 	return lastPartition, nil
 }
@@ -101,4 +105,27 @@ func createBlockDevice(target string) error {
 		return err
 	}
 	return nil
+}
+
+func checkToolsExists(tools ...string) error {
+	for i := range tools {
+		if _, err := exec.LookPath(tools[i]); err != nil {
+			if errors.Is(err, exec.ErrNotFound) {
+				return fmt.Errorf("%q executable not found in $PATH; %w", tools[i], ErrToolNotFound)
+			}
+		}
+	}
+	return nil
+}
+
+func cmdExitCode(err error) int {
+	var exitError *exec.ExitError
+	if errors.As(err, &exitError) {
+		return exitError.ExitCode()
+	}
+	return 0
+}
+
+func formatCmdError(output []byte) string {
+	return strings.Join(strings.Split(string(output), "\n"), " ")
 }

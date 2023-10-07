@@ -14,6 +14,8 @@ import (
 
 const (
 	storageStateTimeout time.Duration = time.Hour
+	serverStateTimeout  time.Duration = 15 * time.Minute
+
 	// clientTimeout helps to tune for timeout on requests to UpCloud API. Measurement: seconds.
 	clientTimeout time.Duration = 120 * time.Second
 )
@@ -21,6 +23,7 @@ const (
 type upCloudClient interface {
 	upsvc.Storage
 
+	WaitForServerState(ctx context.Context, r *request.WaitForServerStateRequest) (*upcloud.ServerDetails, error)
 	GetServers(ctx context.Context) (*upcloud.Servers, error)
 	GetServerDetails(ctx context.Context, r *request.GetServerDetailsRequest) (*upcloud.ServerDetails, error)
 }
@@ -80,11 +83,7 @@ func (u *UpCloudService) CreateStorage(ctx context.Context, csr *request.CreateS
 	if err != nil {
 		return nil, err
 	}
-	return u.client.WaitForStorageState(ctx, &request.WaitForStorageStateRequest{
-		UUID:         s.Storage.UUID,
-		DesiredState: upcloud.StorageStateOnline,
-		Timeout:      storageStateTimeout,
-	})
+	return u.waitForStorageOnline(ctx, s.Storage.UUID)
 }
 
 func (u *UpCloudService) CloneStorage(ctx context.Context, r *request.CloneStorageRequest, label ...upcloud.Label) (*upcloud.StorageDetails, error) {
@@ -92,11 +91,7 @@ func (u *UpCloudService) CloneStorage(ctx context.Context, r *request.CloneStora
 	if err != nil {
 		return nil, err
 	}
-	s, err = u.client.WaitForStorageState(ctx, &request.WaitForStorageStateRequest{
-		UUID:         s.Storage.UUID,
-		DesiredState: upcloud.StorageStateOnline,
-		Timeout:      storageStateTimeout,
-	})
+	s, err = u.waitForStorageOnline(ctx, s.Storage.UUID)
 	if err != nil {
 		return s, err
 	}
@@ -108,11 +103,7 @@ func (u *UpCloudService) CloneStorage(ctx context.Context, r *request.CloneStora
 		if err != nil {
 			return s, err
 		}
-		s, err = u.client.WaitForStorageState(ctx, &request.WaitForStorageStateRequest{
-			UUID:         s.Storage.UUID,
-			DesiredState: upcloud.StorageStateOnline,
-			Timeout:      storageStateTimeout,
-		})
+		s, err = u.waitForStorageOnline(ctx, s.Storage.UUID)
 	}
 	return s, err
 }
@@ -132,6 +123,9 @@ func (u *UpCloudService) DeleteStorage(ctx context.Context, storageUUID string) 
 }
 
 func (u *UpCloudService) AttachStorage(ctx context.Context, storageUUID, serverUUID string) error {
+	if err := u.waitForServerOnline(ctx, serverUUID); err != nil {
+		return fmt.Errorf("failed to attach storage, pre-condition failed: %w", err)
+	}
 	details, err := u.client.AttachStorage(ctx, &request.AttachStorageRequest{ServerUUID: serverUUID, StorageUUID: storageUUID, Address: "virtio"})
 	if err != nil {
 		return err
@@ -139,9 +133,11 @@ func (u *UpCloudService) AttachStorage(ctx context.Context, storageUUID, serverU
 
 	for _, s := range details.StorageDevices {
 		if storageUUID == s.UUID {
-			return nil
+			// wait until server is no longer in maintenance state
+			return u.waitForServerOnline(ctx, serverUUID)
 		}
 	}
+
 	return fmt.Errorf("storage device not found after attaching to server")
 }
 
@@ -150,7 +146,9 @@ func (u *UpCloudService) DetachStorage(ctx context.Context, storageUUID, serverU
 	if err != nil {
 		return err
 	}
-
+	if err := u.waitForServerOnline(ctx, serverUUID); err != nil {
+		return fmt.Errorf("failed to detach storage, pre-condition failed: %w", err)
+	}
 	for _, device := range sd.StorageDevices {
 		if device.UUID == storageUUID {
 			details, err := u.client.DetachStorage(ctx, &request.DetachStorageRequest{ServerUUID: serverUUID, Address: device.Address})
@@ -162,7 +160,8 @@ func (u *UpCloudService) DetachStorage(ctx context.Context, storageUUID, serverU
 					return fmt.Errorf("storage device still attached")
 				}
 			}
-			return nil
+			// wait until server is no longer in maintenance state
+			return u.waitForServerOnline(ctx, serverUUID)
 		}
 	}
 	return ErrServerStorageNotFound
@@ -219,11 +218,7 @@ func (u *UpCloudService) ResizeStorage(ctx context.Context, uuid string, newSize
 		}
 	}
 
-	return u.client.WaitForStorageState(ctx, &request.WaitForStorageStateRequest{
-		UUID:         storage.Storage.UUID,
-		DesiredState: upcloud.StorageStateOnline,
-		Timeout:      storageStateTimeout,
-	})
+	return u.waitForStorageOnline(ctx, storage.Storage.UUID)
 }
 
 func (u *UpCloudService) ResizeBlockDevice(ctx context.Context, uuid string, newSize int) (*upcloud.StorageDetails, error) {
@@ -234,11 +229,7 @@ func (u *UpCloudService) ResizeBlockDevice(ctx context.Context, uuid string, new
 	if err != nil {
 		return nil, err
 	}
-	return u.client.WaitForStorageState(ctx, &request.WaitForStorageStateRequest{
-		UUID:         storage.Storage.UUID,
-		DesiredState: upcloud.StorageStateOnline,
-		Timeout:      storageStateTimeout,
-	})
+	return u.waitForStorageOnline(ctx, storage.Storage.UUID)
 }
 
 func (u *UpCloudService) CreateStorageBackup(ctx context.Context, uuid, title string) (*upcloud.StorageDetails, error) {
@@ -259,11 +250,7 @@ func (u *UpCloudService) CreateStorageBackup(ctx context.Context, uuid, title st
 	if err != nil {
 		return nil, err
 	}
-	return u.client.WaitForStorageState(ctx, &request.WaitForStorageStateRequest{
-		UUID:         backup.UUID,
-		DesiredState: upcloud.StorageStateOnline,
-		Timeout:      storageStateTimeout,
-	})
+	return u.waitForStorageOnline(ctx, backup.UUID)
 }
 
 // listStorageBackups lists strage backups. If `originUUID` is empty all backups are retured.
@@ -307,17 +294,26 @@ func (u *UpCloudService) GetStorageBackupByName(ctx context.Context, name string
 
 func (u *UpCloudService) RequireStorageOnline(ctx context.Context, s *upcloud.Storage) error {
 	if s.State != upcloud.StorageStateOnline {
-		if _, err := u.waitForStorageState(ctx, s.UUID, upcloud.StorageStateOnline); err != nil {
+		if _, err := u.waitForStorageOnline(ctx, s.UUID); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (u *UpCloudService) waitForStorageState(ctx context.Context, uuid, state string) (*upcloud.StorageDetails, error) {
+func (u *UpCloudService) waitForStorageOnline(ctx context.Context, uuid string) (*upcloud.StorageDetails, error) {
 	return u.client.WaitForStorageState(ctx, &request.WaitForStorageStateRequest{
 		UUID:         uuid,
-		DesiredState: state,
+		DesiredState: upcloud.StorageStateOnline,
 		Timeout:      storageStateTimeout,
 	})
+}
+
+func (u *UpCloudService) waitForServerOnline(ctx context.Context, uuid string) error {
+	_, err := u.client.WaitForServerState(ctx, &request.WaitForServerStateRequest{
+		UUID:         uuid,
+		DesiredState: upcloud.ServerStateStarted,
+		Timeout:      serverStateTimeout,
+	})
+	return err
 }
