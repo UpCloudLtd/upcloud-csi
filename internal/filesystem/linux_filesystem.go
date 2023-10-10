@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"syscall"
 
 	"github.com/UpCloudLtd/upcloud-csi/internal/logger"
 	"github.com/sirupsen/logrus"
@@ -16,9 +15,13 @@ import (
 )
 
 const (
-	udevDiskByIDPath = "/dev/disk/by-id"
-	diskPrefix       = "virtio-"
-
+	udevDiskByIDPath        = "/dev/disk/by-id"
+	diskPrefix              = "virtio-"
+	partitionTableType      = "gpt"
+	blkidCmd                = "blkid"
+	blkidCmdErrCodeNotFound = 2
+	partedCmd               = "parted"
+	sfdiskCmd               = "sfdisk"
 	// udevDiskTimeout specifies a time limit for waiting disk appear under /dev/disk/by-id.
 	udevDiskTimeout = 60
 	// udevSettleTimeout specifies a time limit for waiting udev event queue to become empty.
@@ -30,19 +33,25 @@ type LinuxFilesystem struct {
 	filesystemTypes []string
 }
 
-func NewLinuxFilesystem(filesystemTypes []string, log *logrus.Entry) *LinuxFilesystem {
+func NewLinuxFilesystem(filesystemTypes []string, log *logrus.Entry) (*LinuxFilesystem, error) {
+	tools := []string{blkidCmd, partedCmd, sfdiskCmd}
+	for i := range filesystemTypes {
+		tools = append(tools, fmt.Sprintf("mkfs.%s", filesystemTypes[i]))
+	}
+
 	return &LinuxFilesystem{
 		log:             log,
 		filesystemTypes: filesystemTypes,
-	}
+	}, checkToolsExists(tools...) // allow caller to decide what to do if tools are not present
 }
 
-// Format formats the source with the given filesystem type.
+// Format writes new partition table and creates new partition and filesystem.
+// This function should be idempotent and should eventually lead to success
+// in case off temporary system failure.
 func (m *LinuxFilesystem) Format(ctx context.Context, source, fsType string, mkfsArgs []string) error {
 	if fsType == "" {
 		return errors.New("fs type is not specified for formatting the volume")
 	}
-
 	if source == "" {
 		return errors.New("source is not specified for formatting the volume")
 	}
@@ -51,25 +60,14 @@ func (m *LinuxFilesystem) Format(ctx context.Context, source, fsType string, mkf
 	if err := m.isSupportedFilesystem(fsType); err != nil {
 		return err
 	}
-
-	formatted, err := m.isFormatted(ctx, source)
+	if err := m.createPartitionTableIfNotExists(ctx, source); err != nil {
+		return err
+	}
+	partition, err := m.createPartitionIfNotExists(ctx, source)
 	if err != nil {
 		return err
 	}
-	if formatted {
-		return nil
-	}
-
-	err = m.createPartition(ctx, source)
-	if err != nil {
-		return err
-	}
-
-	lastPartition, err := m.GetDeviceLastPartition(ctx, source)
-	if err != nil {
-		return err
-	}
-	return m.createFilesystem(ctx, lastPartition, fsType, mkfsArgs)
+	return m.createFilesystemIfNotExists(ctx, partition, fsType, mkfsArgs)
 }
 
 func (m *LinuxFilesystem) isSupportedFilesystem(fsType string) error {
@@ -81,24 +79,52 @@ func (m *LinuxFilesystem) isSupportedFilesystem(fsType string) error {
 	return fmt.Errorf("filesystem type '%s' is not supported", fsType)
 }
 
-func (m *LinuxFilesystem) createFilesystem(ctx context.Context, partition, fsType string, mkfsArgs []string) error {
+// createFilesystem creates new filesystem if one doesn't exists yet.
+func (m *LinuxFilesystem) createFilesystemIfNotExists(ctx context.Context, partition, fsType string, mkfsArgs []string) error {
+	if ok, err := m.filesystemExists(ctx, partition, fsType); ok || err != nil {
+		return err
+	}
 	mkfsArgs = append(mkfsArgs, partition)
 	mkfsCmd := fmt.Sprintf("mkfs.%s", fsType)
 
-	_, err := exec.LookPath(mkfsCmd)
-	if err != nil {
-		if errors.Is(err, exec.ErrNotFound) {
-			return fmt.Errorf("%q executable not found in $PATH", mkfsCmd)
-		}
-		return err
-	}
-
 	logger.WithServerContext(ctx, m.log).WithFields(logrus.Fields{logger.CommandKey: mkfsCmd, logger.CommandArgsKey: mkfsArgs}).Debug("executing command")
-
-	if err = exec.CommandContext(ctx, mkfsCmd, mkfsArgs...).Run(); err != nil {
-		return fmt.Errorf("failed to create filesystem %s %s; %w", mkfsCmd, strings.Join(mkfsArgs, " "), err)
+	output, err := exec.CommandContext(ctx, mkfsCmd, mkfsArgs...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to create filesystem %s %s (%s); %w", mkfsCmd, strings.Join(mkfsArgs, " "), formatCmdError(output), err)
 	}
 	return nil
+}
+
+// filesystemExists checks whether the partition is formatted or not. It
+// returns true if the source device is already formatted.
+func (m *LinuxFilesystem) filesystemExists(ctx context.Context, partition, fsType string) (bool, error) {
+	if partition == "" {
+		return false, errors.New("partition is not specified")
+	}
+	blkidArgs := []string{
+		// low-level superblocks probing (bypass cache)
+		"--probe",
+		// output format
+		"--output", "value",
+		// show specified tag
+		"--match-tag", "TYPE",
+		// find device with a specific token (NAME=value pair)
+		"--match-token", fmt.Sprintf("TYPE=%s", fsType),
+		partition,
+	}
+
+	logger.WithServerContext(ctx, m.log).WithFields(logrus.Fields{logger.CommandKey: blkidCmd, logger.CommandArgsKey: blkidArgs}).Debug("executing command")
+	output, err := exec.CommandContext(ctx, blkidCmd, blkidArgs...).CombinedOutput()
+	if err != nil {
+		if cmdExitCode(err) == blkidCmdErrCodeNotFound {
+			return false, nil
+		}
+		return false, fmt.Errorf("checking partition filesystem failed: %w (%s)", err, formatCmdError(output))
+	}
+	if strings.TrimSpace(strings.ToLower(string(output))) == fsType {
+		return true, nil
+	}
+	return false, nil
 }
 
 // Mount mounts source to target with the given fstype and options.
@@ -160,48 +186,6 @@ func (m *LinuxFilesystem) Unmount(ctx context.Context, target string) error {
 	return exec.CommandContext(ctx, umountCmd, umountArgs...).Run()
 }
 
-// IsFormatted checks whether the source device is formatted or not. It
-// returns true if the source device is already formatted.
-func (m *LinuxFilesystem) isFormatted(ctx context.Context, source string) (bool, error) {
-	// blkidExitStatusNoIdentifiers defines the exit code returned from blkid indicating that no devices have been found.
-	// See http://www.polarhome.com/service/man/?qf=blkid&tf=2&of=Alpinelinux for details.
-	const blkidExitStatusNoIdentifiers = 2
-
-	if source == "" {
-		return false, errors.New("source is not specified")
-	}
-
-	blkidCmd := "blkid"
-	_, err := exec.LookPath(blkidCmd)
-	if err != nil {
-		if errors.Is(err, exec.ErrNotFound) {
-			return false, fmt.Errorf("%q executable not found in $PATH", blkidCmd)
-		}
-		return false, err
-	}
-
-	blkidArgs := []string{source}
-
-	logger.WithServerContext(ctx, m.log).WithFields(logrus.Fields{logger.CommandKey: blkidCmd, logger.CommandArgsKey: blkidArgs}).Debug("executing command")
-	if err = exec.CommandContext(ctx, blkidCmd, blkidArgs...).Run(); err != nil {
-		var exitError *exec.ExitError
-		if !errors.As(err, &exitError) {
-			return false, fmt.Errorf("checking formatting failed: %w cmd: %q, args: %q", err, blkidCmd, blkidArgs)
-		}
-		ws, ok := exitError.Sys().(syscall.WaitStatus)
-		if !ok {
-			return false, fmt.Errorf("checking formatting exit status: %w cmd: %q, args: %q", err, blkidCmd, blkidArgs)
-		}
-		exitCode := ws.ExitStatus()
-		if exitCode == blkidExitStatusNoIdentifiers {
-			return false, nil
-		}
-		return false, fmt.Errorf("checking formatting failed: %w cmd: %q, args: %q", err, blkidCmd, blkidArgs)
-	}
-
-	return true, nil
-}
-
 // IsMounted checks whether the target path is a correct mount (i.e:
 // propagated). It returns true if it's mounted. An error is returned in
 // case of system errors or if it's mounted incorrectly.
@@ -221,8 +205,7 @@ func (m *LinuxFilesystem) IsMounted(ctx context.Context, target string) (bool, e
 		if strings.TrimSpace(string(out)) == "" {
 			return false, nil
 		}
-
-		return false, fmt.Errorf("checking mounted failed: %w cmd: %q output: %q", err, findmntCmd, string(out))
+		return false, fmt.Errorf("checking mounted failed: %w cmd: %q output: %s", err, findmntCmd, formatCmdError(out))
 	}
 
 	// no response means there is no mount
@@ -263,19 +246,68 @@ func (m *LinuxFilesystem) IsMounted(ctx context.Context, target string) (bool, e
 	return targetFound, nil
 }
 
-func (m *LinuxFilesystem) createPartition(ctx context.Context, device string) error {
-	cmd := "parted"
-	args := []string{device, "mklabel", "gpt"}
-	log := logger.WithServerContext(ctx, m.log).WithFields(logrus.Fields{logger.CommandKey: cmd, logger.CommandArgsKey: args})
-	log.Debug("executing command")
-	partedMklabel := exec.CommandContext(ctx, cmd, args...)
-	if err := partedMklabel.Run(); err != nil {
+// createPartitionTableIfNotExists creates new partition table if one does not exists.
+func (m *LinuxFilesystem) createPartitionTableIfNotExists(ctx context.Context, device string) error {
+	if ok, err := m.hasPartitionTable(ctx, device); ok || err != nil {
 		return err
 	}
+	args := []string{device, "mklabel", "gpt"}
+	log := logger.WithServerContext(ctx, m.log).WithFields(logrus.Fields{logger.CommandKey: partedCmd, logger.CommandArgsKey: args})
+	log.Debug("executing command")
+	output, err := exec.CommandContext(ctx, partedCmd, args...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to create %s partition table '%s'; %w", device, formatCmdError(output), err)
+	}
+	return nil
+}
 
-	args = []string{"-a", "opt", device, "mkpart", "primary", "2048s", "100%"}
-	logger.WithServerContext(ctx, m.log).WithFields(logrus.Fields{logger.CommandKey: cmd, logger.CommandArgsKey: args}).Debug("executing command")
-	return exec.CommandContext(ctx, cmd, args...).Run()
+func (m *LinuxFilesystem) hasPartitionTable(ctx context.Context, device string) (bool, error) {
+	if device == "" {
+		return false, errors.New("source is not specified")
+	}
+	blkidArgs := []string{
+		// low-level superblocks probing (bypass cache)
+		"--probe",
+		// output format
+		"--output", "value",
+		// show specified tag
+		"--match-tag", "PTTYPE",
+		// find device with a specific token (NAME=value pair)
+		"--match-token", fmt.Sprintf("PTTYPE=%s", partitionTableType),
+		device,
+	}
+
+	log := logger.WithServerContext(ctx, m.log)
+	log.WithFields(logrus.Fields{logger.CommandKey: blkidCmd, logger.CommandArgsKey: blkidArgs}).Debug("executing command")
+	output, err := exec.CommandContext(ctx, blkidCmd, blkidArgs...).CombinedOutput()
+	if err != nil {
+		if cmdExitCode(err) == blkidCmdErrCodeNotFound {
+			return false, nil
+		}
+		return false, fmt.Errorf("checking %s partition table failed: %w (%s)", device, err, formatCmdError(output))
+	}
+	foundType := strings.TrimSpace(strings.ToLower(string(output)))
+	log.WithField("device", device).Infof("existing partition table %s found", foundType)
+	if foundType == partitionTableType {
+		return true, nil
+	}
+	return false, nil
+}
+
+// createPartitionIfNotExists creates new primary partition if one does not exists.
+func (m *LinuxFilesystem) createPartitionIfNotExists(ctx context.Context, device string) (string, error) {
+	log := logger.WithServerContext(ctx, m.log)
+	if p, err := m.GetDeviceLastPartition(ctx, device); err == nil {
+		log.WithField("partition", p).Info("existing partition found")
+		return p, nil
+	}
+	args := []string{"-a", "opt", device, "mkpart", "primary", "2048s", "100%"}
+	log.WithFields(logrus.Fields{logger.CommandKey: partedCmd, logger.CommandArgsKey: args}).Debug("executing command")
+	output, err := exec.CommandContext(ctx, partedCmd, args...).CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("failed to create new partition: '%s'; %w", formatCmdError(output), err)
+	}
+	return m.GetDeviceLastPartition(ctx, device)
 }
 
 // filesystemStatistics returns capacity-related volume statistics for the given volume path.
@@ -308,11 +340,11 @@ func (m *LinuxFilesystem) GetDeviceByID(ctx context.Context, id string) (string,
 	return getBlockDeviceByDiskID(ctx, diskID)
 }
 
-func (m *LinuxFilesystem) GetDeviceLastPartition(ctx context.Context, source string) (string, error) {
-	sfdisk, err := exec.CommandContext(ctx, "sfdisk", "-q", "--list", "-o", "device", source).CombinedOutput()
+func (m *LinuxFilesystem) GetDeviceLastPartition(ctx context.Context, device string) (string, error) {
+	output, err := exec.CommandContext(ctx, sfdiskCmd, "-q", "--list", "-o", "device", device).CombinedOutput()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get %s last partition: '%s'; %w", device, formatCmdError(output), err)
 	}
 
-	return sfdiskOutputGetLastPartition(source, string(sfdisk))
+	return sfdiskOutputGetLastPartition(device, string(output))
 }

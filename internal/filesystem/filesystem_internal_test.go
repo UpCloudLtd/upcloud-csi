@@ -69,7 +69,7 @@ func TestLinuxFilesystem_Mount(t *testing.T) {
 
 	m := newTestLinuxFilesystem()
 
-	if err := m.createFilesystem(context.Background(), part, "ext4", nil); err != nil {
+	if err := m.createFilesystemIfNotExists(context.Background(), part, "ext4", nil); err != nil {
 		t.Errorf("Format failed with error: %s", err.Error())
 		return
 	}
@@ -114,25 +114,27 @@ func TestLinuxFilesystem_CreateAndReadPartition(t *testing.T) {
 	t.Logf("create fake disk device %s", disk)
 	m := newTestLinuxFilesystem()
 
-	// Create partition equivalent to creating /dev/sda1 to device /dev/sda
-	if err := m.createPartition(context.Background(), disk); err != nil {
-		t.Errorf("createPartition failed with error: %s", err.Error())
-		return
-	}
-
-	// check if partition table exists
-	gotFormated, err := m.isFormatted(context.Background(), disk)
-	if err != nil {
-		t.Errorf("IsFormatted failed with error: %s", err.Error())
-		return
-	}
-	if gotFormated != true {
-		t.Error("IsFormatted failed device should have parition table (GPT)")
+	ctx := context.Background()
+	// Create partition table
+	if err := m.createPartitionTableIfNotExists(ctx, disk); err != nil {
+		t.Errorf("createPartitionTableIfNotExists failed with error: %s", err.Error())
 		return
 	}
 
 	// check last partition
 	wantPartition := disk + "p1"
+
+	// Create partition equivalent to creating /dev/sda1 to device /dev/sda
+	lastPartition, err := m.createPartitionIfNotExists(ctx, disk)
+	if err != nil {
+		t.Errorf("createPartition failed with error: %s", err.Error())
+		return
+	}
+	if wantPartition != lastPartition {
+		t.Errorf("createPartition returned unexpeted partition, want %s got %s", wantPartition, lastPartition)
+		return
+	}
+
 	gotPartition, err := m.GetDeviceLastPartition(context.Background(), disk)
 	if err != nil {
 		t.Errorf("getLastPartition failed with error: %s", err.Error())
@@ -255,7 +257,8 @@ func checkSystemRequirements() error {
 func newTestLinuxFilesystem() *LinuxFilesystem {
 	logger := logrus.New()
 	logger.SetOutput(io.Discard)
-	return NewLinuxFilesystem([]string{"ext3", "ext4", "xfs"}, logger.WithFields(nil))
+	fs, _ := NewLinuxFilesystem([]string{"ext4"}, logger.WithFields(nil))
+	return fs
 }
 
 func canMount() bool {
