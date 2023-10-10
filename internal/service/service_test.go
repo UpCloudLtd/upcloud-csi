@@ -5,13 +5,18 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/UpCloudLtd/upcloud-csi/internal/service"
+	"github.com/UpCloudLtd/upcloud-csi/internal/service/mock"
 	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud"
 	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud/client"
+	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud/request"
 	upsvc "github.com/UpCloudLtd/upcloud-go-api/v6/upcloud/service"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestUpCloudService_ListStorage(t *testing.T) {
@@ -167,4 +172,56 @@ func TestUpCloudService_ListStorageBackups(t *testing.T) {
 	storages, err = c.ListStorageBackups(context.Background(), "")
 	assert.NoError(t, err)
 	assert.Len(t, storages, 3)
+}
+
+func TestUpCloudService_AttachDetachStorage_Concurrency(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	client := &mock.UpCloudClient{}
+	s := service.NewUpCloudService(client)
+	c := 10
+
+	var wg sync.WaitGroup
+	for i := 0; i < c; i++ {
+		wg.Add(1)
+		// populate backend with two nodes and add 5 storages per node
+		serverUUID := fmt.Sprintf("test-node-%d", i%2)
+		volUUID := fmt.Sprintf("test-vol-%d", i)
+		client.StoreServer(&upcloud.ServerDetails{
+			Server: upcloud.Server{
+				UUID:  serverUUID,
+				State: upcloud.ServerStateStarted,
+			},
+			StorageDevices: make([]upcloud.ServerStorageDevice, 0),
+		})
+		go func(volUUID, serverUUID string) {
+			defer wg.Done()
+			t.Logf("attaching %s to node %s", volUUID, serverUUID)
+			err := s.AttachStorage(ctx, volUUID, serverUUID)
+			assert.NoError(t, err)
+		}(volUUID, serverUUID)
+	}
+	wg.Wait()
+	servers, err := client.GetServers(ctx)
+	require.NoError(t, err)
+	require.Len(t, servers.Servers, 2)
+	for _, srv := range servers.Servers {
+		d, err := client.GetServerDetails(ctx, &request.GetServerDetailsRequest{UUID: srv.UUID})
+		if !assert.NoError(t, err) {
+			continue
+		}
+		for _, storage := range d.StorageDevices {
+			wg.Add(1)
+			go func(volUUID, serverUUID string) {
+				defer wg.Done()
+				t.Logf("detaching %s from node %s", volUUID, serverUUID)
+				err := s.DetachStorage(ctx, volUUID, serverUUID)
+				assert.NoError(t, err)
+			}(storage.UUID, d.UUID)
+		}
+	}
+	wg.Wait()
 }

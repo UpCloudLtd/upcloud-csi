@@ -272,7 +272,6 @@ func (c *Controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 		if errors.As(err, &svcError) && svcError.Status != http.StatusConflict && svcError.ErrorCode() == upcloud.ErrCodeStorageDeviceLimitReached {
 			return nil, status.Error(codes.ResourceExhausted, "The limit of the number of attached devices has been reached")
 		}
-		// already attached to the node
 		return nil, err
 	}
 
