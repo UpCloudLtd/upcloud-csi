@@ -129,8 +129,10 @@ func (u *UpCloudService) DeleteStorage(ctx context.Context, storageUUID string) 
 func (u *UpCloudService) AttachStorage(ctx context.Context, storageUUID, serverUUID string) error {
 	// Lock attach operation per node because node can only attach single storage at the time.
 	mu, _ := u.nodeSync.LoadOrStore(serverUUID, &sync.Mutex{})
-	mu.(*sync.Mutex).Lock()
-	defer mu.(*sync.Mutex).Unlock()
+	if mu != nil {
+		mu.(*sync.Mutex).Lock()
+		defer mu.(*sync.Mutex).Unlock()
+	}
 
 	if err := u.waitForServerOnline(ctx, serverUUID); err != nil {
 		return fmt.Errorf("failed to attach storage, pre-condition failed: %w", err)
@@ -153,8 +155,10 @@ func (u *UpCloudService) AttachStorage(ctx context.Context, storageUUID, serverU
 func (u *UpCloudService) DetachStorage(ctx context.Context, storageUUID, serverUUID string) error {
 	// Lock detach operation per node because node can only detach single storage at the time.
 	mu, _ := u.nodeSync.LoadOrStore(serverUUID, &sync.Mutex{})
-	mu.(*sync.Mutex).Lock()
-	defer mu.(*sync.Mutex).Unlock()
+	if mu != nil {
+		mu.(*sync.Mutex).Lock()
+		defer mu.(*sync.Mutex).Unlock()
+	}
 
 	sd, err := u.client.GetServerDetails(ctx, &request.GetServerDetailsRequest{UUID: serverUUID})
 	if err != nil {

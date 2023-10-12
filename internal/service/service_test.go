@@ -199,8 +199,9 @@ func TestUpCloudService_AttachDetachStorage_Concurrency(t *testing.T) {
 		})
 		go func(volUUID, serverUUID string) {
 			defer wg.Done()
-			t.Logf("attaching %s to node %s", volUUID, serverUUID)
+			t1 := time.Now()
 			err := s.AttachStorage(ctx, volUUID, serverUUID)
+			t.Logf("attached %s to node %s in %s", volUUID, serverUUID, time.Since(t1))
 			assert.NoError(t, err)
 		}(volUUID, serverUUID)
 	}
@@ -217,8 +218,9 @@ func TestUpCloudService_AttachDetachStorage_Concurrency(t *testing.T) {
 			wg.Add(1)
 			go func(volUUID, serverUUID string) {
 				defer wg.Done()
-				t.Logf("detaching %s from node %s", volUUID, serverUUID)
+				t1 := time.Now()
 				err := s.DetachStorage(ctx, volUUID, serverUUID)
+				t.Logf("detached %s from node %s in %s", volUUID, serverUUID, time.Since(t1))
 				assert.NoError(t, err)
 			}(storage.UUID, d.UUID)
 		}
