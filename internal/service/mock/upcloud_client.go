@@ -17,7 +17,6 @@ type UpCloudClient struct {
 	upsvc.Storage
 
 	servers sync.Map
-	mu      sync.Mutex
 }
 
 func (u *UpCloudClient) StoreServer(s *upcloud.ServerDetails) {
@@ -57,8 +56,6 @@ func (u *UpCloudClient) GetServerDetails(ctx context.Context, r *request.GetServ
 }
 
 func (u *UpCloudClient) AttachStorage(ctx context.Context, r *request.AttachStorageRequest) (*upcloud.ServerDetails, error) {
-	u.mu.Lock()
-	defer u.mu.Unlock()
 	server := u.getServer(r.ServerUUID)
 	if server == nil {
 		return server, errors.New("server not found")
@@ -84,8 +81,6 @@ func (u *UpCloudClient) AttachStorage(ctx context.Context, r *request.AttachStor
 }
 
 func (u *UpCloudClient) DetachStorage(ctx context.Context, r *request.DetachStorageRequest) (*upcloud.ServerDetails, error) {
-	u.mu.Lock()
-	defer u.mu.Unlock()
 	server := u.getServer(r.ServerUUID)
 	if server == nil {
 		return server, fmt.Errorf("server %s not found", r.ServerUUID)
