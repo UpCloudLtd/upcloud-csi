@@ -32,6 +32,7 @@ clean-tests:
 
 .PHONY: test
 test:
+	go vet ./...
 	go test -race ./...
 
 test-integration:
