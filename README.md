@@ -11,10 +11,6 @@ Additional info about the CSI can be found
 in [Kubernetes CSI Developer Documentation](https://kubernetes-csi.github.io/docs/)
 and [Kubernetes Blog](https://kubernetes.io/blog/2019/01/15/container-storage-interface-ga/).
 
-## Disclaimer
-
-Before reaching the **v1.0.0** version, UpCloud CSI Driver is **NOT** recommended for production environment usage.
-
 ## Deployment
 ### Kubernetes 
 Kubernetes deployment [README](deploy/kubernetes/README.md) describes how to deploy UpCloud CSI driver using `kubectl` and sidecar containers.

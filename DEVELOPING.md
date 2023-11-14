@@ -24,14 +24,13 @@ $ make build-plugin
 Project's application can be found under `cmd` directory:
 - `upcloud-csi-plugin` is monolith CSI driver that can be run as controller or node driver (or both).
 
-### Driver
-Required interfaces are implemented by `Driver` type in `driver` package. For clarity, interface implementations are separated based on their role to files `controller.go`, `node.go` and `identity.go`.  
-Driver's gRPC server exposes endpoints described in following interfaces:
+### Plugin
+Required CSI interfaces are implemented in `controller`, `node` and `ìdentity` packages. 
+Plugin's gRPC server uses these packages to expose endpoints described in following interfaces:
 - [csi.IdentityServer](https://pkg.go.dev/github.com/container-storage-interface/spec@v1.6.0/lib/go/csi#IdentityServer)
 - [csi.ControllerServer](https://pkg.go.dev/github.com/container-storage-interface/spec@v1.6.0/lib/go/csi#ControllerServer)
 - [csi.NodeServer](https://pkg.go.dev/github.com/container-storage-interface/spec@v1.6.0/lib/go/csi#NodeServer)
 
-It's good to keep in mind that althought same `Driver` type implementes all the interfaces, node (`csi.NodeServer`) and controller (`csi.ControllerServer`) endpoints are normally executed on different hosts.  
 
 ## Testing
 Run tests using `make`
