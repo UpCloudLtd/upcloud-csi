@@ -8,3 +8,5 @@ temp/
 .DS_Store
 vendor/
 dist/
+# Generated release notes
+.release_notes
