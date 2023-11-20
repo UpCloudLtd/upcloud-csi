@@ -44,3 +44,13 @@ build-plugin:
 
 .PHONY: build
 build: build-plugin
+
+.PHONY: release-notes
+release-notes: CHANGELOG_HEADER = ^\#\# \[
+release-notes: CHANGELOG_VERSION = $(subst v,,$(TAG))
+release-notes:
+	@awk \
+		'/${CHANGELOG_HEADER}${CHANGELOG_VERSION}/ { flag = 1; next } \
+		/${CHANGELOG_HEADER}/ { if ( flag ) { exit; } } \
+		flag { if ( n ) { print prev; } n++; prev = $$0 }' \
+		CHANGELOG.md
