@@ -5,6 +5,9 @@ See updating [Changelog example here](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Fixed
+- controller: regard volume as unpublished from the node, if node is not found
+
 ## [1.0.0]
 
 First stable release
