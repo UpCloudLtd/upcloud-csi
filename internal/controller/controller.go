@@ -305,6 +305,7 @@ func (c *Controller) ControllerUnpublishVolume(ctx context.Context, req *csi.Con
 	_, err := c.svc.GetStorageByUUID(ctx, req.GetVolumeId())
 	if err != nil {
 		if errors.Is(err, service.ErrStorageNotFound) {
+			log.Info("storage not found")
 			return &csi.ControllerUnpublishVolumeResponse{}, nil
 		}
 		return nil, err
@@ -314,6 +315,10 @@ func (c *Controller) ControllerUnpublishVolume(ctx context.Context, req *csi.Con
 	log.Info("getting server by hostname")
 	server, err := c.svc.GetServerByHostname(ctx, req.GetNodeId())
 	if err != nil {
+		if errors.Is(err, service.ErrServerNotFound) {
+			log.Info("server not found")
+			return &csi.ControllerUnpublishVolumeResponse{}, nil
+		}
 		return nil, err
 	}
 
