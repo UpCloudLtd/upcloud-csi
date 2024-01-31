@@ -169,7 +169,7 @@ func (c *Controller) createVolumeFromSource(ctx context.Context, req *csi.Create
 		return nil, status.Errorf(codes.InvalidArgument, err.Error())
 	}
 	if src.Encrypted.Bool() != createVolumeRequestEncryptionAtRest(req) {
-		// To prevent unexpectected dst device properties, only allow cloning from device with same encryption policy.
+		// To prevent unexpected dst device properties, only allow cloning from device with same encryption policy.
 		return nil, status.Errorf(codes.InvalidArgument, "source and destination volumes needs to have same encryption policy")
 	}
 	log.Info("checking that source storage is online")
