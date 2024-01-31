@@ -682,7 +682,6 @@ linters-settings:
               "PKI",
               "PSU",
               "PTR",
-              "REST",
               "RSA",
               "RTP",
               "RX",

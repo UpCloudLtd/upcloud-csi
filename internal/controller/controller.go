@@ -86,11 +86,12 @@ func (c *Controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 		}
 	} else {
 		volumeReq := &request.CreateStorageRequest{
-			Zone:   c.zone,
-			Title:  req.GetName(),
-			Size:   storageSizeGB,
-			Tier:   tier,
-			Labels: c.storageLabels,
+			Zone:      c.zone,
+			Title:     req.GetName(),
+			Size:      storageSizeGB,
+			Tier:      tier,
+			Labels:    c.storageLabels,
+			Encrypted: upcloud.FromBool(createVolumeRequestEncryptionAtRest(req)),
 		}
 		logger.WithServiceRequest(log, volumeReq).Info("creating volume")
 		if vol, err = c.svc.CreateStorage(ctx, volumeReq); err != nil {
@@ -167,15 +168,20 @@ func (c *Controller) createVolumeFromSource(ctx context.Context, req *csi.Create
 		}
 		return nil, status.Errorf(codes.InvalidArgument, err.Error())
 	}
+	if src.Encrypted.Bool() != createVolumeRequestEncryptionAtRest(req) {
+		// To prevent unexpectected dst device properties, only allow cloning from device with same encryption policy.
+		return nil, status.Errorf(codes.InvalidArgument, "source and destination volumes needs to have same encryption policy")
+	}
 	log.Info("checking that source storage is online")
 	if err := c.svc.RequireStorageOnline(ctx, &src.Storage); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	volumeReq := &request.CloneStorageRequest{
-		UUID:  src.Storage.UUID,
-		Zone:  c.zone,
-		Tier:  tier,
-		Title: req.GetName(),
+		UUID:      src.Storage.UUID,
+		Zone:      c.zone,
+		Tier:      tier,
+		Title:     req.GetName(),
+		Encrypted: src.Encrypted,
 	}
 	logger.WithServiceRequest(log, volumeReq).Info("cloning volume")
 	vol, err := c.svc.CloneStorage(ctx, volumeReq, c.storageLabels...)
@@ -748,6 +754,14 @@ func createVolumeRequestTier(r *csi.CreateVolumeRequest) (string, error) {
 		return tier, nil
 	}
 	return "", status.Error(codes.InvalidArgument, fmt.Sprintf("storage tier '%s' not supported", tier))
+}
+
+func createVolumeRequestEncryptionAtRest(r *csi.CreateVolumeRequest) bool {
+	e, ok := r.Parameters["encryption"]
+	if ok && e == "data-at-rest" {
+		return true
+	}
+	return false
 }
 
 func validateCreateVolumeRequest(r *csi.CreateVolumeRequest, zone string) error {

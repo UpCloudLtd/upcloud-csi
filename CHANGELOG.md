@@ -5,6 +5,10 @@ See updating [Changelog example here](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Added
+
+- controller: support for data at rest encryption (using encrypted snapshots as volume source is not supported yet)
+
 ## [1.0.1]
 
 ### Fixed
