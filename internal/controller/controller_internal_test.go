@@ -4,7 +4,9 @@ import (
 	"testing"
 
 	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud"
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPaginateStorage(t *testing.T) {
@@ -87,4 +89,22 @@ func TestIsValidStorageUUID(t *testing.T) {
 
 	assert.True(t, isValidUUID("1160ffc3-58ec-4670-bdc9-27fe385d281d"))
 	assert.True(t, isValidUUID("0160ffc3-58ec-4670-bdc9-27fe385d281d"))
+}
+
+func TestCreateVolumeRequestEncryptionAtRest(t *testing.T) {
+	t.Parallel()
+
+	require.False(t, createVolumeRequestEncryptionAtRest(&csi.CreateVolumeRequest{}))
+
+	p := map[string]string{}
+	require.False(t, createVolumeRequestEncryptionAtRest(&csi.CreateVolumeRequest{Parameters: p}))
+
+	p["encryption"] = "data-at-restx"
+	require.False(t, createVolumeRequestEncryptionAtRest(&csi.CreateVolumeRequest{Parameters: p}))
+
+	p["encryption"] = ""
+	require.False(t, createVolumeRequestEncryptionAtRest(&csi.CreateVolumeRequest{Parameters: p}))
+
+	p["encryption"] = "data-at-rest"
+	require.True(t, createVolumeRequestEncryptionAtRest(&csi.CreateVolumeRequest{Parameters: p}))
 }

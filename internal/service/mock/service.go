@@ -23,9 +23,10 @@ func newMockStorage(size int, label ...upcloud.Label) *upcloud.Storage {
 	id, _ := uuid.NewUUID()
 
 	return &upcloud.Storage{
-		Size:   size,
-		UUID:   id.String(),
-		Labels: label,
+		Size:      size,
+		UUID:      id.String(),
+		Labels:    label,
+		Encrypted: 0,
 	}
 }
 
@@ -62,8 +63,10 @@ func (m *UpCloudServiceMock) GetStorageByName(ctx context.Context, storageName s
 
 func (m *UpCloudServiceMock) CreateStorage(ctx context.Context, csr *request.CreateStorageRequest) (*upcloud.StorageDetails, error) {
 	id, _ := uuid.NewUUID()
+	storage := newMockStorage(m.StorageSize)
+	storage.Encrypted = csr.Encrypted
 	s := &upcloud.StorageDetails{
-		Storage:     *newMockStorage(m.StorageSize),
+		Storage:     *storage,
 		ServerUUIDs: upcloud.ServerUUIDSlice{id.String()}, // TODO change UUID prefix
 	}
 
@@ -72,8 +75,10 @@ func (m *UpCloudServiceMock) CreateStorage(ctx context.Context, csr *request.Cre
 
 func (m *UpCloudServiceMock) CloneStorage(ctx context.Context, csr *request.CloneStorageRequest, label ...upcloud.Label) (*upcloud.StorageDetails, error) {
 	id, _ := uuid.NewUUID()
+	storage := newMockStorage(m.CloneStorageSize, label...)
+	storage.Encrypted = csr.Encrypted
 	s := &upcloud.StorageDetails{
-		Storage:     *newMockStorage(m.CloneStorageSize, label...),
+		Storage:     *storage,
 		ServerUUIDs: upcloud.ServerUUIDSlice{id.String()}, // TODO change UUID prefix
 	}
 
