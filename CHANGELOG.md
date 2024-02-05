@@ -5,6 +5,8 @@ See updating [Changelog example here](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.1.0]
+
 ### Added
 
 - controller: support for data at rest encryption (using encrypted snapshots as volume source is not supported yet)
@@ -18,6 +20,7 @@ See updating [Changelog example here](https://keepachangelog.com/en/1.0.0/)
 
 First stable release
 
-[Unreleased]: https://github.com/UpCloudLtd/upcloud-csi/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/UpCloudLtd/upcloud-csi/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/UpCloudLtd/upcloud-csi/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/UpCloudLtd/upcloud-csi/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/UpCloudLtd/upcloud-csi/releases/tag/1.0.0
