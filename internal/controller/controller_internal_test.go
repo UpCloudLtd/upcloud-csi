@@ -3,7 +3,7 @@ package controller
 import (
 	"testing"
 
-	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud"
+	"github.com/UpCloudLtd/upcloud-go-api/v8/upcloud"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

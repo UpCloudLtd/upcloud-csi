@@ -42,6 +42,20 @@ allowVolumeExpansion: true
 reclaimPolicy: Retain
 
 ---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: upcloud-block-storage-standard
+  namespace: kube-system
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "false"
+parameters:
+  tier: standard
+provisioner: storage.csi.upcloud.com
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+
+---
 #######################
 # Controller plugin
 #######################

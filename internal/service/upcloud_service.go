@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud"
-	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud/client"
-	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud/request"
-	upsvc "github.com/UpCloudLtd/upcloud-go-api/v6/upcloud/service"
+	"github.com/UpCloudLtd/upcloud-go-api/v8/upcloud"
+	"github.com/UpCloudLtd/upcloud-go-api/v8/upcloud/client"
+	"github.com/UpCloudLtd/upcloud-go-api/v8/upcloud/request"
+	upsvc "github.com/UpCloudLtd/upcloud-go-api/v8/upcloud/service"
 )
 
 const (
@@ -322,18 +322,20 @@ func (u *UpCloudService) RequireStorageOnline(ctx context.Context, s *upcloud.St
 }
 
 func (u *UpCloudService) waitForStorageOnline(ctx context.Context, uuid string) (*upcloud.StorageDetails, error) {
+	ctx, cancel := context.WithTimeout(ctx, storageStateTimeout)
+	defer cancel()
 	return u.client.WaitForStorageState(ctx, &request.WaitForStorageStateRequest{
 		UUID:         uuid,
 		DesiredState: upcloud.StorageStateOnline,
-		Timeout:      storageStateTimeout,
 	})
 }
 
 func (u *UpCloudService) waitForServerOnline(ctx context.Context, uuid string) error {
+	ctx, cancel := context.WithTimeout(ctx, serverStateTimeout)
+	defer cancel()
 	_, err := u.client.WaitForServerState(ctx, &request.WaitForServerStateRequest{
 		UUID:         uuid,
 		DesiredState: upcloud.ServerStateStarted,
-		Timeout:      serverStateTimeout,
 	})
 	return err
 }

@@ -1,6 +1,6 @@
 module github.com/UpCloudLtd/upcloud-csi
 
-go 1.20
+go 1.22
 
 require (
 	github.com/container-storage-interface/spec v1.6.0
@@ -22,7 +22,7 @@ require (
 
 require github.com/kubernetes-csi/csi-test/v5 v5.0.0
 
-require github.com/UpCloudLtd/upcloud-go-api/v6 v6.12.0
+require github.com/UpCloudLtd/upcloud-go-api/v8 v8.6.1
 
 require (
 	github.com/emicklei/go-restful/v3 v3.9.0 // indirect

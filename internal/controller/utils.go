@@ -3,7 +3,7 @@ package controller
 import (
 	"strings"
 
-	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud"
+	"github.com/UpCloudLtd/upcloud-go-api/v8/upcloud"
 )
 
 func upcloudLabels(labels []string) []upcloud.Label {
