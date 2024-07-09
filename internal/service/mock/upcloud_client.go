@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud"
-	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud/request"
-	upsvc "github.com/UpCloudLtd/upcloud-go-api/v6/upcloud/service"
+	"github.com/UpCloudLtd/upcloud-go-api/v8/upcloud"
+	"github.com/UpCloudLtd/upcloud-go-api/v8/upcloud/request"
+	upsvc "github.com/UpCloudLtd/upcloud-go-api/v8/upcloud/service"
 )
 
 type UpCloudClient struct {

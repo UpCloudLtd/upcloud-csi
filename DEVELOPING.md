@@ -4,7 +4,7 @@ CSI driver's primary goal is to conform to [Container Storage Interface (CSI)](h
 Depending on [CO](https://www.vmware.com/topics/glossary/content/container-orchestration.html), endpoints are called directly or by [sidecar containers](deploy/kubernetes/README.md#sidecars).
 
 ## Requirements
-- [Go](https://golang.org/doc/install) >= 1.20
+- [Go](https://golang.org/doc/install) >= 1.22
 
 Get the source code:
 

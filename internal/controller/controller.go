@@ -10,8 +10,8 @@ import (
 
 	"github.com/UpCloudLtd/upcloud-csi/internal/logger"
 	"github.com/UpCloudLtd/upcloud-csi/internal/service"
-	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud"
-	"github.com/UpCloudLtd/upcloud-go-api/v6/upcloud/request"
+	"github.com/UpCloudLtd/upcloud-go-api/v8/upcloud"
+	"github.com/UpCloudLtd/upcloud-go-api/v8/upcloud/request"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
@@ -743,7 +743,11 @@ func listSnapshotsErrorResponse(err error) (*csi.ListSnapshotsResponse, error) {
 }
 
 func createVolumeRequestTier(r *csi.CreateVolumeRequest) (string, error) {
-	tierMapper := map[string]string{"maxiops": upcloud.StorageTierMaxIOPS, "hdd": upcloud.StorageTierHDD}
+	tierMapper := map[string]string{
+		"maxiops":  upcloud.StorageTierMaxIOPS,
+		"hdd":      upcloud.StorageTierHDD,
+		"standard": upcloud.StorageTierStandard,
+	}
 	p, ok := r.Parameters["tier"]
 	if !ok {
 		// tier parameter is not required
