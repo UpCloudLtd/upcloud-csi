@@ -59,10 +59,12 @@ $ kubectl apply -f https://raw.githubusercontent.com/UpCloudLtd/upcloud-csi/main
 
 ### Choose storage disk type
 
-It's possible to select an option of disk type between `HDD` and `MaxIOPS`.
+It's possible to select an option of disk type between `HDD`, `Standard` and `MaxIOPS`. Details about different storage tiers can be found from [the UpCloud product documentation](https://upcloud.com/docs/products/block-storage/features/tiers/).
+
 For setting desired type you can set a `storageClassName` field in `PVC` to:
 * `upcloud-block-storage-maxiops`
 * `upcloud-block-storage-hdd`
+* `upcloud-block-storage-standard`
 
 If `storageClassName` field is not set, the default provisioned option will be `upcloud-block-storage-maxiops`. 
 
