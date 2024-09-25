@@ -65,7 +65,7 @@ func (c *Controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	if len(volumes) > 0 {
-		return createVolumeExistsResponse(ctx, req, volumes, log)
+		return createVolumeExistsResponse(req, volumes, log)
 	}
 
 	tier, err := createVolumeRequestTier(req)
@@ -115,7 +115,7 @@ func (c *Controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 	}, nil
 }
 
-func createVolumeExistsResponse(ctx context.Context, req *csi.CreateVolumeRequest, volumes []*upcloud.StorageDetails, log *logrus.Entry) (resp *csi.CreateVolumeResponse, err error) {
+func createVolumeExistsResponse(req *csi.CreateVolumeRequest, volumes []*upcloud.StorageDetails, log *logrus.Entry) (resp *csi.CreateVolumeResponse, err error) {
 	if len(volumes) > 1 {
 		return nil, fmt.Errorf("fatal: duplicate volume %q exists", req.GetName())
 	}
@@ -168,8 +168,8 @@ func (c *Controller) createVolumeFromSource(ctx context.Context, req *csi.Create
 		}
 		return nil, status.Errorf(codes.InvalidArgument, err.Error())
 	}
-	if src.Encrypted.Bool() != createVolumeRequestEncryptionAtRest(req) {
-		// To prevent unexpected dst device properties, only allow cloning from device with same encryption policy.
+	if src.Type != upcloud.StorageTypeBackup && (src.Encrypted.Bool() != createVolumeRequestEncryptionAtRest(req)) {
+		// To prevent unexpected dst device properties, only allow cloning from backups or device with same encryption policy.
 		return nil, status.Errorf(codes.InvalidArgument, "source and destination volumes needs to have same encryption policy")
 	}
 	log.Info("checking that source storage is online")
@@ -181,7 +181,7 @@ func (c *Controller) createVolumeFromSource(ctx context.Context, req *csi.Create
 		Zone:      c.zone,
 		Tier:      tier,
 		Title:     req.GetName(),
-		Encrypted: src.Encrypted,
+		Encrypted: upcloud.FromBool(createVolumeRequestEncryptionAtRest(req)),
 	}
 	logger.WithServiceRequest(log, volumeReq).Info("cloning volume")
 	vol, err := c.svc.CloneStorage(ctx, volumeReq, c.storageLabels...)

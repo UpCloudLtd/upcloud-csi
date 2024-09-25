@@ -5,6 +5,9 @@ See updating [Changelog example here](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Added
+- controller: allow any snapshot as volume data source for encrypted volume
+
 ## [1.2.0]
 
 ### Added
