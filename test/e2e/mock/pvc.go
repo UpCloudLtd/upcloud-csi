@@ -23,7 +23,7 @@ func (c *Client) CreatePVC(ctx context.Context, p string) (*v1.PersistentVolumeC
 			AccessModes: []v1.PersistentVolumeAccessMode{
 				v1.PersistentVolumeAccessMode("ReadWriteOnce"),
 			},
-			Resources: v1.ResourceRequirements{
+			Resources: v1.VolumeResourceRequirements{
 				Requests: v1.ResourceList{
 					v1.ResourceStorage: resource.MustParse("10Gi"),
 				},

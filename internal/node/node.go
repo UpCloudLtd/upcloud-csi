@@ -147,7 +147,7 @@ func (n *Node) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolume
 	if _, err := os.Stat(req.GetStagingTargetPath()); err == nil {
 		log.Info("removing staging target path")
 		if err := os.Remove(req.GetStagingTargetPath()); err != nil {
-			return nil, status.Errorf(codes.Internal, err.Error())
+			return nil, status.Error(codes.Internal, err.Error())
 		}
 	}
 	return &csi.NodeUnstageVolumeResponse{}, nil
@@ -242,7 +242,7 @@ func (n *Node) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVo
 	if _, err := os.Stat(req.GetTargetPath()); err == nil {
 		log.Info("removing target path")
 		if err := os.Remove(req.GetTargetPath()); err != nil {
-			return nil, status.Errorf(codes.Internal, err.Error())
+			return nil, status.Error(codes.Internal, err.Error())
 		}
 	}
 	return &csi.NodeUnpublishVolumeResponse{}, nil
