@@ -106,11 +106,11 @@ func (c *Client) DeleteDeployment(ctx context.Context, deploymentName string) er
 }
 
 func (c *Client) WaitForDeployment(ctx context.Context, deploymentName, namespace string) error {
-	return wait.PollImmediate(time.Second, time.Minute, c.isDeploymentRunning(ctx, deploymentName, namespace))
+	return wait.PollUntilContextTimeout(ctx, time.Second, time.Minute, true, c.isDeploymentRunning(ctx, deploymentName, namespace))
 }
 
-func (c *Client) isDeploymentRunning(ctx context.Context, deploymentName, namespace string) wait.ConditionFunc {
-	return func() (bool, error) {
+func (c *Client) isDeploymentRunning(ctx context.Context, deploymentName, namespace string) wait.ConditionWithContextFunc {
+	return func(ctx context.Context) (bool, error) {
 		deployment, err := c.k8s.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
 		if err != nil {
 			return false, err

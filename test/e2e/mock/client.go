@@ -1,6 +1,7 @@
 package mock
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -62,7 +63,9 @@ func (c *Client) Exec(params ExecParams) error {
 	cmd := "kubectl"
 	args := []string{"exec", "-i", params.PodName, "--", "/bin/sh", "-c", "cat ./temp"}
 
-	cmdSh := exec.Command(cmd, args...)
+	ctx := context.Background()
+
+	cmdSh := exec.CommandContext(ctx, cmd, args...)
 	cmdSh.Dir = projectRoot
 	cmdSh.Stdout = os.Stdout
 	cmdSh.Stderr = os.Stderr

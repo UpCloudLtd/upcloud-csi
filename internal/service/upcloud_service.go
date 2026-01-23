@@ -87,7 +87,7 @@ func (u *UpCloudService) CreateStorage(ctx context.Context, csr *request.CreateS
 	if err != nil {
 		return nil, err
 	}
-	return u.waitForStorageOnline(ctx, s.Storage.UUID)
+	return u.waitForStorageOnline(ctx, s.UUID)
 }
 
 func (u *UpCloudService) CloneStorage(ctx context.Context, r *request.CloneStorageRequest, label ...upcloud.Label) (*upcloud.StorageDetails, error) {
@@ -95,19 +95,19 @@ func (u *UpCloudService) CloneStorage(ctx context.Context, r *request.CloneStora
 	if err != nil {
 		return nil, err
 	}
-	s, err = u.waitForStorageOnline(ctx, s.Storage.UUID)
+	s, err = u.waitForStorageOnline(ctx, s.UUID)
 	if err != nil {
 		return s, err
 	}
 	if len(label) > 0 {
 		s, err = u.client.ModifyStorage(ctx, &request.ModifyStorageRequest{
-			UUID:   s.Storage.UUID,
+			UUID:   s.UUID,
 			Labels: &label,
 		})
 		if err != nil {
 			return s, err
 		}
-		s, err = u.waitForStorageOnline(ctx, s.Storage.UUID)
+		s, err = u.waitForStorageOnline(ctx, s.UUID)
 	}
 	return s, err
 }
@@ -130,8 +130,13 @@ func (u *UpCloudService) AttachStorage(ctx context.Context, storageUUID, serverU
 	// Lock attach operation per node because node can only attach single storage at the time.
 	mu, _ := u.nodeSync.LoadOrStore(serverUUID, &sync.Mutex{})
 	if mu != nil {
-		mu.(*sync.Mutex).Lock()
-		defer mu.(*sync.Mutex).Unlock()
+		mutex, ok := mu.(*sync.Mutex)
+		if !ok {
+			return fmt.Errorf("nodeSync value for serverUUID %s is not a *sync.Mutex", serverUUID)
+		}
+
+		mutex.Lock()
+		defer mutex.Unlock()
 	}
 
 	if err := u.waitForServerOnline(ctx, serverUUID); err != nil {
@@ -156,8 +161,12 @@ func (u *UpCloudService) DetachStorage(ctx context.Context, storageUUID, serverU
 	// Lock detach operation per node because node can only detach single storage at the time.
 	mu, _ := u.nodeSync.LoadOrStore(serverUUID, &sync.Mutex{})
 	if mu != nil {
-		mu.(*sync.Mutex).Lock()
-		defer mu.(*sync.Mutex).Unlock()
+		mutex, ok := mu.(*sync.Mutex)
+		if !ok {
+			return fmt.Errorf("nodeSync value for serverUUID %s is not a *sync.Mutex", serverUUID)
+		}
+		mutex.Lock()
+		defer mutex.Unlock()
 	}
 
 	sd, err := u.client.GetServerDetails(ctx, &request.GetServerDetailsRequest{UUID: serverUUID})
@@ -169,6 +178,7 @@ func (u *UpCloudService) DetachStorage(ctx context.Context, storageUUID, serverU
 			return fmt.Errorf("failed to detach storage, pre-condition failed: %w", err)
 		}
 	}
+
 	for _, device := range sd.StorageDevices {
 		if device.UUID == storageUUID {
 			details, err := u.client.DetachStorage(ctx, &request.DetachStorageRequest{ServerUUID: serverUUID, Address: device.Address})
@@ -238,7 +248,7 @@ func (u *UpCloudService) ResizeStorage(ctx context.Context, uuid string, newSize
 		}
 	}
 
-	return u.waitForStorageOnline(ctx, storage.Storage.UUID)
+	return u.waitForStorageOnline(ctx, storage.UUID)
 }
 
 func (u *UpCloudService) ResizeBlockDevice(ctx context.Context, uuid string, newSize int) (*upcloud.StorageDetails, error) {
@@ -249,7 +259,7 @@ func (u *UpCloudService) ResizeBlockDevice(ctx context.Context, uuid string, new
 	if err != nil {
 		return nil, err
 	}
-	return u.waitForStorageOnline(ctx, storage.Storage.UUID)
+	return u.waitForStorageOnline(ctx, storage.UUID)
 }
 
 func (u *UpCloudService) CreateStorageBackup(ctx context.Context, uuid, title string) (*upcloud.StorageDetails, error) {

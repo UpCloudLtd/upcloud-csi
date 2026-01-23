@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -45,7 +46,10 @@ func (s *HealthServer) Run() error {
 		"health_url": fmt.Sprintf("http://%s/health", s.listen.Host),
 	}).Info("starting HTTP server")
 
-	listener, err := net.Listen(s.listen.Scheme, s.listen.Host)
+	ctx := context.Background()
+	lc := net.ListenConfig{}
+
+	listener, err := lc.Listen(ctx, s.listen.Scheme, s.listen.Host)
 	if err != nil {
 		return fmt.Errorf("failed to listen: %w", err)
 	}

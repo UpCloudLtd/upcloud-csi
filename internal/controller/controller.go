@@ -178,7 +178,7 @@ func (c *Controller) createVolumeFromSource(ctx context.Context, req *csi.Create
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	volumeReq := &request.CloneStorageRequest{
-		UUID:      src.Storage.UUID,
+		UUID:      src.UUID,
 		Zone:      c.zone,
 		Tier:      tier,
 		Title:     req.GetName(),
@@ -190,11 +190,11 @@ func (c *Controller) createVolumeFromSource(ctx context.Context, req *csi.Create
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	log = log.WithField(logger.VolumeIDKey, vol.Storage.UUID).WithField("size", vol.Storage.Size)
-	if storageSizeGB > vol.Storage.Size {
+	log = log.WithField(logger.VolumeIDKey, vol.Storage.UUID).WithField("size", vol.Size)
+	if storageSizeGB > vol.Size {
 		log.WithField("new_size", storageSizeGB).Info("resizing volume")
 		// resize cloned storage and delete backup taken during resize operation as this is newly created storage
-		if vol, err = c.svc.ResizeStorage(ctx, vol.Storage.UUID, storageSizeGB, true); err != nil {
+		if vol, err = c.svc.ResizeStorage(ctx, vol.UUID, storageSizeGB, true); err != nil {
 			return nil, status.Error(codes.Internal, err.Error())
 		}
 	}
@@ -428,7 +428,7 @@ func (c *Controller) GetCapacity(ctx context.Context, req *csi.GetCapacityReques
 
 // ControllerGetCapabilities returns the capacity of the storage pool.
 func (c *Controller) ControllerGetCapabilities(ctx context.Context, req *csi.ControllerGetCapabilitiesRequest) (*csi.ControllerGetCapabilitiesResponse, error) {
-	caps := make([]*csi.ControllerServiceCapability, 0)
+	caps := make([]*csi.ControllerServiceCapability, 0, len(supportedCapabilities))
 	for _, capability := range supportedCapabilities {
 		caps = append(caps, &csi.ControllerServiceCapability{
 			Type: &csi.ControllerServiceCapability_Rpc{

@@ -59,9 +59,11 @@ func (c *Client) ListVolumes(ctx context.Context) (*v1.PersistentVolumeList, err
 	return c.k8s.CoreV1().PersistentVolumes().List(ctx, metav1.ListOptions{})
 }
 
-func (c *Client) isPVCRunning(ctx context.Context, pvcName, namespace string) wait.ConditionFunc {
-	return func() (bool, error) {
-		pvc, err := c.k8s.CoreV1().PersistentVolumeClaims(namespace).Get(ctx, pvcName, metav1.GetOptions{})
+func (c *Client) isPVCRunning(pvcName, namespace string) wait.ConditionWithContextFunc {
+	return func(ctx context.Context) (bool, error) {
+		pvc, err := c.k8s.CoreV1().
+			PersistentVolumeClaims(namespace).
+			Get(ctx, pvcName, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -71,7 +73,13 @@ func (c *Client) isPVCRunning(ctx context.Context, pvcName, namespace string) wa
 }
 
 func (c *Client) WaitForPVC(ctx context.Context, pvcName, namespace string) error {
-	return wait.PollImmediate(time.Second, time.Minute, c.isPVCRunning(ctx, pvcName, namespace))
+	return wait.PollUntilContextTimeout(
+		ctx,
+		time.Second,
+		time.Minute,
+		true,
+		c.isPVCRunning(pvcName, namespace),
+	)
 }
 
 func getMaxIOPSStorageClass() *string {
