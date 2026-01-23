@@ -479,7 +479,7 @@ linters:
 
     # See discussion for `paralleltest`.
     - tparallel
-    -
+
     # Warns on unnecessary type conversions. Unnecessary conversions make code
     # harder to read and can also relay false information to the developer,
     # e.g. assuming that a particular method returns a type that needs to be
