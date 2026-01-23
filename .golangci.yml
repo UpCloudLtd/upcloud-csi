@@ -121,10 +121,6 @@ linters:
     # using `pkg/errors`, but those are generally moving towards stdlib.
     - errorlint
 
-    # Checks that SQL statements are executed with the appropriate `.Exec` or
-    # `.Query` function.
-    - execinquery
-
     # Checks that switches of enum(-like) types cover every possible case.
     # Very helpful when we need to add new cases to enums, making sure that all
     # the relevant bits are checked. Can become annoying if there's a _lot_ of
@@ -320,7 +316,7 @@ linters:
 
     # Check that common logger library function calls have appropriate number
     # of key/value arguments.
-    - logrlint
+    - loggercheck
 
     # See discussion in `cyclop`.
     ## - maintidx # DISABLE
@@ -457,10 +453,7 @@ linters:
     # style concerns.
     ## - tagliatelle # DISABLE
 
-    # Advises to use `t.SetEnv` instead of `os.SetEnv` so that one does not
-    # need to bother with restoring the pre-test env var value. Note that
-    # this is not applicable to parallel tests.
-    - tenv
+    - usetesting
 
     # Checks that examples run by the `testing` package have an applicable
     # "output" comment, so that the example output can be verified to be as
@@ -486,14 +479,7 @@ linters:
 
     # See discussion for `paralleltest`.
     - tparallel
-
-    # Basically does what the frontend of the Go compiler does, parses and type
-    # checks code. More of a sanity check before committing than an actual
-    # linter. Several other linters require compiled/typechecked code before
-    # they can do their work, so this cannot really be disabled in the usual
-    # sense. See https://github.com/golangci/golangci-lint/issues/2912
-    - typecheck
-
+    -
     # Warns on unnecessary type conversions. Unnecessary conversions make code
     # harder to read and can also relay false information to the developer,
     # e.g. assuming that a particular method returns a type that needs to be
@@ -546,138 +532,65 @@ linters:
     # in typical codebases. `whitespace` is the generally preferred choice
     # over this.
     ## - wsl # DISABLE
-
-output:
-  # Get all issues from all linters, instead of just first per line, so we
-  # get to see everything on first pass.
-  uniq-by-line: false
-
-issues:
-  exclude:
-    # We used to have a mixture of initialisms and non-initialisms between and
-    # even within projects, but are converging towards the initialisms practice
-    # that is the most common one with Go code in general. Note that changing
-    # the naming is a breaking change, and whether/when/how to do it depends on
-    # the case at hand.
-    # - "^var-naming: .+ should be " # OPTIONAL, if needed
-  # Disable per linter/same-issue limits, again to get the whole picture on
-  # first pass.
-  max-issues-per-linter: 0
-  max-same-issues: 0
-  # Fix found issues where supported, because life is too short. Be sure to
-  # sanity check the diffs.
-  fix: true
-  # Exclude some linters from testing
-  exclude-rules:
+exclusions:
+  rules:
     - path: _test\.go
       linters:
-        # Test functions can easily grow quite large and don't/can't really
-        # be shortened
         - funlen
-        # Enforcing context in tests clutters up the code and isn't really
-        # necessary
         - noctx
-        # Closing response bodies in tests clutters up the code and isn't
-        # really necessary
         - bodyclose
 
-linters-settings:
-  errcheck:
-    # See discussion in `forcetypeassert`.
-    check-type-assertions: true
+  # v2 replacement for linters-settings:
+  settings:
+    errcheck:
+      check-type-assertions: true
 
-  gocritic:
-    disabled-checks:
-      # commentFormatting is redundant with/inferior to gofumpt which can also
-      # autofix this.
-      - commentFormatting
-      # hugeParam, range*Copy (from performance tag) to be discussed, arguably
-      # promote unconventional code.
-      - hugeParam
-      - rangeValCopy
-      - rangeExprCopy
-    enabled-tags:
-      # Most performance checks also encourage clean/idiomatic code.
-      - performance
-    settings:
-      captLocal:
-        paramsOnly: false
+    gocritic:
+      disabled-checks:
+        - commentFormatting
+        - hugeParam
+        - rangeValCopy
+        - rangeExprCopy
+      enabled-tags:
+        - performance
+      settings:
+        captLocal:
+          paramsOnly: false
 
-  gofumpt:
-    extra-rules: true
+    gofumpt:
+      extra-rules: true
 
-  importas:
-    no-unaliased: true
-    alias:
-      # Prominently differentiate pkg/errors and stdlib errors.
-      - pkg: github.com/pkg/errors
-        alias: pkgerrors
+    importas:
+      no-unaliased: true
+      alias:
+        - pkg: github.com/pkg/errors
+          alias: pkgerrors
 
-  nolintlint:
-    require-explanation: true
-    require-specific: true
+    nolintlint:
+      require-explanation: true
+      require-specific: true
 
-  reassign:
-    patterns:
-      - ".*"
+    reassign:
+      patterns:
+        - ".*"
 
-  revive:
-    rules:
-      - name: var-naming
-        arguments:
-          - []
-          - [
-              "ACME",
-              "AMQP",
-              "BGP",
-              "CA",
-              "CIDR",
-              "CSV",
-              "DB",
-              "DCMI",
-              "DHCP",
-              "DSA",
-              "ECDSA",
-              "EMA",
-              "EVI",
-              "EVPN",
-              "FIFO",
-              "FRU",
-              "GID",
-              "GPU",
-              "IB",
-              "IPMI",
-              "JWT",
-              "KV",
-              "LAN",
-              "LFU",
-              "LIFO",
-              "LRU",
-              "MAC",
-              "NIC",
-              "PDF",
-              "PKI",
-              "PSU",
-              "PTR",
-              "REST",
-              "RSA",
-              "RTP",
-              "RX",
-              "SCSI",
-              "SDN",
-              "SHA",
-              "SIP",
-              "SPOE",
-              "SSD",
-              "TS",
-              "TSV",
-              "TTL",
-              "TX",
-              "TXN",
-              "ULID",
-              "VAT",
-              "VCPU",
-              "VIP",
-              "VLAN",
-              "VRF",
+    revive:
+      rules:
+        - name: var-naming
+          arguments:
+            - []
+            - [
+              "ACME","AMQP","BGP","CA","CIDR","CSV","DB","DCMI","DHCP","DSA","ECDSA","EMA",
+              "EVI","EVPN","FIFO","FRU","GID","GPU","IB","IPMI","JWT","KV","LAN","LFU","LIFO",
+              "LRU","MAC","NIC","PDF","PKI","PSU","PTR","REST","RSA","RTP","RX","SCSI","SDN",
+              "SHA","SIP","SPOE","SSD","TS","TSV","TTL","TX","TXN","ULID","VAT","VCPU","VIP",
+              "VLAN","VRF"
             ]
+
+issues:
+  # v2 location for uniq-by-line
+  uniq-by-line: false
+
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  fix: true
