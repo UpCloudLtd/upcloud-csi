@@ -322,9 +322,15 @@ func (m *LinuxFilesystem) Statistics(volumePath string) (VolumeStatistics, error
 		return VolumeStatistics{}, err
 	}
 
-	availableBytes := statfs.Bavail * uint64(statfs.Bsize)
-	totalBytes := statfs.Blocks * uint64(statfs.Bsize)
-	usedBytes := (statfs.Blocks - statfs.Bfree) * uint64(statfs.Bsize)
+	bsize := statfs.Bsize
+	if bsize <= 0 {
+		return VolumeStatistics{}, fmt.Errorf("invalid statfs block size %d", bsize)
+	}
+	ubsize := uint64(bsize)
+
+	availableBytes := statfs.Bavail * ubsize
+	totalBytes := statfs.Blocks * ubsize
+	usedBytes := (statfs.Blocks - statfs.Bfree) * ubsize
 	usedInodesU := statfs.Files - statfs.Ffree
 
 	volStats := VolumeStatistics{
