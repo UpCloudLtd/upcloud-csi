@@ -19,16 +19,6 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-var supportedCapabilities = []csi.ControllerServiceCapability_RPC_Type{ //nolint: gochecknoglobals // readonly variable
-	csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
-	csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME,
-	csi.ControllerServiceCapability_RPC_LIST_VOLUMES,
-	csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
-	csi.ControllerServiceCapability_RPC_LIST_SNAPSHOTS,
-	csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
-	csi.ControllerServiceCapability_RPC_CLONE_VOLUME,
-}
-
 type Controller struct {
 	zone              string
 	maxVolumesPerNode int
@@ -39,7 +29,7 @@ type Controller struct {
 	storageLabels []upcloud.Label
 }
 
-func NewController(svc service.Service, zone string, maxVolumesPerNode int, l *logrus.Entry, labels ...string) (*Controller, error) {
+func NewController(svc service.Service, zone string, maxVolumesPerNode int, l *logrus.Entry, labels ...string) (csi.ControllerServer, error) {
 	if zone == "" {
 		return nil, errors.New("controller zone is required field")
 	}
@@ -427,6 +417,16 @@ func (c *Controller) GetCapacity(ctx context.Context, req *csi.GetCapacityReques
 
 // ControllerGetCapabilities returns the capacity of the storage pool.
 func (c *Controller) ControllerGetCapabilities(ctx context.Context, req *csi.ControllerGetCapabilitiesRequest) (*csi.ControllerGetCapabilitiesResponse, error) {
+	supportedCapabilities := []csi.ControllerServiceCapability_RPC_Type{
+		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
+		csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME,
+		csi.ControllerServiceCapability_RPC_LIST_VOLUMES,
+		csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
+		csi.ControllerServiceCapability_RPC_LIST_SNAPSHOTS,
+		csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
+		csi.ControllerServiceCapability_RPC_CLONE_VOLUME,
+	}
+
 	caps := make([]*csi.ControllerServiceCapability, 0)
 	for _, capability := range supportedCapabilities {
 		caps = append(caps, &csi.ControllerServiceCapability{

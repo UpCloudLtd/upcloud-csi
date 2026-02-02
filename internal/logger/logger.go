@@ -37,6 +37,7 @@ const (
 	ListStartingTokenKey string = "starting_token"
 	ListMaxEntriesKey    string = "max_entries"
 	ZoneKey              string = "zone"
+	DriverKey            string = "driver"
 
 	CtxCorrelationIDKey contextKey = "ctx_correlation_id"
 	CtxCalledMethodKey  contextKey = "ctx_called_method"

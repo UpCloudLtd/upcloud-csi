@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/UpCloudLtd/upcloud-csi/internal/controller"
+	"github.com/UpCloudLtd/upcloud-csi/internal/driver/block/controller"
 	"github.com/UpCloudLtd/upcloud-csi/internal/service"
 	"github.com/UpCloudLtd/upcloud-csi/internal/service/mock"
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -21,7 +21,7 @@ const (
 	tiB
 )
 
-func newController(svc service.Service) *controller.Controller {
+func newController(svc service.Service) csi.ControllerServer {
 	if svc == nil {
 		svc = &mock.UpCloudServiceMock{StorageSize: 10, CloneStorageSize: 10, VolumeUUIDExists: true}
 	}

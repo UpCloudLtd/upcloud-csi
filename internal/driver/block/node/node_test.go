@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/UpCloudLtd/upcloud-csi/internal/driver/block/node"
 	"github.com/UpCloudLtd/upcloud-csi/internal/filesystem/mock"
-	"github.com/UpCloudLtd/upcloud-csi/internal/node"
 	"github.com/sirupsen/logrus"
 )
 
