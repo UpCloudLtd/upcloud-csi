@@ -15,7 +15,8 @@ var (
 type DriverID string
 
 const (
-	BlockDriver DriverID = "Block"
+	FileStorageDriver DriverID = "FileStorage"
+	BlockDriver       DriverID = "Block"
 )
 
 type Driver interface {

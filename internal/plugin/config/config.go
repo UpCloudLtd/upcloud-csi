@@ -69,7 +69,7 @@ func Parse(osArgs []string) (Config, error) {
 	flagSet.StringVar(&c.LogLevel, "log-level", "info", "Logging level: panic, fatal, error, warn, warning, info, debug or trace")
 	flagSet.StringSliceVar(&c.Labels, "label", nil, "Apply default labels to all storage devices created by CSI driver, e.g. --label=color=green --label=size=xl")
 	flagSet.StringSliceVar(&c.FilesystemTypes, "fs-types", []string{"ext3", "ext4", "xfs"}, "Filesystem types supported by the system")
-	flagSet.StringVar(&c.Driver, "driver", string(driver.BlockDriver), "Driver to use (only Block supported right now)")
+	flagSet.StringVar(&c.Driver, "driver", string(driver.BlockDriver), "Driver to use (Block or FileStorage)")
 
 	if err := flagSet.Parse(osArgs); err != nil {
 		return c, err

@@ -2,11 +2,13 @@ package plugin
 
 import (
 	"context"
+	"errors"
 	"os"
 	"time"
 
 	"github.com/UpCloudLtd/upcloud-csi/internal/driver"
 	"github.com/UpCloudLtd/upcloud-csi/internal/driver/block"
+	"github.com/UpCloudLtd/upcloud-csi/internal/driver/filestorage"
 	"github.com/UpCloudLtd/upcloud-csi/internal/filesystem"
 	"github.com/UpCloudLtd/upcloud-csi/internal/identity"
 	"github.com/UpCloudLtd/upcloud-csi/internal/logger"
@@ -95,6 +97,8 @@ func initDriver(c *config.Config, l *logrus.Entry) (driver.Driver, error) {
 	switch c.Driver {
 	case string(driver.BlockDriver):
 		return block.New(c, l.WithField(logger.DriverKey, "block"))
+	case string(driver.FileStorageDriver):
+		return filestorage.New(c, l.WithField(logger.DriverKey, "fileStorage"))
 	default:
 		return nil, errors.New("invalid driver")
 	}
