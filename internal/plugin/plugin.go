@@ -2,7 +2,6 @@ package plugin
 
 import (
 	"context"
-	"errors"
 	"os"
 	"time"
 
@@ -33,7 +32,6 @@ func Run(c config.Config) error {
 }
 
 func newPluginServer(c config.Config, l *logrus.Entry) (*server.PluginServer, error) {
-	var srv *server.PluginServer
 	var err error
 	if c.Filesystem == nil {
 		c.Filesystem, err = filesystem.NewLinuxFilesystem(c.FilesystemTypes, l)
@@ -51,10 +49,6 @@ func newPluginServer(c config.Config, l *logrus.Entry) (*server.PluginServer, er
 	var csiNode csi.NodeServer
 
 	if c.Mode == config.DriverModeController || c.Mode == config.DriverModeMonolith {
-		if err := validateControllerConfig(c); err != nil {
-			return srv, err
-		}
-
 		svc, err := service.NewUpCloudServiceFromCredentials(c.Username, c.Password)
 		if err != nil {
 			return nil, err
@@ -84,7 +78,7 @@ func newPluginServer(c config.Config, l *logrus.Entry) (*server.PluginServer, er
 }
 
 func autoConfigureZone(svc *service.UpCloudService, c *config.Config) {
-	if c.Zone == "" {
+	if c.Zone == "" && c.NodeHost != "" {
 		// if zone is not provided, try to use nodeHost to auto-configure zone
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -108,11 +102,4 @@ func hostname() string {
 		return n
 	}
 	return ""
-}
-
-func validateControllerConfig(c config.Config) error {
-	if c.Zone == "" && c.NodeHost == "" {
-		return errors.New("controller required that zone or valid node host is set")
-	}
-	return nil
 }

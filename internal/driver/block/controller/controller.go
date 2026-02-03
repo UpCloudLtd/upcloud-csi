@@ -33,6 +33,7 @@ func NewController(svc service.Service, zone string, maxVolumesPerNode int, l *l
 	if zone == "" {
 		return nil, errors.New("controller zone is required field")
 	}
+
 	return &Controller{
 		zone:              zone,
 		svc:               svc,
