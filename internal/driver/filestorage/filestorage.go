@@ -28,5 +28,5 @@ func (d fileStorageDriver) Controller(svc *service.UpCloudService) (csi.Controll
 }
 
 func (d fileStorageDriver) Node() (csi.NodeServer, error) {
-	return node.NewNode(d.config.NodeHost, d.config.Filesystem, d.logger)
+	return node.NewNode(d.config.NodeHost, d.config.Zone, d.config.Filesystem, d.logger)
 }

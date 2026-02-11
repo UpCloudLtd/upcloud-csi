@@ -15,6 +15,7 @@ import (
 
 type UpCloudClient struct {
 	upsvc.Storage
+	upsvc.FileStorage
 
 	servers sync.Map
 }

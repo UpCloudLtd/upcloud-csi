@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
@@ -23,6 +24,7 @@ const (
 
 type upCloudClient interface {
 	upsvc.Storage
+	upsvc.FileStorage
 
 	WaitForServerState(ctx context.Context, r *request.WaitForServerStateRequest) (*upcloud.ServerDetails, error)
 	GetServers(ctx context.Context) (*upcloud.Servers, error)
@@ -348,4 +350,174 @@ func (u *UpCloudService) waitForServerOnline(ctx context.Context, uuid string) e
 		DesiredState: upcloud.ServerStateStarted,
 	})
 	return err
+}
+
+func (u *UpCloudService) GetFileStorageByID(ctx context.Context, uuid string) (*upcloud.FileStorage, error) {
+	// we always go by the current state
+	storage, err := u.client.GetFileStorageCurrentState(ctx, &request.GetFileStorageCurrentStateRequest{UUID: uuid})
+	var p *upcloud.Problem
+	if errors.As(err, &p) && p.Status == http.StatusNotFound {
+		return nil, ErrFileStorageNotFound
+	}
+	return storage, err
+}
+
+func (u *UpCloudService) CreateShareOnFileStorage(ctx context.Context, fileStorage string, shareName string) error {
+	_, err := u.client.CreateFileStorageShare(ctx, &request.CreateFileStorageShareRequest{
+		ServiceUUID: fileStorage,
+		Name:        shareName,
+		Path:        fmt.Sprintf("/%v", shareName),
+		ACL:         []upcloud.FileStorageShareACL{},
+	})
+	if err != nil {
+		return fmt.Errorf("error creating Share on File Storage: %w", err)
+	}
+
+	return u.waitFileStorageCurrentState(ctx, fileStorage, func(fs *upcloud.FileStorage) bool {
+		for _, share := range fs.Shares {
+			if share.Name == shareName {
+				return true
+			}
+		}
+
+		return false
+	})
+}
+
+func (u *UpCloudService) DeleteFileStorageShareByIDAndName(ctx context.Context, uuid string, shareName string) error {
+	err := u.client.DeleteFileStorageShare(ctx, &request.DeleteFileStorageShareRequest{
+		ServiceUUID: uuid,
+		ShareName:   shareName,
+	})
+
+	var p *upcloud.Problem
+	if errors.As(err, &p) && p.Status == http.StatusNotFound {
+		return ErrFileStorageShareNotFound
+	}
+
+	return err
+}
+
+func (u *UpCloudService) AttachNetworkToFileStorage(ctx context.Context, fileStorage string, network string) (string, error) {
+	fileStorageDetails, err := u.client.GetFileStorage(ctx, &request.GetFileStorageRequest{UUID: fileStorage})
+	if err != nil {
+		return "", fmt.Errorf("error fetching FileStorage: %w", err)
+	}
+
+	for _, net := range fileStorageDetails.Networks {
+		if net.UUID == network {
+			return net.IPAddress, nil
+		}
+	}
+
+	net, err := u.client.CreateFileStorageNetwork(ctx, &request.CreateFileStorageNetworkRequest{
+		ServiceUUID: fileStorage,
+		UUID:        network,
+		Name:        "csi",
+		Family:      upcloud.IPAddressFamilyIPv4, // TODO? allow choosing v4 or v6
+	})
+	if err != nil {
+		return "", fmt.Errorf("error attaching network to File Storage: %w", err)
+	}
+
+	return net.IPAddress, u.waitFileStorageCurrentState(ctx, fileStorage, func(fs *upcloud.FileStorage) bool {
+		for _, net := range fs.Networks {
+			if net.Name == "csi" && net.UUID == network {
+				return true
+			}
+		}
+
+		return false
+	})
+}
+
+func (u *UpCloudService) EnsureFileStorageShareACL(ctx context.Context, fileStorage string, shareName string, aclName string, address string) error {
+	acl, err := u.client.GetFileStorageShareACL(ctx, &request.GetFileStorageShareACLRequest{
+		ServiceUUID: fileStorage,
+		ShareName:   shareName,
+		ACLName:     aclName,
+	})
+	if err == nil {
+		if acl.Target == address {
+			// correct ACL already exists
+			return nil
+		}
+
+		_, err = u.client.ModifyFileStorageShareACL(ctx, &request.ModifyFileStorageShareACLRequest{
+			ServiceUUID: fileStorage,
+			ShareName:   shareName,
+			ACLName:     aclName,
+			ModifyFileStorageShareACL: request.ModifyFileStorageShareACL{
+				Target: &address,
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("error modifying existing Share ACL for node: %w", err)
+		}
+	} else {
+		_, err = u.client.CreateFileStorageShareACL(ctx, &request.CreateFileStorageShareACLRequest{
+			ServiceUUID: fileStorage,
+			ShareName:   shareName,
+			FileStorageShareACL: upcloud.FileStorageShareACL{
+				Name:       aclName,
+				Permission: upcloud.FileStorageShareACLPermissionReadWrite,
+				Target:     address,
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("error creating ACL: %w", err)
+		}
+	}
+
+	return u.waitFileStorageCurrentState(ctx, fileStorage, func(fs *upcloud.FileStorage) bool {
+		for _, share := range fs.Shares {
+			if share.Name == shareName {
+				for _, acl := range share.ACL {
+					if acl.Name == aclName {
+						return true
+					}
+				}
+			}
+		}
+		return false
+	})
+}
+
+func (u *UpCloudService) RemoveFileStorageShareACL(ctx context.Context, fileStorage string, shareName string, aclName string) error {
+	err := u.client.DeleteFileStorageShareACL(ctx, &request.DeleteFileStorageShareACLRequest{
+		ServiceUUID: fileStorage,
+		ShareName:   shareName,
+		ACLName:     aclName,
+	})
+
+	var p *upcloud.Problem
+	if errors.As(err, &p) && p.Status == http.StatusNotFound {
+		return nil
+	}
+
+	return err
+}
+
+func (u *UpCloudService) waitFileStorageCurrentState(ctx context.Context, fileStorage string, f func(*upcloud.FileStorage) bool) error {
+	ctx, cancel := context.WithTimeout(ctx, serverStateTimeout)
+	defer cancel()
+
+	timer := time.NewTicker(5 * time.Second)
+
+	for ctx.Err() == nil {
+		<-timer.C
+
+		currentState, err := u.client.GetFileStorageCurrentState(ctx, &request.GetFileStorageCurrentStateRequest{
+			UUID: fileStorage,
+		})
+		if err != nil {
+			return fmt.Errorf("error fetching current state of FileStorage: %w", err)
+		}
+
+		if f(currentState) {
+			return nil
+		}
+	}
+
+	return ctx.Err()
 }

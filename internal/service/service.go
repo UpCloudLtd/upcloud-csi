@@ -13,6 +13,9 @@ var (
 	ErrServerNotFound        = errors.New("upcloud: server not found")
 	ErrServerStorageNotFound = errors.New("upcloud: server storage not found")
 	ErrBackupInProgress      = errors.New("upcloud: cannot take snapshot while storage is in state backup")
+
+	ErrFileStorageNotFound      = errors.New("upcloud: File Storage not found")
+	ErrFileStorageShareNotFound = errors.New("upcloud: File Storage Share not found")
 )
 
 type Service interface { //nolint:interfacebloat // Split this to smaller piece when it makes sense code wise
@@ -32,4 +35,14 @@ type Service interface { //nolint:interfacebloat // Split this to smaller piece 
 	ResizeBlockDevice(ctx context.Context, uuid string, newSize int) (*upcloud.StorageDetails, error)
 	CreateStorageBackup(ctx context.Context, uuid, title string) (*upcloud.StorageDetails, error)
 	DeleteStorageBackup(ctx context.Context, uuid string) error
+}
+
+type FileStorage interface {
+	GetServerByHostname(context.Context, string) (*upcloud.ServerDetails, error)
+	GetFileStorageByID(ctx context.Context, uuid string) (*upcloud.FileStorage, error)
+	CreateShareOnFileStorage(ctx context.Context, fileStorage string, shareName string) error
+	AttachNetworkToFileStorage(ctx context.Context, fileStorage string, network string) (string, error)
+	DeleteFileStorageShareByIDAndName(ctx context.Context, uuid string, shareName string) error
+	EnsureFileStorageShareACL(ctx context.Context, fileStorage string, shareName string, aclName string, address string) error
+	RemoveFileStorageShareACL(ctx context.Context, fileStorage string, shareName string, aclName string) error
 }
