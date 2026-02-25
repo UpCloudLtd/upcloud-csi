@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"strings"
@@ -34,7 +35,9 @@ type LinuxFilesystem struct {
 }
 
 func NewLinuxFilesystem(filesystemTypes []string, log *logrus.Entry) (*LinuxFilesystem, error) {
-	tools := []string{blkidCmd, partedCmd, sfdiskCmd}
+	tools := make([]string, 0, 3+len(filesystemTypes))
+	tools = append(tools, blkidCmd, partedCmd, sfdiskCmd)
+
 	for i := range filesystemTypes {
 		tools = append(tools, fmt.Sprintf("mkfs.%s", filesystemTypes[i]))
 	}
@@ -327,14 +330,26 @@ func (m *LinuxFilesystem) Statistics(volumePath string) (VolumeStatistics, error
 	if err != nil {
 		return VolumeStatistics{}, err
 	}
-	volStats := VolumeStatistics{
-		AvailableBytes: int64(statfs.Bavail) * int64(statfs.Bsize),                         //nolint:unconvert // unix.Statfs_t integer types varies between GOARCHs
-		TotalBytes:     int64(statfs.Blocks) * int64(statfs.Bsize),                         //nolint:unconvert // unix.Statfs_t integer types varies between GOARCHs
-		UsedBytes:      (int64(statfs.Blocks) - int64(statfs.Bfree)) * int64(statfs.Bsize), //nolint:unconvert // unix.Statfs_t integer types varies between GOARCHs
 
-		AvailableInodes: int64(statfs.Ffree),
-		TotalInodes:     int64(statfs.Files),
-		UsedInodes:      int64(statfs.Files) - int64(statfs.Ffree),
+	bsize := statfs.Bsize
+	if bsize <= 0 {
+		return VolumeStatistics{}, fmt.Errorf("invalid statfs block size %d", bsize)
+	}
+	ubsize := uint64(bsize)
+
+	availableBytes := statfs.Bavail * ubsize
+	totalBytes := statfs.Blocks * ubsize
+	usedBytes := (statfs.Blocks - statfs.Bfree) * ubsize
+	usedInodesU := statfs.Files - statfs.Ffree
+
+	volStats := VolumeStatistics{
+		AvailableBytes: clampUint64ToInt64(availableBytes),
+		TotalBytes:     clampUint64ToInt64(totalBytes),
+		UsedBytes:      clampUint64ToInt64(usedBytes),
+
+		AvailableInodes: clampUint64ToInt64(statfs.Ffree),
+		TotalInodes:     clampUint64ToInt64(statfs.Files),
+		UsedInodes:      clampUint64ToInt64(usedInodesU),
 	}
 
 	return volStats, nil
@@ -356,4 +371,11 @@ func (m *LinuxFilesystem) GetDeviceLastPartition(ctx context.Context, device str
 	}
 
 	return sfdiskOutputGetLastPartition(device, string(output))
+}
+
+func clampUint64ToInt64(u uint64) int64 {
+	if u > uint64(math.MaxInt64) {
+		return math.MaxInt64
+	}
+	return int64(u)
 }

@@ -130,8 +130,13 @@ func (u *UpCloudService) AttachStorage(ctx context.Context, storageUUID, serverU
 	// Lock attach operation per node because node can only attach single storage at the time.
 	mu, _ := u.nodeSync.LoadOrStore(serverUUID, &sync.Mutex{})
 	if mu != nil {
-		mu.(*sync.Mutex).Lock()
-		defer mu.(*sync.Mutex).Unlock()
+		mutex, ok := mu.(*sync.Mutex)
+		if !ok {
+			return fmt.Errorf("nodeSync value for serverUUID %s is not a *sync.Mutex", serverUUID)
+		}
+
+		mutex.Lock()
+		defer mutex.Unlock()
 	}
 
 	if err := u.waitForServerOnline(ctx, serverUUID); err != nil {
@@ -156,8 +161,13 @@ func (u *UpCloudService) DetachStorage(ctx context.Context, storageUUID, serverU
 	// Lock detach operation per node because node can only detach single storage at the time.
 	mu, _ := u.nodeSync.LoadOrStore(serverUUID, &sync.Mutex{})
 	if mu != nil {
-		mu.(*sync.Mutex).Lock()
-		defer mu.(*sync.Mutex).Unlock()
+		mutex, ok := mu.(*sync.Mutex)
+		if !ok {
+			return fmt.Errorf("nodeSync value for serverUUID %s is not a *sync.Mutex", serverUUID)
+		}
+
+		mutex.Lock()
+		defer mutex.Unlock()
 	}
 
 	sd, err := u.client.GetServerDetails(ctx, &request.GetServerDetailsRequest{UUID: serverUUID})
