@@ -8,7 +8,8 @@ RUN apk add ca-certificates \
     blkid \
     e2fsprogs-extra \
     util-linux \
-    parted
+    parted \
+    nfs-utils
 
 ADD upcloud-csi-plugin /bin/
 
