@@ -178,6 +178,15 @@ func (m *LinuxFilesystem) Unmount(ctx context.Context, target string) error {
 		return nil
 	}
 
+	if mounted, err := m.IsMounted(ctx, target); err != nil {
+		err := errors.New("cannot check if target is a mountpoint")
+		log.WithFields(logrus.Fields{"target": target}).Error(err)
+		return err
+	} else if !mounted {
+		log.WithFields(logrus.Fields{"target": target}).Debug("target is not a mountpoint, nothing to do")
+		return nil
+	}
+
 	umountCmd := "umount"
 	umountArgs := []string{target}
 
