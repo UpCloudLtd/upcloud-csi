@@ -48,14 +48,17 @@ func newPluginServer(c config.Config, l *logrus.Entry) (*server.PluginServer, er
 	var csiController csi.ControllerServer
 	var csiNode csi.NodeServer
 
-	if c.Mode == config.DriverModeController || c.Mode == config.DriverModeMonolith {
-		svc, err := service.NewUpCloudServiceFromCredentials(c.Username, c.Password)
+	var svc *service.UpCloudService
+	if c.Username != "" {
+		svc, err = service.NewUpCloudServiceFromCredentials(c.Username, c.Password)
 		if err != nil {
 			return nil, err
 		}
 
 		autoConfigureZone(svc, &c)
+	}
 
+	if c.Mode == config.DriverModeController || c.Mode == config.DriverModeMonolith {
 		csiController, err = driver.Controller(svc)
 		if err != nil {
 			return nil, err
