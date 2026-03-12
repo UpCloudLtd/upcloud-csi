@@ -1,0 +1,200 @@
+#######################
+# Driver
+#######################
+apiVersion: storage.k8s.io/v1
+kind: CSIDriver
+metadata:
+  name: filestorage.csi.upcloud.com
+spec:
+  attachRequired: true
+  fsGroupPolicy: File
+---
+#######################
+# Controller plugin
+#######################
+kind: StatefulSet
+apiVersion: apps/v1
+metadata:
+  name: csi-upcloud-filestorage-controller
+  namespace: kube-system
+spec:
+  serviceName: "csi-upcloud-filestorage"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: csi-upcloud-filestorage-controller
+  template:
+    metadata:
+      labels:
+        app: csi-upcloud-filestorage-controller
+        role: csi-upcloud-filestorage
+    spec:
+      priorityClassName: system-cluster-critical
+      serviceAccount: csi-upcloud-controller-sa
+      containers:
+        - name: csi-provisioner
+          image: k8s.gcr.io/sig-storage/csi-provisioner:v3.1.0
+          args:
+            - "--csi-address=$(ADDRESS)"
+            - "--v=5"
+            - "--timeout=600s"
+          env:
+            - name: ADDRESS
+              value: /var/lib/csi/sockets/pluginproxy/csi.sock
+          imagePullPolicy: "Always"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/csi/sockets/pluginproxy/
+        - name: csi-attacher
+          image: k8s.gcr.io/sig-storage/csi-attacher:v3.4.0
+          args:
+            - "--v=5"
+            - "--csi-address=$(ADDRESS)"
+            - "--timeout=600s"
+          env:
+            - name: ADDRESS
+              value: /var/lib/csi/sockets/pluginproxy/csi.sock
+          imagePullPolicy: "Always"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/csi/sockets/pluginproxy/
+        - name: csi-upcloud-plugin
+          image: ghcr.io/upcloudltd/upcloud-csi:mgrosch-test-1
+          args:
+            - "--endpoint=$(CSI_ENDPOINT)"
+            - "--nodehost=$(NODE_ID)"
+            - "--mode=controller"
+            - "--driver=FileStorage"
+            - "--driver-name=filestorage.csi.upcloud.com"
+          env:
+            - name: CSI_ENDPOINT
+              value: unix:///var/lib/csi/sockets/pluginproxy/csi.sock
+            - name: UPCLOUD_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: upcloud-csi-filestorage
+                  key: username
+            - name: UPCLOUD_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: upcloud-csi-filestorage
+                  key: password
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          imagePullPolicy: "Always"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/csi/sockets/pluginproxy/
+      volumes:
+        - name: socket-dir
+          emptyDir: {}
+
+---
+#######################
+# Node plugin
+#######################
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: csi-upcloud-filestorage-node
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: csi-upcloud-filestorage-node
+  template:
+    metadata:
+      labels:
+        app: csi-upcloud-filestorage-node
+        role: csi-upcloud-filestorage
+    spec:
+      priorityClassName: system-node-critical
+      serviceAccount: csi-upcloud-node-sa
+      hostNetwork: true
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: csi-upcloud-filestorage-node
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: csi-node-driver-registrar
+          image: k8s.gcr.io/sig-storage/csi-node-driver-registrar:v2.5.0
+          args:
+            - "--v=5"
+            - "--csi-address=$(ADDRESS)"
+            - "--kubelet-registration-path=$(DRIVER_REG_SOCK_PATH)"
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+            - name: DRIVER_REG_SOCK_PATH
+              value: /var/lib/kubelet/plugins/filestorage.csi.upcloud.com/csi.sock
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - name: plugin-dir
+              mountPath: /csi/
+            - name: registration-dir
+              mountPath: /registration/
+        - name: csi-upcloud-plugin
+          image: ghcr.io/upcloudltd/upcloud-csi:mgrosch-test-1
+          args:
+            - "--endpoint=$(CSI_ENDPOINT)"
+            - "--nodehost=$(NODE_ID)"
+            - "--mode=node"
+            - "--driver=FileStorage"
+            - "--driver-name=filestorage.csi.upcloud.com"
+          env:
+            - name: CSI_ENDPOINT
+              value: unix:///csi/csi.sock
+            - name: UPCLOUD_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: upcloud-csi-filestorage
+                  key: username
+            - name: UPCLOUD_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: upcloud-csi-filestorage
+                  key: password
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          imagePullPolicy: "Always"
+          securityContext:
+            privileged: true
+            capabilities:
+              add: ["SYS_ADMIN"]
+            allowPrivilegeEscalation: true
+          volumeMounts:
+            - name: plugin-dir
+              mountPath: /csi
+            - name: pods-mount-dir
+              mountPath: /var/lib/kubelet
+              # needed so that any mounts setup inside this container are
+              # propagated back to the host machine.
+              mountPropagation: "Bidirectional"
+            - name: device-dir
+              mountPath: /dev
+      volumes:
+        - name: registration-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins_registry/
+            type: DirectoryOrCreate
+        - name: plugin-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins/filestorage.csi.upcloud.com
+            type: DirectoryOrCreate
+        - name: pods-mount-dir
+          hostPath:
+            path: /var/lib/kubelet
+            type: Directory
+        - name: device-dir
+          hostPath:
+            path: /dev

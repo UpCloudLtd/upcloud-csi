@@ -144,10 +144,6 @@ linters:
     # using `pkg/errors`, but those are generally moving towards stdlib.
     - errorlint
 
-    # Checks that SQL statements are executed with the appropriate `.Exec` or
-    # `.Query` function.
-    - execinquery
-
     # Checks that switches of enum(-like) types cover every possible case.
     # Very helpful when we need to add new cases to enums, making sure that all
     # the relevant bits are checked. Can become annoying if there's a _lot_ of

@@ -3,6 +3,7 @@ package plugin
 import (
 	"testing"
 
+	"github.com/UpCloudLtd/upcloud-csi/internal/driver"
 	"github.com/UpCloudLtd/upcloud-csi/internal/filesystem/mock"
 	"github.com/UpCloudLtd/upcloud-csi/internal/logger"
 	"github.com/UpCloudLtd/upcloud-csi/internal/plugin/config"
@@ -21,6 +22,7 @@ func TestNewPluginServer(t *testing.T) {
 		Zone:                "fi-hel2",
 		PluginServerAddress: config.DefaultPluginServerAddress,
 		Filesystem:          &mock.MockFilesystem{},
+		Driver:              string(driver.BlockDriver),
 	}
 	srv, err := newPluginServer(cfg, l.WithField("package", "plugin"))
 	require.NoError(t, err)
@@ -34,6 +36,7 @@ func TestNewPluginServer(t *testing.T) {
 		PluginServerAddress: config.DefaultPluginServerAddress,
 		Zone:                "fi-hel2",
 		Filesystem:          &mock.MockFilesystem{},
+		Driver:              string(driver.BlockDriver),
 	}
 	srv, err = newPluginServer(cfg, l.WithField("package", "plugin"))
 	require.NoError(t, err)
@@ -49,6 +52,7 @@ func TestNewPluginServer(t *testing.T) {
 		PluginServerAddress: config.DefaultPluginServerAddress,
 		Zone:                "fi-hel2",
 		Filesystem:          &mock.MockFilesystem{},
+		Driver:              string(driver.BlockDriver),
 	}
 	srv, err = newPluginServer(cfg, l.WithField("package", "plugin"))
 	require.NoError(t, err)

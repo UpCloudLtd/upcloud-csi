@@ -3,18 +3,19 @@ package plugin
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"time"
 
-	"github.com/UpCloudLtd/upcloud-csi/internal/controller"
+	"github.com/UpCloudLtd/upcloud-csi/internal/driver"
+	"github.com/UpCloudLtd/upcloud-csi/internal/driver/block"
+	"github.com/UpCloudLtd/upcloud-csi/internal/driver/filestorage"
 	"github.com/UpCloudLtd/upcloud-csi/internal/filesystem"
 	"github.com/UpCloudLtd/upcloud-csi/internal/identity"
 	"github.com/UpCloudLtd/upcloud-csi/internal/logger"
-	"github.com/UpCloudLtd/upcloud-csi/internal/node"
 	"github.com/UpCloudLtd/upcloud-csi/internal/plugin/config"
 	"github.com/UpCloudLtd/upcloud-csi/internal/server"
 	"github.com/UpCloudLtd/upcloud-csi/internal/service"
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/sirupsen/logrus"
 )
 
@@ -33,7 +34,6 @@ func Run(c config.Config) error {
 }
 
 func newPluginServer(c config.Config, l *logrus.Entry) (*server.PluginServer, error) {
-	var srv *server.PluginServer
 	var err error
 	if c.Filesystem == nil {
 		c.Filesystem, err = filesystem.NewLinuxFilesystem(c.FilesystemTypes, l)
@@ -41,84 +41,39 @@ func newPluginServer(c config.Config, l *logrus.Entry) (*server.PluginServer, er
 			return nil, err
 		}
 	}
-	switch c.Mode {
-	case config.DriverModeController:
-		if err := validateControllerConfig(c); err != nil {
-			return srv, err
-		}
-		if srv, err = newControllerPluginServer(c, l); err != nil {
-			return srv, err
-		}
-	case config.DriverModeNode:
-		if srv, err = newNodePluginServer(c, l); err != nil {
-			return srv, err
-		}
-	case config.DriverModeMonolith:
-		if err := validateControllerConfig(c); err != nil {
-			return srv, err
-		}
-		if srv, err = newMonolithPluginServer(c, l); err != nil {
-			return srv, err
-		}
-	default:
-		return srv, fmt.Errorf("unknow driver mode '%s'", c.Mode)
-	}
-	return srv, nil
-}
 
-func newNodePluginServer(c config.Config, l *logrus.Entry) (*server.PluginServer, error) {
-	l = l.WithField(logger.NodeIDKey, c.NodeHost)
-	if c.Zone != "" {
-		l = l.WithField(logger.ZoneKey, c.Zone)
-	}
-
-	csiNode, err := node.NewNode(c.NodeHost, c.Zone, int64(config.MaxVolumesPerNode), c.Filesystem, l)
-	if err != nil {
-		return nil, err
-	}
-	identity := identity.NewIdentity(c.DriverName, l)
-	pluginServer, err := server.NewNodePluginServer(c.PluginServerAddress, csiNode, identity, l)
-	if err != nil {
-		return nil, err
-	}
-	return pluginServer, nil
-}
-
-func newControllerPluginServer(c config.Config, l *logrus.Entry) (*server.PluginServer, error) {
-	svc, err := service.NewUpCloudServiceFromCredentials(c.Username, c.Password)
+	driver, err := initDriver(&c, l)
 	if err != nil {
 		return nil, err
 	}
 
-	autoConfigureZone(svc, &c)
-	l = l.WithField(logger.ZoneKey, c.Zone)
-	csiController, err := controller.NewController(svc, c.Zone, config.MaxVolumesPerNode, l, c.Labels...)
-	if err != nil {
-		return nil, err
-	}
-	identity := identity.NewIdentity(c.DriverName, l)
-	pluginServer, err := server.NewControllerPluginServer(c.PluginServerAddress, csiController, identity, l)
-	if err != nil {
-		return nil, err
-	}
-	return pluginServer, nil
-}
+	var csiController csi.ControllerServer
+	var csiNode csi.NodeServer
 
-func newMonolithPluginServer(c config.Config, l *logrus.Entry) (*server.PluginServer, error) {
-	svc, err := service.NewUpCloudServiceFromCredentials(c.Username, c.Password)
-	if err != nil {
-		return nil, err
+	var svc *service.UpCloudService
+	if c.Username != "" {
+		svc, err = service.NewUpCloudServiceFromCredentials(c.Username, c.Password)
+		if err != nil {
+			return nil, err
+		}
+
+		autoConfigureZone(svc, &c)
 	}
-	autoConfigureZone(svc, &c)
-	l = l.WithField(logger.NodeIDKey, c.NodeHost).WithField(logger.ZoneKey, c.Zone)
-	csiController, err := controller.NewController(svc, c.Zone, config.MaxVolumesPerNode, l, c.Labels...)
-	if err != nil {
-		return nil, err
+
+	if c.Mode == config.DriverModeController || c.Mode == config.DriverModeMonolith {
+		csiController, err = driver.Controller(svc)
+		if err != nil {
+			return nil, err
+		}
 	}
-	csiNode, err := node.NewNode(c.NodeHost, c.Zone, int64(config.MaxVolumesPerNode), c.Filesystem, l)
-	if err != nil {
-		return nil, err
+
+	if c.Mode == config.DriverModeNode || c.Mode == config.DriverModeMonolith {
+		csiNode, err = driver.Node()
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	identity := identity.NewIdentity(c.DriverName, l)
 	pluginServer, err := server.NewPluginServer(c.PluginServerAddress, csiController, csiNode, identity, l)
 	if err != nil {
@@ -128,7 +83,7 @@ func newMonolithPluginServer(c config.Config, l *logrus.Entry) (*server.PluginSe
 }
 
 func autoConfigureZone(svc *service.UpCloudService, c *config.Config) {
-	if c.Zone == "" {
+	if c.Zone == "" && c.NodeHost != "" {
 		// if zone is not provided, try to use nodeHost to auto-configure zone
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -138,16 +93,20 @@ func autoConfigureZone(svc *service.UpCloudService, c *config.Config) {
 	}
 }
 
+func initDriver(c *config.Config, l *logrus.Entry) (driver.Driver, error) {
+	switch c.Driver {
+	case string(driver.BlockDriver):
+		return block.New(c, l.WithField(logger.DriverKey, "block"))
+	case string(driver.FileStorageDriver):
+		return filestorage.New(c, l.WithField(logger.DriverKey, "fileStorage"))
+	default:
+		return nil, errors.New("invalid driver")
+	}
+}
+
 func hostname() string {
 	if n, err := os.Hostname(); err == nil {
 		return n
 	}
 	return ""
-}
-
-func validateControllerConfig(c config.Config) error {
-	if c.Zone == "" && c.NodeHost == "" {
-		return errors.New("controller required that zone or valid node host is set")
-	}
-	return nil
 }

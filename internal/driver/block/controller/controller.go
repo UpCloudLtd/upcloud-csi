@@ -19,16 +19,6 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-var supportedCapabilities = []csi.ControllerServiceCapability_RPC_Type{ //nolint: gochecknoglobals // readonly variable
-	csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
-	csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME,
-	csi.ControllerServiceCapability_RPC_LIST_VOLUMES,
-	csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
-	csi.ControllerServiceCapability_RPC_LIST_SNAPSHOTS,
-	csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
-	csi.ControllerServiceCapability_RPC_CLONE_VOLUME,
-}
-
 type Controller struct {
 	zone              string
 	maxVolumesPerNode int
@@ -39,10 +29,11 @@ type Controller struct {
 	storageLabels []upcloud.Label
 }
 
-func NewController(svc service.Service, zone string, maxVolumesPerNode int, l *logrus.Entry, labels ...string) (*Controller, error) {
+func NewController(svc service.Service, zone string, maxVolumesPerNode int, l *logrus.Entry, labels ...string) (csi.ControllerServer, error) {
 	if zone == "" {
 		return nil, errors.New("controller zone is required field")
 	}
+
 	return &Controller{
 		zone:              zone,
 		svc:               svc,
@@ -166,7 +157,7 @@ func (c *Controller) createVolumeFromSource(ctx context.Context, req *csi.Create
 		if errors.Is(err, service.ErrStorageNotFound) {
 			return nil, status.Errorf(codes.NotFound, "could not retrieve source volume by ID: %s", err.Error())
 		}
-		return nil, status.Errorf(codes.InvalidArgument, err.Error())
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 	if src.Type != upcloud.StorageTypeBackup && (src.Encrypted.Bool() != createVolumeRequestEncryptionAtRest(req)) {
 		// To prevent unexpected dst device properties, only allow cloning from backups or device with same encryption policy.
@@ -427,6 +418,16 @@ func (c *Controller) GetCapacity(ctx context.Context, req *csi.GetCapacityReques
 
 // ControllerGetCapabilities returns the capacity of the storage pool.
 func (c *Controller) ControllerGetCapabilities(ctx context.Context, req *csi.ControllerGetCapabilitiesRequest) (*csi.ControllerGetCapabilitiesResponse, error) {
+	supportedCapabilities := []csi.ControllerServiceCapability_RPC_Type{
+		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
+		csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME,
+		csi.ControllerServiceCapability_RPC_LIST_VOLUMES,
+		csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT,
+		csi.ControllerServiceCapability_RPC_LIST_SNAPSHOTS,
+		csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
+		csi.ControllerServiceCapability_RPC_CLONE_VOLUME,
+	}
+
 	caps := make([]*csi.ControllerServiceCapability, 0)
 	for _, capability := range supportedCapabilities {
 		caps = append(caps, &csi.ControllerServiceCapability{
@@ -503,7 +504,7 @@ func (c *Controller) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshot
 		if err := c.svc.DeleteStorageBackup(ctx, snapID); err != nil {
 			var svcError *upcloud.Problem
 			if errors.As(err, &svcError) && svcError.Status != http.StatusNotFound {
-				return nil, status.Errorf(codes.Internal, err.Error())
+				return nil, status.Error(codes.Internal, err.Error())
 			}
 		}
 	}

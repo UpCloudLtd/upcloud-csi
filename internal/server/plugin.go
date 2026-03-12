@@ -20,14 +20,6 @@ type PluginServer struct {
 	listen *url.URL
 }
 
-func NewControllerPluginServer(addr string, controllerServer csi.ControllerServer, identity csi.IdentityServer, l *logrus.Entry) (*PluginServer, error) {
-	return NewPluginServer(addr, controllerServer, nil, identity, l)
-}
-
-func NewNodePluginServer(addr string, nodeServer csi.NodeServer, identity csi.IdentityServer, l *logrus.Entry) (*PluginServer, error) {
-	return NewPluginServer(addr, nil, nodeServer, identity, l)
-}
-
 func NewPluginServer(addr string, controllerServer csi.ControllerServer, nodeServer csi.NodeServer, identity csi.IdentityServer, l *logrus.Entry) (*PluginServer, error) {
 	if identity == nil {
 		return nil, errors.New("identity service is not defined")

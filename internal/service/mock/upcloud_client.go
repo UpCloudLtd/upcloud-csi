@@ -15,6 +15,7 @@ import (
 
 type UpCloudClient struct {
 	upsvc.Storage
+	upsvc.FileStorage
 
 	servers sync.Map
 }
@@ -25,7 +26,9 @@ func (u *UpCloudClient) StoreServer(s *upcloud.ServerDetails) {
 
 func (u *UpCloudClient) getServer(id string) *upcloud.ServerDetails {
 	if s, ok := u.servers.Load(id); ok {
-		return s.(*upcloud.ServerDetails)
+		if details, ok := s.(*upcloud.ServerDetails); ok {
+			return details
+		}
 	}
 	return nil
 }
