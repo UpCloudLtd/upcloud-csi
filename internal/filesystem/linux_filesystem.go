@@ -318,14 +318,15 @@ func (m *LinuxFilesystem) Statistics(volumePath string) (VolumeStatistics, error
 	if err != nil {
 		return VolumeStatistics{}, err
 	}
+	//nolint:gosec // unix.Statfs_t integer types varies between GOARCHs//nolint:gosec
 	volStats := VolumeStatistics{
-		AvailableBytes: int64(statfs.Bavail) * int64(statfs.Bsize),                         //nolint:unconvert // unix.Statfs_t integer types varies between GOARCHs
-		TotalBytes:     int64(statfs.Blocks) * int64(statfs.Bsize),                         //nolint:unconvert // unix.Statfs_t integer types varies between GOARCHs
-		UsedBytes:      (int64(statfs.Blocks) - int64(statfs.Bfree)) * int64(statfs.Bsize), //nolint:unconvert // unix.Statfs_t integer types varies between GOARCHs
+		AvailableBytes: int64(statfs.Bavail) * statfs.Bsize,
+		TotalBytes:     int64(statfs.Blocks) * statfs.Bsize,
+		UsedBytes:      int64(statfs.Blocks-statfs.Bfree) * statfs.Bsize,
 
 		AvailableInodes: int64(statfs.Ffree),
 		TotalInodes:     int64(statfs.Files),
-		UsedInodes:      int64(statfs.Files) - int64(statfs.Ffree),
+		UsedInodes:      int64(statfs.Files - statfs.Ffree),
 	}
 
 	return volStats, nil

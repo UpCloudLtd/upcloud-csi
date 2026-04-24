@@ -144,10 +144,6 @@ linters:
     # using `pkg/errors`, but those are generally moving towards stdlib.
     - errorlint
 
-    # Checks that SQL statements are executed with the appropriate `.Exec` or
-    # `.Query` function.
-    - execinquery
-
     # Checks that switches of enum(-like) types cover every possible case.
     # Very helpful when we need to add new cases to enums, making sure that all
     # the relevant bits are checked. Can become annoying if there's a _lot_ of
@@ -343,7 +339,7 @@ linters:
 
     # Check that common logger library function calls have appropriate number
     # of key/value arguments.
-    - logrlint
+    - loggercheck
 
     # See discussion in `cyclop`.
     ## - maintidx # DISABLE
@@ -480,11 +476,6 @@ linters:
     # style concerns.
     ## - tagliatelle # DISABLE
 
-    # Advises to use `t.SetEnv` instead of `os.SetEnv` so that one does not
-    # need to bother with restoring the pre-test env var value. Note that
-    # this is not applicable to parallel tests.
-    - tenv
-
     # Checks that examples run by the `testing` package have an applicable
     # "output" comment, so that the example output can be verified to be as
     # expected.
@@ -570,12 +561,10 @@ linters:
     # over this.
     ## - wsl # DISABLE
 
-output:
+issues:
   # Get all issues from all linters, instead of just first per line, so we
   # get to see everything on first pass.
   uniq-by-line: false
-
-issues:
   exclude:
     # We used to have a mixture of initialisms and non-initialisms between and
     # even within projects, but are converging towards the initialisms practice

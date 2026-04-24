@@ -166,7 +166,7 @@ func (c *Controller) createVolumeFromSource(ctx context.Context, req *csi.Create
 		if errors.Is(err, service.ErrStorageNotFound) {
 			return nil, status.Errorf(codes.NotFound, "could not retrieve source volume by ID: %s", err.Error())
 		}
-		return nil, status.Errorf(codes.InvalidArgument, err.Error())
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 	if src.Type != upcloud.StorageTypeBackup && (src.Encrypted.Bool() != createVolumeRequestEncryptionAtRest(req)) {
 		// To prevent unexpected dst device properties, only allow cloning from backups or device with same encryption policy.
@@ -503,7 +503,7 @@ func (c *Controller) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshot
 		if err := c.svc.DeleteStorageBackup(ctx, snapID); err != nil {
 			var svcError *upcloud.Problem
 			if errors.As(err, &svcError) && svcError.Status != http.StatusNotFound {
-				return nil, status.Errorf(codes.Internal, err.Error())
+				return nil, status.Error(codes.Internal, err.Error())
 			}
 		}
 	}

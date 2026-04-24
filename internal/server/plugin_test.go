@@ -41,7 +41,7 @@ func TestPluginServer(t *testing.T) {
 	require.FileExists(t, tmpSocket)
 
 	t.Logf("connection GRPC server at %s", addr)
-	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer conn.Close()
 	id := csi.NewIdentityClient(conn)
