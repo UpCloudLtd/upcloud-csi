@@ -15,7 +15,6 @@ builds:
     binary: "upcloud-csi-plugin_v{{ .Version }}"
     goos:
       - linux
-      - darwin
     goarch:
       - amd64
       - arm64
