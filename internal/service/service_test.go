@@ -227,3 +227,62 @@ func TestUpCloudService_AttachDetachStorage_Concurrency(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestUpCloudService_NewUpCloudServiceFromCredentials(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Validation", func(t *testing.T) {
+		t.Parallel()
+		c, err := service.NewUpCloudServiceFromCredentials("", "", "")
+		require.ErrorContains(t, err, "UpCloud API credentials missing")
+		require.Nil(t, c)
+
+		c, err = service.NewUpCloudServiceFromCredentials("a", "", "")
+		require.ErrorContains(t, err, "UpCloud API password is missing")
+		require.Nil(t, c)
+
+		c, err = service.NewUpCloudServiceFromCredentials("", "b", "")
+		require.ErrorContains(t, err, "UpCloud API username is missing")
+		require.Nil(t, c)
+	})
+
+	t.Run("Basic auth", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			username, password, ok := r.BasicAuth()
+			assert.True(t, ok)
+			assert.Equal(t, "a", username)
+			assert.Equal(t, "b", password)
+			fmt.Fprint(w, `{}`)
+		}))
+		defer srv.Close()
+		svc, err := service.NewUpCloudServiceFromCredentials("a", "b", "", client.WithBaseURL(srv.URL))
+		require.NoError(t, err)
+		_, err = svc.ListStorage(t.Context(), "fi-hel2")
+		require.NoError(t, err)
+	})
+
+	t.Run("Token auth", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _, ok := r.BasicAuth()
+			assert.False(t, ok)
+			authHeader := r.Header.Get("Authorization")
+			assert.Equal(t, "Bearer c", authHeader)
+			fmt.Fprint(w, `{}`)
+		}))
+		defer srv.Close()
+
+		svc, err := service.NewUpCloudServiceFromCredentials("a", "b", "c", client.WithBaseURL(srv.URL))
+		require.NoError(t, err)
+		_, err = svc.ListStorage(t.Context(), "fi-hel1")
+		require.NoError(t, err)
+
+		svc, err = service.NewUpCloudServiceFromCredentials("", "", "c", client.WithBaseURL(srv.URL))
+		require.NoError(t, err)
+		_, err = svc.ListStorage(t.Context(), "fi-hel2")
+		require.NoError(t, err)
+	})
+}

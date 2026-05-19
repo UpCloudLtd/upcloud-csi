@@ -40,15 +40,26 @@ func NewUpCloudService(svc upCloudClient) *UpCloudService {
 	return &UpCloudService{client: svc}
 }
 
-func NewUpCloudServiceFromCredentials(username, password string) (*UpCloudService, error) {
-	if username == "" {
-		return nil, errors.New("UpCloud API username is missing")
+func NewUpCloudServiceFromCredentials(username, password, token string, c ...client.ConfigFn) (*UpCloudService, error) {
+	if username == "" && password == "" && token == "" {
+		return nil, errors.New("UpCloud API credentials missing, define either username and password or token.")
 	}
-	if password == "" {
-		return nil, errors.New("UpCloud API password is missing")
+	if len(c) == 0 {
+		c = make([]client.ConfigFn, 0)
+	}
+	c = append(c, client.WithTimeout(clientTimeout))
+	if token != "" {
+		c = append(c, client.WithBearerAuth(token))
+	} else {
+		if username == "" {
+			return nil, errors.New("UpCloud API username is missing")
+		}
+		if password == "" {
+			return nil, errors.New("UpCloud API password is missing")
+		}
 	}
 	return NewUpCloudService(
-		upsvc.New(client.New(username, password, client.WithTimeout(clientTimeout))),
+		upsvc.New(client.New(username, password, c...)),
 	), nil
 }
 

@@ -85,7 +85,7 @@ func newNodePluginServer(c config.Config, l *logrus.Entry) (*server.PluginServer
 }
 
 func newControllerPluginServer(c config.Config, l *logrus.Entry) (*server.PluginServer, error) {
-	svc, err := service.NewUpCloudServiceFromCredentials(c.Username, c.Password)
+	svc, err := service.NewUpCloudServiceFromCredentials(c.Username, c.Password, c.Token)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +105,7 @@ func newControllerPluginServer(c config.Config, l *logrus.Entry) (*server.Plugin
 }
 
 func newMonolithPluginServer(c config.Config, l *logrus.Entry) (*server.PluginServer, error) {
-	svc, err := service.NewUpCloudServiceFromCredentials(c.Username, c.Password)
+	svc, err := service.NewUpCloudServiceFromCredentials(c.Username, c.Password, c.Token)
 	if err != nil {
 		return nil, err
 	}

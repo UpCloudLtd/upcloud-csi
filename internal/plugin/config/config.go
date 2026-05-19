@@ -30,6 +30,7 @@ const (
 
 	envUpcloudUsername string = "UPCLOUD_USERNAME"
 	envUpcloudPassword string = "UPCLOUD_PASSWORD"
+	envUpcloudToken    string = "UPCLOUD_TOKEN"
 	envStorageLabels   string = "STORAGE_LABELS"
 )
 
@@ -38,6 +39,7 @@ type Config struct {
 	Zone            string
 	Username        string
 	Password        string
+	Token           string
 	DriverName      string
 	PrintVersion    bool
 	Mode            string
@@ -59,6 +61,7 @@ func Parse(osArgs []string) (Config, error) {
 	flagSet.StringVar(&c.Zone, "zone", "", "The zone in which the driver will be hosted, e.g. de-fra1. Defaults to `nodeHost` zone.")
 	flagSet.StringVar(&c.Username, "username", "", "UpCloud username")
 	flagSet.StringVar(&c.Password, "password", "", "UpCloud password")
+	flagSet.StringVar(&c.Token, "token", "", "UpCloud auth token. If defined, takes precedence over username and password.")
 	flagSet.StringVar(&c.DriverName, "driver-name", DefaultDriverName, "Name for the driver")
 	flagSet.StringVar(&c.HealtServerAddress, "address", DefaultHealtServerAddress, "Address to serve on")
 	flagSet.BoolVar(&c.PrintVersion, "version", false, "Print the version and exit.")
@@ -81,6 +84,10 @@ func Parse(osArgs []string) (Config, error) {
 
 	if c.Password == "" {
 		c.Password = os.Getenv(envUpcloudPassword)
+	}
+
+	if c.Token == "" {
+		c.Token = os.Getenv(envUpcloudToken)
 	}
 	return c, nil
 }
