@@ -266,6 +266,13 @@ func (n *Node) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabili
 				},
 			},
 		},
+		{
+			Type: &csi.NodeServiceCapability_Rpc{
+				Rpc: &csi.NodeServiceCapability_RPC{
+					Type: csi.NodeServiceCapability_RPC_EXPAND_VOLUME,
+				},
+			},
+		},
 	}
 
 	log.WithField("capabilities", caps).Info("supported capabilities")
@@ -341,7 +348,47 @@ func (n *Node) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeSta
 }
 
 func (n *Node) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method NodeExpandVolume not implemented")
+	volumeID := req.GetVolumeId()
+	if volumeID == "" {
+		return nil, status.Error(codes.InvalidArgument, "volume ID must be provided")
+	}
+
+	volumePath := req.GetVolumePath()
+	if volumePath == "" {
+		return nil, status.Error(codes.InvalidArgument, "volume path must be provided")
+	}
+
+	log := logger.WithServerContext(ctx, n.log).WithFields(logrus.Fields{
+		logger.VolumeIDKey: volumeID,
+		"volume_path":      volumePath,
+	})
+
+	if req.GetVolumeCapability() != nil {
+		if _, ok := req.VolumeCapability.GetAccessType().(*csi.VolumeCapability_Block); ok {
+			log.Info("volume is a block device, no filesystem expansion required")
+			return &csi.NodeExpandVolumeResponse{}, nil
+		}
+	}
+
+	source, err := n.fs.GetDeviceByID(ctx, volumeID)
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "volume ID %s not found on node: %v", volumeID, err)
+	}
+
+	deviceToResize, err := n.fs.GetDeviceLastPartition(ctx, source)
+	if err != nil {
+		deviceToResize = source
+	}
+
+	log.WithField("device", deviceToResize).Info("expanding filesystem")
+
+	if err := n.fs.Resize(ctx, source, deviceToResize, volumePath); err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to resize filesystem: %v", err)
+	}
+
+	return &csi.NodeExpandVolumeResponse{
+		CapacityBytes: req.GetCapacityRange().GetRequiredBytes(),
+	}, nil
 }
 
 func validateNodePublishVolumeRequest(r *csi.NodePublishVolumeRequest) error {
