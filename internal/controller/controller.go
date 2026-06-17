@@ -598,18 +598,15 @@ func (c *Controller) ControllerExpandVolume(ctx context.Context, req *csi.Contro
 		return &csi.ControllerExpandVolumeResponse{CapacityBytes: int64(volume.Size * giB), NodeExpansionRequired: true}, nil
 	}
 
-	if len(volume.ServerUUIDs) > 0 {
-		return nil, status.Error(codes.FailedPrecondition, "volume is currently published on a node")
-	}
-
 	isBlockDevice := false
 	if req.GetVolumeCapability() != nil {
 		if _, ok := req.VolumeCapability.AccessType.(*csi.VolumeCapability_Block); ok {
 			isBlockDevice = true
 		}
 	}
+	isAttached := len(volume.ServerUUIDs) > 0
 
-	if isBlockDevice {
+	if isBlockDevice || isAttached {
 		log.Info("resizing block device")
 		_, err = c.svc.ResizeBlockDevice(ctx, volume.UUID, int(resizeGigaBytes))
 		if err != nil {
@@ -625,7 +622,7 @@ func (c *Controller) ControllerExpandVolume(ctx context.Context, req *csi.Contro
 
 	return &csi.ControllerExpandVolumeResponse{
 		CapacityBytes:         resizeGigaBytes * giB,
-		NodeExpansionRequired: false,
+		NodeExpansionRequired: true,
 	}, nil
 }
 

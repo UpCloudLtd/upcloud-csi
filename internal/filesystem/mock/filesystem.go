@@ -75,3 +75,7 @@ func (m *MockFilesystem) GetDeviceLastPartition(ctx context.Context, source stri
 	m.log.Debugf("Mock GetDeviceLastPartition(%s) -> %s1", source, source)
 	return fmt.Sprintf("%s1", source), nil
 }
+
+func (m *MockFilesystem) Resize(ctx context.Context, baseDisk string, partition string, volumePath string) error {
+	return nil
+}

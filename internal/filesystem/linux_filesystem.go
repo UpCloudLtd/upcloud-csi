@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 
 	"github.com/UpCloudLtd/upcloud-csi/internal/logger"
@@ -34,7 +35,7 @@ type LinuxFilesystem struct {
 }
 
 func NewLinuxFilesystem(filesystemTypes []string, log *logrus.Entry) (*LinuxFilesystem, error) {
-	tools := []string{blkidCmd, partedCmd, sfdiskCmd}
+	tools := []string{blkidCmd, partedCmd, sfdiskCmd, "resize2fs", "xfs_growfs", "sgdisk", "growpart"}
 	for i := range filesystemTypes {
 		tools = append(tools, fmt.Sprintf("mkfs.%s", filesystemTypes[i]))
 	}
@@ -320,9 +321,9 @@ func (m *LinuxFilesystem) Statistics(volumePath string) (VolumeStatistics, error
 	}
 	//nolint:gosec // unix.Statfs_t integer types varies between GOARCHs//nolint:gosec
 	volStats := VolumeStatistics{
-		AvailableBytes: int64(statfs.Bavail) * statfs.Bsize,
-		TotalBytes:     int64(statfs.Blocks) * statfs.Bsize,
-		UsedBytes:      int64(statfs.Blocks-statfs.Bfree) * statfs.Bsize,
+		AvailableBytes: int64(statfs.Bavail) * int64(statfs.Bsize),
+		TotalBytes:     int64(statfs.Blocks) * int64(statfs.Bsize),
+		UsedBytes:      int64(statfs.Blocks-statfs.Bfree) * int64(statfs.Bsize),
 
 		AvailableInodes: int64(statfs.Ffree),
 		TotalInodes:     int64(statfs.Files),
@@ -348,4 +349,57 @@ func (m *LinuxFilesystem) GetDeviceLastPartition(ctx context.Context, device str
 	}
 
 	return sfdiskOutputGetLastPartition(device, string(output))
+}
+
+// Resize expands the partition and the filesystem to the maximum available size.
+func (m *LinuxFilesystem) Resize(ctx context.Context, baseDisk, partition, volumePath string) error {
+	if baseDisk == "" || partition == "" || volumePath == "" {
+		return errors.New("missing required arguments for resizing")
+	}
+
+	partNumMatch := regexp.MustCompile(`\d+$`).FindString(partition)
+	if partNumMatch == "" {
+		return fmt.Errorf("could not parse partition number from path: %s", partition)
+	}
+	partNum := partNumMatch
+
+	run := func(cmd string, args ...string) ([]byte, error) {
+		m.log.WithFields(logrus.Fields{logger.CommandKey: cmd, logger.CommandArgsKey: args}).Debug("executing command")
+		return exec.CommandContext(ctx, cmd, args...).CombinedOutput()
+	}
+
+	// Fix the GPT backup header layout
+	if out, err := run("sgdisk", "-e", baseDisk); err != nil {
+		m.log.Warnf("sgdisk notice: %s; %v", formatCmdError(out), err)
+	}
+
+	// Maximize live partition
+	if out, err := run("growpart", baseDisk, partNum); err != nil {
+		if !strings.Contains(string(out), "NOCHANGE") {
+			return fmt.Errorf("growpart failed on %s p%s: %s; %w", baseDisk, partNum, formatCmdError(out), err)
+		}
+	}
+
+	blkidOut, err := run(blkidCmd, "--probe", "--output", "value", "--match-tag", "TYPE", partition)
+	if err != nil {
+		return fmt.Errorf("blkid failed on %s: %s; %w", partition, formatCmdError(blkidOut), err)
+	}
+
+	var cmd string
+	var args []string
+	switch fsType := strings.TrimSpace(strings.ToLower(string(blkidOut))); fsType {
+	case "ext4", "ext3":
+		cmd, args = "resize2fs", []string{partition}
+	case "xfs":
+		cmd, args = "xfs_growfs", []string{volumePath}
+	default:
+		return fmt.Errorf("unsupported filesystem type '%s' for hot-resizing", fsType)
+	}
+
+	if out, err := run(cmd, args...); err != nil {
+		return fmt.Errorf("hot-resize failed using %s: %s; %w", cmd, formatCmdError(out), err)
+	}
+
+	m.log.WithField("partition", partition).Info("successfully hot-resized partition and filesystem")
+	return nil
 }
