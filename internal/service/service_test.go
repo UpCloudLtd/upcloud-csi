@@ -15,6 +15,7 @@ import (
 	"github.com/UpCloudLtd/upcloud-go-api/v8/upcloud/client"
 	"github.com/UpCloudLtd/upcloud-go-api/v8/upcloud/request"
 	upsvc "github.com/UpCloudLtd/upcloud-go-api/v8/upcloud/service"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -285,4 +286,46 @@ func TestUpCloudService_NewUpCloudServiceFromCredentials(t *testing.T) {
 		_, err = svc.ListStorage(t.Context(), "fi-hel2")
 		require.NoError(t, err)
 	})
+}
+
+func TestUpCloudService_ResizeStorage(t *testing.T) {
+	t.Parallel()
+
+	id := uuid.NewString()
+	baseURL := fmt.Sprintf("/1.3/storage/%s", id)
+	resizeBackupID := uuid.NewString()
+
+	deleteBackup := false
+	backupDeleted := false
+
+	resizeTo := 10
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodDelete:
+			require.Equal(t, "/1.3/storage/"+resizeBackupID, r.URL.Path)
+			fmt.Fprint(w, `{}`)
+			backupDeleted = true
+		case http.MethodGet, http.MethodPut:
+			require.Equal(t, baseURL, r.URL.Path)
+			fmt.Fprintf(w, `{"storage": {"uuid" : "%s", "state" : "online", "size": %d}}`, id, resizeTo)
+		case http.MethodPost:
+			require.Equal(t, baseURL+"/resize", r.URL.Path)
+			fmt.Fprintf(w, `{"resize_backup": {"uuid": "%s"}}`, resizeBackupID)
+		}
+	}))
+	defer srv.Close()
+
+	c := service.NewUpCloudService(upsvc.New(client.New("", "", client.WithBaseURL(srv.URL))))
+	storage, err := c.ResizeStorage(t.Context(), id, resizeTo, deleteBackup)
+	assert.NoError(t, err)
+	require.False(t, backupDeleted)
+	require.NotNil(t, storage)
+	require.Equal(t, resizeTo, storage.Size)
+
+	deleteBackup = true
+	storage, err = c.ResizeStorage(t.Context(), id, resizeTo, deleteBackup)
+	assert.NoError(t, err)
+	require.True(t, backupDeleted)
+	require.NotNil(t, storage)
+	require.Equal(t, resizeTo, storage.Size)
 }

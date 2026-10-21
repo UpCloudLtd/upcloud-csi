@@ -30,8 +30,9 @@ var supportedCapabilities = []csi.ControllerServiceCapability_RPC_Type{ //nolint
 }
 
 type Controller struct {
-	zone              string
-	maxVolumesPerNode int
+	zone               string
+	maxVolumesPerNode  int
+	deleteResizeBackup bool
 
 	svc service.Service
 	log *logrus.Entry
@@ -39,16 +40,17 @@ type Controller struct {
 	storageLabels []upcloud.Label
 }
 
-func NewController(svc service.Service, zone string, maxVolumesPerNode int, l *logrus.Entry, labels ...string) (*Controller, error) {
+func NewController(svc service.Service, zone string, maxVolumesPerNode int, deleteResizeBackup bool, l *logrus.Entry, labels ...string) (*Controller, error) {
 	if zone == "" {
 		return nil, errors.New("controller zone is required field")
 	}
 	return &Controller{
-		zone:              zone,
-		svc:               svc,
-		log:               l,
-		storageLabels:     upcloudLabels(labels),
-		maxVolumesPerNode: maxVolumesPerNode,
+		zone:               zone,
+		svc:                svc,
+		log:                l,
+		storageLabels:      upcloudLabels(labels),
+		maxVolumesPerNode:  maxVolumesPerNode,
+		deleteResizeBackup: deleteResizeBackup,
 	}, nil
 }
 
@@ -616,8 +618,8 @@ func (c *Controller) ControllerExpandVolume(ctx context.Context, req *csi.Contro
 			c.log.Errorf("cannot resizeBlockDevice volume %s: %s", volumeID, err.Error())
 		}
 	} else {
-		log.Info("resizing volume")
-		_, err = c.svc.ResizeStorage(ctx, volume.UUID, int(resizeGigaBytes), false)
+		log.WithField("backup", !c.deleteResizeBackup).Info("resizing volume")
+		_, err = c.svc.ResizeStorage(ctx, volume.UUID, int(resizeGigaBytes), c.deleteResizeBackup)
 		if err != nil {
 			c.log.Errorf("cannot resizeStorage volume %s: %s", volumeID, err.Error())
 		}

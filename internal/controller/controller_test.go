@@ -26,7 +26,7 @@ func newController(svc service.Service) *controller.Controller {
 		svc = &mock.UpCloudServiceMock{StorageSize: 10, CloneStorageSize: 10, VolumeUUIDExists: true}
 	}
 
-	c, _ := controller.NewController(svc, "fi-hel2", 10, logrus.New().WithField("package", "controller_test"))
+	c, _ := controller.NewController(svc, "fi-hel2", 10, false, logrus.New().WithField("package", "controller_test"))
 	return c
 }
 
