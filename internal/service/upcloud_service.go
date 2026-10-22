@@ -42,7 +42,7 @@ func NewUpCloudService(svc upCloudClient) *UpCloudService {
 
 func NewUpCloudServiceFromCredentials(username, password, token string, c ...client.ConfigFn) (*UpCloudService, error) {
 	if username == "" && password == "" && token == "" {
-		return nil, errors.New("UpCloud API credentials missing, define either username and password or token.")
+		return nil, errors.New("UpCloud API credentials missing, define either username and password or token")
 	}
 	if len(c) == 0 {
 		c = make([]client.ConfigFn, 0)
@@ -98,7 +98,7 @@ func (u *UpCloudService) CreateStorage(ctx context.Context, csr *request.CreateS
 	if err != nil {
 		return nil, err
 	}
-	return u.waitForStorageOnline(ctx, s.Storage.UUID)
+	return u.waitForStorageOnline(ctx, s.UUID)
 }
 
 func (u *UpCloudService) CloneStorage(ctx context.Context, r *request.CloneStorageRequest, label ...upcloud.Label) (*upcloud.StorageDetails, error) {
@@ -106,19 +106,19 @@ func (u *UpCloudService) CloneStorage(ctx context.Context, r *request.CloneStora
 	if err != nil {
 		return nil, err
 	}
-	s, err = u.waitForStorageOnline(ctx, s.Storage.UUID)
+	s, err = u.waitForStorageOnline(ctx, s.UUID)
 	if err != nil {
 		return s, err
 	}
 	if len(label) > 0 {
 		s, err = u.client.ModifyStorage(ctx, &request.ModifyStorageRequest{
-			UUID:   s.Storage.UUID,
+			UUID:   s.UUID,
 			Labels: &label,
 		})
 		if err != nil {
 			return s, err
 		}
-		s, err = u.waitForStorageOnline(ctx, s.Storage.UUID)
+		s, err = u.waitForStorageOnline(ctx, s.UUID)
 	}
 	return s, err
 }
@@ -251,7 +251,7 @@ func (u *UpCloudService) ResizeStorage(ctx context.Context, uuid string, newSize
 		}
 	}
 
-	return u.waitForStorageOnline(ctx, storage.Storage.UUID)
+	return u.waitForStorageOnline(ctx, storage.UUID)
 }
 
 func (u *UpCloudService) ResizeBlockDevice(ctx context.Context, uuid string, newSize int) (*upcloud.StorageDetails, error) {
@@ -262,7 +262,7 @@ func (u *UpCloudService) ResizeBlockDevice(ctx context.Context, uuid string, new
 	if err != nil {
 		return nil, err
 	}
-	return u.waitForStorageOnline(ctx, storage.Storage.UUID)
+	return u.waitForStorageOnline(ctx, storage.UUID)
 }
 
 func (u *UpCloudService) CreateStorageBackup(ctx context.Context, uuid, title string) (*upcloud.StorageDetails, error) {

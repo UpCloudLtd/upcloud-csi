@@ -34,7 +34,8 @@ type LinuxFilesystem struct {
 }
 
 func NewLinuxFilesystem(filesystemTypes []string, log *logrus.Entry) (*LinuxFilesystem, error) {
-	tools := []string{blkidCmd, partedCmd, sfdiskCmd}
+	tools := make([]string, 3, 3+len(filesystemTypes))
+	tools[0], tools[1], tools[2] = blkidCmd, partedCmd, sfdiskCmd
 	for i := range filesystemTypes {
 		tools = append(tools, fmt.Sprintf("mkfs.%s", filesystemTypes[i]))
 	}
