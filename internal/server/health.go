@@ -45,7 +45,7 @@ func (s *HealthServer) Run() error {
 		"health_url": fmt.Sprintf("http://%s/health", s.listen.Host),
 	}).Info("starting HTTP server")
 
-	listener, err := net.Listen(s.listen.Scheme, s.listen.Host)
+	listener, err := net.Listen(s.listen.Scheme, s.listen.Host) //nolint: noctx // Use ListenConfig.Listen when context is available.
 	if err != nil {
 		return fmt.Errorf("failed to listen: %w", err)
 	}
