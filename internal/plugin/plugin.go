@@ -92,7 +92,7 @@ func newControllerPluginServer(c config.Config, l *logrus.Entry) (*server.Plugin
 
 	autoConfigureZone(svc, &c)
 	l = l.WithField(logger.ZoneKey, c.Zone)
-	csiController, err := controller.NewController(svc, c.Zone, config.MaxVolumesPerNode, l, c.Labels...)
+	csiController, err := controller.NewController(svc, c.Zone, config.MaxVolumesPerNode, c.DeleteResizeBackup, l, c.Labels...)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +111,7 @@ func newMonolithPluginServer(c config.Config, l *logrus.Entry) (*server.PluginSe
 	}
 	autoConfigureZone(svc, &c)
 	l = l.WithField(logger.NodeIDKey, c.NodeHost).WithField(logger.ZoneKey, c.Zone)
-	csiController, err := controller.NewController(svc, c.Zone, config.MaxVolumesPerNode, l, c.Labels...)
+	csiController, err := controller.NewController(svc, c.Zone, config.MaxVolumesPerNode, c.DeleteResizeBackup, l, c.Labels...)
 	if err != nil {
 		return nil, err
 	}

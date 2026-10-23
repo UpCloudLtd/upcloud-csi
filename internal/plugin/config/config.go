@@ -35,17 +35,18 @@ const (
 )
 
 type Config struct {
-	NodeHost        string
-	Zone            string
-	Username        string
-	Password        string
-	Token           string
-	DriverName      string
-	PrintVersion    bool
-	Mode            string
-	LogLevel        string
-	Labels          []string
-	FilesystemTypes []string
+	NodeHost           string
+	Zone               string
+	Username           string
+	Password           string
+	Token              string
+	DriverName         string
+	PrintVersion       bool
+	Mode               string
+	LogLevel           string
+	Labels             []string
+	FilesystemTypes    []string
+	DeleteResizeBackup bool
 
 	PluginServerAddress string
 	HealtServerAddress  string
@@ -69,6 +70,7 @@ func Parse(osArgs []string) (Config, error) {
 	flagSet.StringVar(&c.LogLevel, "log-level", "info", "Logging level: panic, fatal, error, warn, warning, info, debug or trace")
 	flagSet.StringSliceVar(&c.Labels, "label", nil, "Apply default labels to all storage devices created by CSI driver, e.g. --label=color=green --label=size=xl")
 	flagSet.StringSliceVar(&c.FilesystemTypes, "fs-types", []string{"ext3", "ext4", "xfs"}, "Filesystem types supported by the system")
+	flagSet.BoolVar(&c.DeleteResizeBackup, "delete-resize-backup", false, "Automatically delete storage backup taken before resize operation (volume expansion)")
 
 	if err := flagSet.Parse(osArgs); err != nil {
 		return c, err

@@ -30,8 +30,9 @@ var supportedCapabilities = []csi.ControllerServiceCapability_RPC_Type{ //nolint
 }
 
 type Controller struct {
-	zone              string
-	maxVolumesPerNode int
+	zone               string
+	maxVolumesPerNode  int
+	deleteResizeBackup bool
 
 	svc service.Service
 	log *logrus.Entry
@@ -39,16 +40,17 @@ type Controller struct {
 	storageLabels []upcloud.Label
 }
 
-func NewController(svc service.Service, zone string, maxVolumesPerNode int, l *logrus.Entry, labels ...string) (*Controller, error) {
+func NewController(svc service.Service, zone string, maxVolumesPerNode int, deleteResizeBackup bool, l *logrus.Entry, labels ...string) (*Controller, error) {
 	if zone == "" {
 		return nil, errors.New("controller zone is required field")
 	}
 	return &Controller{
-		zone:              zone,
-		svc:               svc,
-		log:               l,
-		storageLabels:     upcloudLabels(labels),
-		maxVolumesPerNode: maxVolumesPerNode,
+		zone:               zone,
+		svc:                svc,
+		log:                l,
+		storageLabels:      upcloudLabels(labels),
+		maxVolumesPerNode:  maxVolumesPerNode,
+		deleteResizeBackup: deleteResizeBackup,
 	}, nil
 }
 
@@ -177,7 +179,7 @@ func (c *Controller) createVolumeFromSource(ctx context.Context, req *csi.Create
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	volumeReq := &request.CloneStorageRequest{
-		UUID:      src.Storage.UUID,
+		UUID:      src.UUID,
 		Zone:      c.zone,
 		Tier:      tier,
 		Title:     req.GetName(),
@@ -189,11 +191,11 @@ func (c *Controller) createVolumeFromSource(ctx context.Context, req *csi.Create
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	log = log.WithField(logger.VolumeIDKey, vol.Storage.UUID).WithField("size", vol.Storage.Size)
-	if storageSizeGB > vol.Storage.Size {
+	log = log.WithField(logger.VolumeIDKey, vol.Storage.UUID).WithField("size", vol.Size)
+	if storageSizeGB > vol.Size {
 		log.WithField("new_size", storageSizeGB).Info("resizing volume")
 		// resize cloned storage and delete backup taken during resize operation as this is newly created storage
-		if vol, err = c.svc.ResizeStorage(ctx, vol.Storage.UUID, storageSizeGB, true); err != nil {
+		if vol, err = c.svc.ResizeStorage(ctx, vol.UUID, storageSizeGB, true); err != nil {
 			return nil, status.Error(codes.Internal, err.Error())
 		}
 	}
@@ -427,15 +429,15 @@ func (c *Controller) GetCapacity(ctx context.Context, req *csi.GetCapacityReques
 
 // ControllerGetCapabilities returns the capacity of the storage pool.
 func (c *Controller) ControllerGetCapabilities(ctx context.Context, req *csi.ControllerGetCapabilitiesRequest) (*csi.ControllerGetCapabilitiesResponse, error) {
-	caps := make([]*csi.ControllerServiceCapability, 0)
-	for _, capability := range supportedCapabilities {
-		caps = append(caps, &csi.ControllerServiceCapability{
+	caps := make([]*csi.ControllerServiceCapability, len(supportedCapabilities))
+	for i, capability := range supportedCapabilities {
+		caps[i] = &csi.ControllerServiceCapability{
 			Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{
 					Type: capability,
 				},
 			},
-		})
+		}
 	}
 
 	logger.WithServerContext(ctx, c.log).WithField("caps", caps).Info("reporting capabilities")
@@ -616,8 +618,8 @@ func (c *Controller) ControllerExpandVolume(ctx context.Context, req *csi.Contro
 			c.log.Errorf("cannot resizeBlockDevice volume %s: %s", volumeID, err.Error())
 		}
 	} else {
-		log.Info("resizing volume")
-		_, err = c.svc.ResizeStorage(ctx, volume.UUID, int(resizeGigaBytes), false)
+		log.WithField("backup", !c.deleteResizeBackup).Info("resizing volume")
+		_, err = c.svc.ResizeStorage(ctx, volume.UUID, int(resizeGigaBytes), c.deleteResizeBackup)
 		if err != nil {
 			c.log.Errorf("cannot resizeStorage volume %s: %s", volumeID, err.Error())
 		}

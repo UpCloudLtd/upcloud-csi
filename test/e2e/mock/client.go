@@ -1,3 +1,4 @@
+// nolint: goconst // Disabled in mock
 package mock
 
 import (
@@ -62,7 +63,7 @@ func (c *Client) Exec(params ExecParams) error {
 	cmd := "kubectl"
 	args := []string{"exec", "-i", params.PodName, "--", "/bin/sh", "-c", "cat ./temp"}
 
-	cmdSh := exec.Command(cmd, args...)
+	cmdSh := exec.Command(cmd, args...) //nolint: noctx // Use ListenConfig.Listen when context is available.
 	cmdSh.Dir = projectRoot
 	cmdSh.Stdout = os.Stdout
 	cmdSh.Stderr = os.Stderr

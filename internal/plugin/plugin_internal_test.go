@@ -1,3 +1,4 @@
+// nolint: goconst // Disabled in tests
 package plugin
 
 import (
