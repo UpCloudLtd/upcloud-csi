@@ -81,7 +81,7 @@ func (s *PluginServer) Run() error {
 	if err := s.cleanUpSocket(s.listen.Path); err != nil {
 		return err
 	}
-	grpcListener, err := net.Listen(s.listen.Scheme, s.listen.Path)
+	grpcListener, err := net.Listen(s.listen.Scheme, s.listen.Path) //nolint: noctx // Use ListenConfig.Listen when context is available.
 	if err != nil {
 		return fmt.Errorf("failed to listen: %w", err)
 	}

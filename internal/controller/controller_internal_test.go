@@ -11,7 +11,7 @@ import (
 
 func TestPaginateStorage(t *testing.T) {
 	t.Parallel()
-	s := []upcloud.Storage{{UUID: "1"}, {UUID: "2"}}
+	s := []upcloud.Storage{{UUID: "1"}, {UUID: "2"}} //nolint: prealloc // Disabled in test
 	var next int
 
 	t.Log("testing that empty start token and excessive size returns equal slice")

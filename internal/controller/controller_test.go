@@ -1,3 +1,4 @@
+// nolint: goconst // Disabled in tests
 package controller_test
 
 import (

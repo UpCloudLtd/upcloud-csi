@@ -1,3 +1,4 @@
+// nolint: goconst // Disabled in mock
 package mock
 
 import (
