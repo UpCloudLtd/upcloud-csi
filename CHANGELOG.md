@@ -5,6 +5,15 @@ See updating [Changelog example here](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.5.0]
+
+### Added
+- plugin: add new cli flag `--delete-resize-backup` that can be used to automatically delete storage backup taken before resize operation
+
+### Changed
+- bump Go from 1.24 to 1.26
+- migrate `golangci-lint` from v1 to v2.
+
 ## [1.4.0]
 
 ### Added
@@ -49,7 +58,8 @@ See updating [Changelog example here](https://keepachangelog.com/en/1.0.0/)
 
 First stable release
 
-[Unreleased]: https://github.com/UpCloudLtd/upcloud-csi/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/UpCloudLtd/upcloud-csi/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/UpCloudLtd/upcloud-csi/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/UpCloudLtd/upcloud-csi/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/UpCloudLtd/upcloud-csi/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/UpCloudLtd/upcloud-csi/compare/v1.2.0...v1.3.0
