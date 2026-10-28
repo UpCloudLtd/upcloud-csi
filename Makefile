@@ -35,6 +35,10 @@ test:
 	go vet ./...
 	go test -race ./...
 
+.PHONY: helm-verify
+helm-verify:
+	python3 charts/upcloud-csi-driver/scripts/verify.py
+
 test-integration:
 	make -C test/integration test
 

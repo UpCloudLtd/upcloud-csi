@@ -1,0 +1,14 @@
+apiVersion: v2
+name: upcloud-csi-driver
+description: Helm chart for the UpCloud CSI driver
+type: application
+version: 0.1.0
+appVersion: "latest"
+kubeVersion: ">=1.16.0-0"
+home: https://github.com/UpCloudLtd/upcloud-csi
+sources:
+  - https://github.com/UpCloudLtd/upcloud-csi
+keywords:
+  - csi
+  - storage
+  - upcloud

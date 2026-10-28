@@ -23,3 +23,24 @@ jobs:
           version: v2.15.0
           args: --timeout 5m
           skip-cache: true
+
+  helm:
+    name: helm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout head
+        uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyYAML
+        run: pip install pyyaml
+
+      - name: Lint chart and compare with static manifests
+        run: python3 charts/upcloud-csi-driver/scripts/verify.py

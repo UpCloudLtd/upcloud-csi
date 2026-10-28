@@ -1,0 +1,19 @@
+The UpCloud CSI driver is installed in namespace {{ .Release.Namespace }}.
+
+Create Secret {{ .Values.credentials.secretName }} in that namespace before the pods can start.
+It needs keys "username" and "password".
+
+{{- if .Values.storageClasses.enabled }}
+
+StorageClasses:
+  upcloud-block-storage-maxiops (default)
+  upcloud-block-storage-hdd
+  upcloud-block-storage-standard
+{{- else }}
+
+StorageClasses were left for you to manage (storageClasses.enabled=false).
+{{- end }}
+{{- if .Values.volumeSnapshotClass.enabled }}
+
+VolumeSnapshotClass: upcloud-csi-snapshotclass
+{{- end }}

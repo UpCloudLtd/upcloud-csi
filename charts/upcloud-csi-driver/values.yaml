@@ -1,0 +1,60 @@
+# Defaults match deploy/kubernetes/setup-upcloud-csi.yaml and
+# deploy/kubernetes/rbac-upcloud-csi.yaml.
+# Install the chart into the namespace that holds the credentials Secret.
+# The static manifests use kube-system.
+
+image:
+  repository: ghcr.io/upcloudltd/upcloud-csi
+  tag: latest
+
+sidecars:
+  provisioner:
+    repository: k8s.gcr.io/sig-storage/csi-provisioner
+    tag: v3.1.0
+  attacher:
+    repository: k8s.gcr.io/sig-storage/csi-attacher
+    tag: v3.4.0
+  resizer:
+    repository: k8s.gcr.io/sig-storage/csi-resizer
+    tag: v1.4.0
+  snapshotter:
+    repository: k8s.gcr.io/sig-storage/csi-snapshotter
+    tag: v4.2.1
+  snapshotController:
+    repository: k8s.gcr.io/sig-storage/snapshot-controller
+    tag: v4.2.1
+  nodeDriverRegistrar:
+    repository: k8s.gcr.io/sig-storage/csi-node-driver-registrar
+    tag: v2.5.0
+
+# Replica count for the csi-upcloud-controller Deployment.
+controller:
+  replicas: 1
+
+# Replica count for the csi-upcloud-snapshot-controller Deployment.
+snapshotController:
+  replicas: 2
+
+# Name of an existing Secret with keys "username" and "password".
+# The chart does not create this Secret.
+credentials:
+  secretName: upcloud
+
+# Leave a container entry empty to omit its resources block.
+resources:
+  controller:
+    provisioner: {}
+    attacher: {}
+    resizer: {}
+    snapshotter: {}
+    plugin: {}
+  snapshotController: {}
+  node:
+    registrar: {}
+    plugin: {}
+
+storageClasses:
+  enabled: true
+
+volumeSnapshotClass:
+  enabled: true
