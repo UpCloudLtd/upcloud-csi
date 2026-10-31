@@ -1,6 +1,6 @@
 module github.com/UpCloudLtd/upcloud-csi
 
-go 1.26
+go 1.26.10
 
 require (
 	github.com/container-storage-interface/spec v1.6.0
