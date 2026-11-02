@@ -5,6 +5,12 @@ See updating [Changelog example here](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.5.1]
+
+### Changed
+- set Go patch version to 1.26.10
+- bump `golang.org/x/net` to v0.62.0
+
 ## [1.5.0]
 
 ### Added
@@ -58,7 +64,8 @@ See updating [Changelog example here](https://keepachangelog.com/en/1.0.0/)
 
 First stable release
 
-[Unreleased]: https://github.com/UpCloudLtd/upcloud-csi/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/UpCloudLtd/upcloud-csi/compare/v1.5.1...HEAD
+[1.5.1]: https://github.com/UpCloudLtd/upcloud-csi/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/UpCloudLtd/upcloud-csi/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/UpCloudLtd/upcloud-csi/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/UpCloudLtd/upcloud-csi/compare/v1.3.0...v1.3.1
