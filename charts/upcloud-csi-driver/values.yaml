@@ -30,6 +30,9 @@ sidecars:
 # Replica count for the csi-upcloud-controller Deployment.
 controller:
   replicas: 1
+  # Required by the controller plugin; set to the UpCloud zone.
+  zone: ""
+  tolerations: []
 
 # Replica count for the csi-upcloud-snapshot-controller Deployment.
 snapshotController:
@@ -38,7 +41,7 @@ snapshotController:
 # Name of an existing Secret with keys "username" and "password".
 # The chart does not create this Secret.
 credentials:
-  secretName: upcloud
+  secretName: upcloud-csi-credentials
 
 # Leave a container entry empty to omit its resources block.
 resources:

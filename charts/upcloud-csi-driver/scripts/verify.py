@@ -146,6 +146,30 @@ def find(docs, kind, name):
     raise SystemExit(f"rendered chart is missing {kind}/{name}")
 
 
+def set_expected_chart_workload_changes(docs):
+    node = find(docs, "DaemonSet", "csi-upcloud-node")
+    node_plugin = node["spec"]["template"]["spec"]["containers"][-1]
+    node_plugin["args"] = [
+        "--endpoint=$(CSI_ENDPOINT)",
+        "--nodehost=$(NODE_ID)",
+        "--mode=node",
+    ]
+    node_plugin["env"] = [
+        env for env in node_plugin["env"]
+        if env["name"] not in {"UPCLOUD_USERNAME", "UPCLOUD_PASSWORD"}
+    ]
+
+    controller = find(docs, "Deployment", "csi-upcloud-controller")
+    controller_plugin = controller["spec"]["template"]["spec"]["containers"][-1]
+    controller_plugin["args"] = [
+        "--endpoint=$(CSI_ENDPOINT)",
+        "--mode=controller",
+    ]
+    controller_plugin["env"] = [
+        env for env in controller_plugin["env"] if env["name"] != "NODE_ID"
+    ]
+
+
 def compare(rendered_docs, manifest_docs, skip=frozenset()):
     rendered = index(rendered_docs)
     manifest = index(manifest_docs)
@@ -212,6 +236,7 @@ def main():
     manifest = []
     for path in STATIC:
         manifest.extend(load_file(path))
+    set_expected_chart_workload_changes(manifest)
     print(f"comparing {len(rendered)} rendered resources with the static manifests")
     ok = True
     for doc in rendered:
@@ -254,6 +279,7 @@ def main():
             "controller.replicas=3",
             "snapshotController.replicas=4",
             "credentials.secretName=my-secret",
+            "controller.zone=fi-hel1",
             "image.repository=example.com/csi",
             "image.tag=v9.9.9",
             "sidecars.provisioner.tag=v9.9.9",
@@ -261,6 +287,9 @@ def main():
             "resources.node.plugin.requests.memory=128Mi",
             "resources.node.plugin.limits.memory=256Mi",
             "resources.controller.provisioner.requests.cpu=50m",
+            "controller.tolerations[0].key=node-role.kubernetes.io/control-plane",
+            "controller.tolerations[0].operator=Exists",
+            "controller.tolerations[0].effect=NoSchedule",
         ],
     )
     controller = find(custom, "Deployment", "csi-upcloud-controller")
@@ -284,14 +313,47 @@ def main():
     plugin = controller["spec"]["template"]["spec"]["containers"][-1]
     provisioner = controller["spec"]["template"]["spec"]["containers"][0]
     node_plugin = node["spec"]["template"]["spec"]["containers"][-1]
+    controller_pod_spec = controller["spec"]["template"]["spec"]
+    node_pod_spec = node["spec"]["template"]["spec"]
+    controller_plugin_env = {env["name"]: env for env in plugin["env"]}
+    node_plugin_env = {env["name"]: env for env in node_plugin["env"]}
+    default_controller_pod_spec = find(
+        rendered, "Deployment", "csi-upcloud-controller"
+    )["spec"]["template"]["spec"]
     checks.extend(
         [
             plugin["image"] == "example.com/csi:v9.9.9",
             node_plugin["image"] == "example.com/csi:v9.9.9",
             provisioner["image"].endswith(":v9.9.9"),
-            plugin["env"][1]["valueFrom"]["secretKeyRef"]["name"] == "my-secret",
-            plugin["env"][2]["valueFrom"]["secretKeyRef"]["name"] == "my-secret",
-            node_plugin["env"][1]["valueFrom"]["secretKeyRef"]["name"] == "my-secret",
+            "--mode=controller" in plugin["args"],
+            "--zone=fi-hel1" in plugin["args"],
+            "NODE_ID" not in controller_plugin_env,
+            controller_plugin_env["UPCLOUD_USERNAME"]["valueFrom"]["secretKeyRef"]["name"] == "my-secret",
+            controller_plugin_env["UPCLOUD_PASSWORD"]["valueFrom"]["secretKeyRef"]["name"] == "my-secret",
+            "--mode=node" in node_plugin["args"],
+            "--nodehost=$(NODE_ID)" in node_plugin["args"],
+            "NODE_ID" in node_plugin_env,
+            node_plugin_env["NODE_ID"]["valueFrom"]["fieldRef"]["fieldPath"] == "spec.nodeName",
+            "UPCLOUD_USERNAME" not in node_plugin_env,
+            "UPCLOUD_PASSWORD" not in node_plugin_env,
+            not any(
+                "secretKeyRef" in env.get("valueFrom", {})
+                for container in node_pod_spec["containers"]
+                for env in container.get("env", [])
+            ),
+            not any(
+                "secret" in volume
+                for volume in node_pod_spec.get("volumes", [])
+            ),
+            "tolerations" not in default_controller_pod_spec,
+            controller_pod_spec["tolerations"] == [
+                {
+                    "key": "node-role.kubernetes.io/control-plane",
+                    "operator": "Exists",
+                    "effect": "NoSchedule",
+                }
+            ],
+            "tolerations" not in node_pod_spec,
             node_plugin["resources"]["requests"]["cpu"] == "100m",
             node_plugin["resources"]["requests"]["memory"] == "128Mi",
             node_plugin["resources"]["limits"]["memory"] == "256Mi",

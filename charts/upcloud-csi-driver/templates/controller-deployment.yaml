@@ -19,6 +19,10 @@ spec:
     spec:
       priorityClassName: system-cluster-critical
       serviceAccount: csi-upcloud-controller-sa
+      {{- with .Values.controller.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: csi-provisioner
           image: {{ include "upcloud-csi-driver.image" .Values.sidecars.provisioner }}
@@ -94,8 +98,10 @@ spec:
           image: {{ include "upcloud-csi-driver.image" .Values.image }}
           args:
             - "--endpoint=$(CSI_ENDPOINT)"
-            - "--nodehost=$(NODE_ID)"
-            - "--mode=monolith"
+            - "--mode=controller"
+            {{- with .Values.controller.zone }}
+            - "--zone={{ . }}"
+            {{- end }}
           env:
             - name: CSI_ENDPOINT
               value: unix:///var/lib/csi/sockets/pluginproxy/csi.sock
@@ -109,10 +115,6 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.credentials.secretName }}
                   key: password
-            - name: NODE_ID
-              valueFrom:
-                fieldRef:
-                  fieldPath: spec.nodeName
           imagePullPolicy: Always
           {{- with .Values.resources.controller.plugin }}
           resources:

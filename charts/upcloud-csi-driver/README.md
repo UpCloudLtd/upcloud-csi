@@ -1,7 +1,7 @@
 # UpCloud CSI Driver
 
 Helm chart for the Kubernetes deployment in [`deploy/kubernetes`](../../deploy/kubernetes).
-Resource names, images, arguments, RBAC, and storage classes match those manifests.
+Resource names, images, RBAC, and storage classes match those manifests. The chart runs separate node and controller driver modes.
 
 The chart installs:
 
@@ -19,10 +19,10 @@ UpCloud Managed Kubernetes (UKS) already includes this driver. Skip this chart o
 
 - Kubernetes 1.16 or newer
 - Helm 3 or newer
-- An existing Secret with keys `username` and `password`
+- A pre-existing Kubernetes Secret with keys `username` and `password`. The recommended name is `upcloud-csi-credentials`.
 
 ```bash
-kubectl -n kube-system create secret generic upcloud \
+kubectl -n kube-system create secret generic upcloud-csi-credentials \
   --from-literal=username="$UPCLOUD_USERNAME" \
   --from-literal=password="$UPCLOUD_PASSWORD"
 ```
@@ -35,7 +35,7 @@ From the repository root:
 helm install upcloud-csi charts/upcloud-csi-driver --namespace kube-system
 ```
 
-The chart does not create the credentials Secret. The controller and node pods stay unready until that Secret exists.
+The chart does not create the credentials Secret. The controller requires that Secret; the node DaemonSet runs without API credentials.
 
 Object names are fixed (`csi-upcloud-controller`, `csi-upcloud-node`, and the RBAC and storage class names from the static manifests). Install one release per cluster.
 
@@ -52,6 +52,8 @@ Object names are fixed (`csi-upcloud-controller`, `csi-upcloud-node`, and the RB
 | `sidecars.snapshotController.repository` / `tag` | `k8s.gcr.io/sig-storage/snapshot-controller` / `v4.2.1` | snapshot-controller |
 | `sidecars.nodeDriverRegistrar.repository` / `tag` | `k8s.gcr.io/sig-storage/csi-node-driver-registrar` / `v2.5.0` | node-driver-registrar |
 | `controller.replicas` | `1` | `csi-upcloud-controller` Deployment replicas |
+| `controller.zone` | `""` | UpCloud zone used by the controller. Set this when deploying the controller in controller mode |
+| `controller.tolerations` | `[]` | Tolerations for the controller pod |
 | `snapshotController.replicas` | `2` | snapshot-controller Deployment replicas |
 | `credentials.secretName` | `upcloud` | Existing Secret name |
 | `resources.controller.*` | `{}` | Requests and limits for provisioner, attacher, resizer, snapshotter, and plugin |
@@ -63,6 +65,7 @@ Object names are fixed (`csi-upcloud-controller`, `csi-upcloud-node`, and the RB
 Empty resource values omit the `resources` block, which is what the static manifests do.
 
 `controller.replicas` defaults to 1. The csi-snapshotter container is started with `--leader-election=false`, so keep a single controller replica unless you also change that sidecar. The snapshot-controller Deployment runs with `--leader-election=true` and defaults to 2 replicas.
+Set `controller.zone` to the UpCloud zone where the driver runs; the controller mode requires a zone.
 
 Example resource override:
 
@@ -75,6 +78,16 @@ resources:
         memory: 128Mi
       limits:
         memory: 256Mi
+```
+
+Example controller toleration:
+
+```yaml
+controller:
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
 ```
 
 ```bash
