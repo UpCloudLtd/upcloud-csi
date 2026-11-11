@@ -7,6 +7,9 @@ metadata:
     {{- include "upcloud-csi-driver.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.controller.replicas }}
+  strategy:
+    type: Recreate
+    rollingUpdate: null
   selector:
     matchLabels:
       app: csi-upcloud-controller
@@ -100,7 +103,7 @@ spec:
             - "--endpoint=$(CSI_ENDPOINT)"
             - "--mode=controller"
             {{- with .Values.controller.zone }}
-            - "--zone={{ . }}"
+            - {{ printf "--zone=%s" . | quote }}
             {{- end }}
           env:
             - name: CSI_ENDPOINT
@@ -110,11 +113,19 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.credentials.secretName }}
                   key: username
+                  optional: true
             - name: UPCLOUD_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.credentials.secretName }}
                   key: password
+                  optional: true
+            - name: UPCLOUD_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.credentials.secretName }}
+                  key: token
+                  optional: true
           imagePullPolicy: Always
           {{- with .Values.resources.controller.plugin }}
           resources:

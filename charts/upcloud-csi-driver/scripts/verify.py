@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Lint the chart and compare it with the static Kubernetes manifests."""
 
-import copy
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -18,7 +18,13 @@ STATIC = [
     ROOT / "deploy" / "kubernetes" / "rbac-upcloud-csi.yaml",
     ROOT / "deploy" / "kubernetes" / "setup-upcloud-csi.yaml",
 ]
-CRD_SOURCE = ROOT / "deploy" / "kubernetes" / "crd-upcloud-csi.yaml"
+SHARED_SNAPSHOT_RESOURCES = {
+    ("Deployment", "csi-upcloud-snapshot-controller"),
+    ("ClusterRole", "csi-upcloud-snapshot-controller-role"),
+    ("ClusterRoleBinding", "snapshot-controller-role-binding"),
+    ("Role", "csi-upcloud-snapshot-controller-leaderelection-role"),
+    ("RoleBinding", "snapshot-controller-leaderelection-binding"),
+}
 
 HELM_LABELS = {
     "helm.sh/chart",
@@ -133,10 +139,16 @@ def diff(rendered, manifest, path="$"):
 
 
 def helm_template(namespace, sets=None):
-    cmd = ["helm", "template", "upcloud-csi", str(CHART), "--namespace", namespace]
+    cmd = [
+        "helm", "template", "upcloud-csi", str(CHART),
+        "--namespace", namespace, "--include-crds",
+    ]
     for item in sets or []:
         cmd.extend(["--set", item])
-    return load_docs(run(cmd, echo_stdout=False))
+    docs = load_docs(run(cmd, echo_stdout=False))
+    if any(doc.get("kind") == "CustomResourceDefinition" for doc in docs):
+        raise SystemExit("chart unexpectedly bundles CRDs")
+    return docs
 
 
 def find(docs, kind, name):
@@ -147,6 +159,12 @@ def find(docs, kind, name):
 
 
 def set_expected_chart_workload_changes(docs):
+    binding = find(docs, "RoleBinding", "snapshot-controller-leaderelection-binding")
+    binding["subjects"] = [{
+        "kind": "ServiceAccount",
+        "name": "csi-upcloud-controller-sa",
+        "namespace": "kube-system",
+    }]
     node = find(docs, "DaemonSet", "csi-upcloud-node")
     node_plugin = node["spec"]["template"]["spec"]["containers"][-1]
     node_plugin["args"] = [
@@ -160,6 +178,8 @@ def set_expected_chart_workload_changes(docs):
     ]
 
     controller = find(docs, "Deployment", "csi-upcloud-controller")
+    # Explicit null also clears the API server's default RollingUpdate on upgrade.
+    controller["spec"]["strategy"] = {"type": "Recreate", "rollingUpdate": None}
     controller_plugin = controller["spec"]["template"]["spec"]["containers"][-1]
     controller_plugin["args"] = [
         "--endpoint=$(CSI_ENDPOINT)",
@@ -168,6 +188,30 @@ def set_expected_chart_workload_changes(docs):
     controller_plugin["env"] = [
         env for env in controller_plugin["env"] if env["name"] != "NODE_ID"
     ]
+    for env in controller_plugin["env"]:
+        if env["name"] in {"UPCLOUD_USERNAME", "UPCLOUD_PASSWORD"}:
+            env["valueFrom"]["secretKeyRef"]["name"] = "upcloud-csi-credentials"
+            env["valueFrom"]["secretKeyRef"]["optional"] = True
+    controller_plugin["env"].append(
+        {
+            "name": "UPCLOUD_TOKEN",
+            "valueFrom": {
+                "secretKeyRef": {
+                    "name": "upcloud-csi-credentials",
+                    "key": "token",
+                    "optional": True,
+                }
+            },
+        }
+    )
+
+    for doc in docs:
+        if doc.get("kind") not in {"Deployment", "DaemonSet"}:
+            continue
+        for container in doc["spec"]["template"]["spec"]["containers"]:
+            container["image"] = container["image"].replace("k8s.gcr.io/", "registry.k8s.io/")
+            if container["name"] == "csi-upcloud-plugin":
+                container["image"] = "ghcr.io/upcloudltd/upcloud-csi:v1.5.1"
 
 
 def compare(rendered_docs, manifest_docs, skip=frozenset()):
@@ -195,39 +239,33 @@ def compare(rendered_docs, manifest_docs, skip=frozenset()):
     return ok
 
 
-def strip_crd(doc):
-    doc = copy.deepcopy(doc)
-    metadata = doc.get("metadata") or {}
-    if metadata.get("creationTimestamp") is None:
-        metadata.pop("creationTimestamp", None)
-    doc.pop("status", None)
-    return doc
+def check_credentials(plugin, secret_name):
+    refs = {
+        env["name"]: env["valueFrom"]["secretKeyRef"]
+        for env in plugin["env"]
+        if env["name"].startswith("UPCLOUD_")
+    }
+    expected = {
+        f"UPCLOUD_{key.upper()}": {"name": secret_name, "key": key, "optional": True}
+        for key in ("username", "password", "token")
+    }
+    if refs != expected:
+        print(f"incorrect credential Secret references: {refs!r}")
+        return False
 
-
-def compare_crds():
-    source = {doc["metadata"]["name"]: strip_crd(doc) for doc in load_file(CRD_SOURCE)}
-    chart_docs = []
-    for path in sorted((CHART / "crds").glob("*.yaml")):
-        chart_docs.extend(load_file(path))
-    chart = {doc["metadata"]["name"]: strip_crd(doc) for doc in chart_docs}
-    print(f"comparing {len(chart)} snapshot CRDs")
-    ok = True
-    for name in sorted(set(source) | set(chart)):
-        if name not in chart:
-            print(f"MISSING CRD {name}")
-            ok = False
-            continue
-        if name not in source:
-            print(f"EXTRA CRD {name}")
-            ok = False
-            continue
-        mismatches = diff(chart[name], source[name], name)
-        if mismatches:
-            ok = False
-            print(f"DIFF CRD {name}")
-            for line in mismatches:
-                print(f"  {line}")
-    return ok
+    # Model Kubernetes' optional key resolution for each supported Secret shape.
+    for secret in (
+        {"username": "user", "password": "password"},
+        {"token": "token"},
+        {"username": "user", "password": "password", "token": "token"},
+    ):
+        resolved = {name: secret.get(ref["key"], "") for name, ref in refs.items()}
+        if not (resolved["UPCLOUD_TOKEN"] or (
+            resolved["UPCLOUD_USERNAME"] and resolved["UPCLOUD_PASSWORD"]
+        )):
+            print(f"credentials could not be resolved from Secret keys {sorted(secret)}")
+            return False
+    return True
 
 
 def main():
@@ -244,8 +282,79 @@ def main():
         if doc.get("kind") in CLUSTER_SCOPED and "namespace" in metadata:
             print(f"{doc['kind']}/{metadata.get('name')} sets metadata.namespace")
             ok = False
-    ok = compare(rendered, manifest) and ok
-    ok = compare_crds() and ok
+    if SHARED_SNAPSHOT_RESOURCES & set(index(rendered)):
+        print("shared snapshot controller resources must be absent by default")
+        ok = False
+    ok = compare(rendered, manifest, skip=SHARED_SNAPSHOT_RESOURCES) and ok
+
+    snapshot_class = find(rendered, "VolumeSnapshotClass", "upcloud-csi-snapshotclass")
+    if (snapshot_class.get("apiVersion"), snapshot_class.get("driver"),
+        snapshot_class.get("deletionPolicy")) != (
+        "snapshot.storage.k8s.io/v1", "storage.csi.upcloud.com", "Delete"
+    ):
+        print("incorrect VolumeSnapshotClass")
+        ok = False
+
+    default_controller = find(rendered, "Deployment", "csi-upcloud-controller")
+    default_node = find(rendered, "DaemonSet", "csi-upcloud-node")
+    default_plugin = default_controller["spec"]["template"]["spec"]["containers"][-1]
+    default_class = find(rendered, "StorageClass", "upcloud-block-storage-maxiops")
+    if default_controller["spec"]["replicas"] != 1 or default_controller["spec"]["strategy"] != {
+        "type": "Recreate", "rollingUpdate": None
+    }:
+        print("default controller must have one replica and use Recreate")
+        ok = False
+    if default_class["metadata"]["annotations"]["storageclass.kubernetes.io/is-default-class"] != "true":
+        print("maxiops StorageClass must be default by default")
+        ok = False
+    ok = check_credentials(default_plugin, "upcloud-csi-credentials") and ok
+
+    pod = default_controller["spec"]["template"]["spec"]
+    snapshotter = next(c for c in pod["containers"] if c["name"] == "csi-snapshotter")
+    plugin = next(c for c in pod["containers"] if c["name"] == "csi-upcloud-plugin")
+    if not (
+        snapshotter["image"] == "registry.k8s.io/sig-storage/csi-snapshotter:v4.2.1"
+        and "--csi-address=$(ADDRESS)" in snapshotter["args"]
+        and "--leader-election=false" in snapshotter["args"]
+        and {"name": "ADDRESS", "value": "/var/lib/csi/sockets/pluginproxy/csi.sock"} in snapshotter["env"]
+        and {"name": "socket-dir", "mountPath": "/var/lib/csi/sockets/pluginproxy/"} in snapshotter["volumeMounts"]
+        and {"name": "socket-dir", "mountPath": "/var/lib/csi/sockets/pluginproxy/"} in plugin["volumeMounts"]
+        and {"name": "CSI_ENDPOINT", "value": "unix:///var/lib/csi/sockets/pluginproxy/csi.sock"} in plugin["env"]
+        and pod["serviceAccount"] == "csi-upcloud-controller-sa"
+    ):
+        print("CSI snapshotter socket, image, or service account is incorrect")
+        ok = False
+    binding = find(rendered, "ClusterRoleBinding", "csi-upcloud-provisioner-binding")
+    role = find(rendered, "ClusterRole", binding["roleRef"]["name"])
+    if {"kind": "ServiceAccount", "name": pod["serviceAccount"], "namespace": "kube-system"} not in binding["subjects"]:
+        print("CSI snapshotter service account is not bound to the provisioner role")
+        ok = False
+    for resource, verbs in {
+        "volumesnapshotclasses": {"get", "list", "watch"},
+        "volumesnapshotcontents": {"create", "get", "list", "watch", "update", "delete"},
+        "volumesnapshotcontents/status": {"update"},
+    }.items():
+        if not any(
+            "snapshot.storage.k8s.io" in rule["apiGroups"]
+            and resource in rule["resources"]
+            and verbs <= set(rule["verbs"])
+            for rule in role["rules"]
+        ):
+            print(f"CSI snapshotter lacks required permissions for {resource}")
+            ok = False
+
+    for workload in (default_controller, default_node):
+        for container in workload["spec"]["template"]["spec"]["containers"]:
+            image = container["image"]
+            if container["name"] == "csi-upcloud-plugin":
+                valid = image == "ghcr.io/upcloudltd/upcloud-csi:v1.5.1"
+            else:
+                valid = bool(re.fullmatch(
+                    r"registry\.k8s\.io/sig-storage/[\w-]+:v\d+\.\d+\.\d+", image
+                ))
+            if not valid:
+                print(f"unexpected default image for {container['name']}: {image}")
+                ok = False
 
     without_classes = helm_template("kube-system", ["storageClasses.enabled=false"])
     if any(doc.get("kind") == "StorageClass" for doc in without_classes):
@@ -255,7 +364,7 @@ def main():
         ok = compare(
             without_classes,
             manifest,
-            skip={
+            skip=SHARED_SNAPSHOT_RESOURCES | {
                 ("StorageClass", "upcloud-block-storage-maxiops"),
                 ("StorageClass", "upcloud-block-storage-hdd"),
                 ("StorageClass", "upcloud-block-storage-standard"),
@@ -270,19 +379,37 @@ def main():
         ok = compare(
             without_snap,
             manifest,
-            skip={("VolumeSnapshotClass", "upcloud-csi-snapshotclass")},
+            skip=SHARED_SNAPSHOT_RESOURCES | {("VolumeSnapshotClass", "upcloud-csi-snapshotclass")},
         ) and ok
+
+    shared = helm_template("kube-system", ["snapshotController.enabled=true"])
+    ok = compare(shared, manifest) and ok
+    shared_without_class = helm_template("kube-system", [
+        "snapshotController.enabled=true", "volumeSnapshotClass.enabled=false",
+    ])
+    if set(index(shared)) - set(index(shared_without_class)) != {
+        ("VolumeSnapshotClass", "upcloud-csi-snapshotclass")
+    } or set(index(shared_without_class)) - set(index(shared)):
+        print("volumeSnapshotClass.enabled must affect only the VolumeSnapshotClass")
+        ok = False
+    ok = compare(
+        shared_without_class, manifest,
+        skip={("VolumeSnapshotClass", "upcloud-csi-snapshotclass")},
+    ) and ok
 
     custom = helm_template(
         "csi-test",
         [
             "controller.replicas=3",
+            "snapshotController.enabled=true",
             "snapshotController.replicas=4",
             "credentials.secretName=my-secret",
             "controller.zone=fi-hel1",
             "image.repository=example.com/csi",
             "image.tag=v9.9.9",
             "sidecars.provisioner.tag=v9.9.9",
+            "sidecars.provisioner.repository=example.com/provisioner",
+            "storageClasses.isDefault=false",
             "resources.node.plugin.requests.cpu=100m",
             "resources.node.plugin.requests.memory=128Mi",
             "resources.node.plugin.limits.memory=256Mi",
@@ -304,11 +431,18 @@ def main():
         controller["spec"]["replicas"] == 3,
         snapshot["spec"]["replicas"] == 4,
         snapshot["metadata"]["namespace"] == "csi-test",
+        find(custom, "RoleBinding", "snapshot-controller-leaderelection-binding")["subjects"] == [{
+            "kind": "ServiceAccount",
+            "name": "csi-upcloud-controller-sa",
+            "namespace": "csi-test",
+        }],
         "namespace" not in driver.get("metadata", {}),
         "namespace" not in storage_class["metadata"],
         "namespace" not in find(custom, "ClusterRole", "csi-upcloud-node-driver-registrar-role")["metadata"],
         "namespace" not in find(custom, "VolumeSnapshotClass", "upcloud-csi-snapshotclass")["metadata"],
         binding["subjects"][0]["namespace"] == "csi-test",
+        storage_class["metadata"]["annotations"]["storageclass.kubernetes.io/is-default-class"] == "false",
+        controller["spec"]["strategy"] == {"type": "Recreate", "rollingUpdate": None},
     ]
     plugin = controller["spec"]["template"]["spec"]["containers"][-1]
     provisioner = controller["spec"]["template"]["spec"]["containers"][0]
@@ -324,18 +458,30 @@ def main():
         [
             plugin["image"] == "example.com/csi:v9.9.9",
             node_plugin["image"] == "example.com/csi:v9.9.9",
-            provisioner["image"].endswith(":v9.9.9"),
+            provisioner["image"] == "example.com/provisioner:v9.9.9",
             "--mode=controller" in plugin["args"],
             "--zone=fi-hel1" in plugin["args"],
             "NODE_ID" not in controller_plugin_env,
             controller_plugin_env["UPCLOUD_USERNAME"]["valueFrom"]["secretKeyRef"]["name"] == "my-secret",
             controller_plugin_env["UPCLOUD_PASSWORD"]["valueFrom"]["secretKeyRef"]["name"] == "my-secret",
             "--mode=node" in node_plugin["args"],
+            "--zone=fi-hel1" in node_plugin["args"],
             "--nodehost=$(NODE_ID)" in node_plugin["args"],
             "NODE_ID" in node_plugin_env,
             node_plugin_env["NODE_ID"]["valueFrom"]["fieldRef"]["fieldPath"] == "spec.nodeName",
             "UPCLOUD_USERNAME" not in node_plugin_env,
             "UPCLOUD_PASSWORD" not in node_plugin_env,
+            "UPCLOUD_TOKEN" not in node_plugin_env,
+            not any(
+                env["name"].startswith("UPCLOUD_")
+                for container in node_pod_spec["containers"]
+                for env in container.get("env", [])
+            ),
+            not any(
+                "secretRef" in source
+                for container in node_pod_spec["containers"]
+                for source in container.get("envFrom", [])
+            ),
             not any(
                 "secretKeyRef" in env.get("valueFrom", {})
                 for container in node_pod_spec["containers"]
@@ -361,6 +507,7 @@ def main():
             "resources" not in controller["spec"]["template"]["spec"]["containers"][1],
         ]
     )
+    ok = check_credentials(plugin, "my-secret") and ok
     if not all(checks):
         print("custom values were not applied as expected")
         print("plugin", plugin["image"], plugin["env"])
@@ -371,7 +518,7 @@ def main():
 
     if not ok:
         sys.exit(1)
-    print("helm chart matches the static manifests")
+    print("helm chart matches the static manifests with expected chart differences")
 
 
 if __name__ == "__main__":

@@ -1,44 +1,48 @@
-# Defaults match deploy/kubernetes/setup-upcloud-csi.yaml and
+# Defaults are based on deploy/kubernetes/setup-upcloud-csi.yaml and
 # deploy/kubernetes/rbac-upcloud-csi.yaml.
 # Install the chart into the namespace that holds the credentials Secret.
 # The static manifests use kube-system.
 
 image:
   repository: ghcr.io/upcloudltd/upcloud-csi
-  tag: latest
+  tag: v1.5.1
 
+# Sidecar repositories and pinned tags can also be overridden.
 sidecars:
   provisioner:
-    repository: k8s.gcr.io/sig-storage/csi-provisioner
+    repository: registry.k8s.io/sig-storage/csi-provisioner
     tag: v3.1.0
   attacher:
-    repository: k8s.gcr.io/sig-storage/csi-attacher
+    repository: registry.k8s.io/sig-storage/csi-attacher
     tag: v3.4.0
   resizer:
-    repository: k8s.gcr.io/sig-storage/csi-resizer
+    repository: registry.k8s.io/sig-storage/csi-resizer
     tag: v1.4.0
   snapshotter:
-    repository: k8s.gcr.io/sig-storage/csi-snapshotter
+    repository: registry.k8s.io/sig-storage/csi-snapshotter
     tag: v4.2.1
   snapshotController:
-    repository: k8s.gcr.io/sig-storage/snapshot-controller
+    repository: registry.k8s.io/sig-storage/snapshot-controller
     tag: v4.2.1
   nodeDriverRegistrar:
-    repository: k8s.gcr.io/sig-storage/csi-node-driver-registrar
+    repository: registry.k8s.io/sig-storage/csi-node-driver-registrar
     tag: v2.5.0
 
-# Replica count for the csi-upcloud-controller Deployment.
+# Keep one controller replica: its sidecars do not use leader election.
+# Recreate upgrades briefly interrupt controller operations.
 controller:
   replicas: 1
-  # Required by the controller plugin; set to the UpCloud zone.
+  # Required UpCloud zone for both controller and node plugins.
   zone: ""
   tolerations: []
 
-# Replica count for the csi-upcloud-snapshot-controller Deployment.
+# The shared snapshot controller is normally installed by the cluster administrator.
 snapshotController:
+  enabled: true
   replicas: 2
 
-# Name of an existing Secret with keys "username" and "password".
+# Existing Secret with keys "username" and "password", or "token".
+# A non-empty token takes precedence if all keys are present.
 # The chart does not create this Secret.
 credentials:
   secretName: upcloud-csi-credentials
@@ -58,6 +62,8 @@ resources:
 
 storageClasses:
   enabled: true
+  # Set false if another StorageClass should remain the default.
+  isDefault: true
 
 volumeSnapshotClass:
   enabled: true

@@ -1,12 +1,13 @@
 The UpCloud CSI driver is installed in namespace {{ .Release.Namespace }}.
 
-Create Secret {{ .Values.credentials.secretName }} in that namespace before the pods can start.
-It needs keys "username" and "password".
+Create Secret {{ .Values.credentials.secretName }} in that namespace with keys
+"username" and "password", or "token". A non-empty token takes precedence.
+Set controller.zone to the UpCloud zone for both controller and node pods.
 
 {{- if .Values.storageClasses.enabled }}
 
 StorageClasses:
-  upcloud-block-storage-maxiops (default)
+  upcloud-block-storage-maxiops{{ if .Values.storageClasses.isDefault }} (default){{ end }}
   upcloud-block-storage-hdd
   upcloud-block-storage-standard
 {{- else }}
@@ -16,4 +17,11 @@ StorageClasses were left for you to manage (storageClasses.enabled=false).
 {{- if .Values.volumeSnapshotClass.enabled }}
 
 VolumeSnapshotClass: upcloud-csi-snapshotclass
+Snapshot CRDs and a compatible cluster-wide snapshot controller must already
+be installed. See the chart README for prerequisites.
+{{- end }}
+{{- if .Values.snapshotController.enabled }}
+
+This release manages the shared snapshot controller. Do not run another
+cluster-wide snapshot controller at the same time.
 {{- end }}
