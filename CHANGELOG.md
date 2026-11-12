@@ -5,6 +5,11 @@ See updating [Changelog example here](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.5.2]
+
+### Added
+- helm: chart for the Kubernetes CSI driver deployment
+
 ## [1.5.1]
 
 ### Changed
@@ -64,7 +69,8 @@ See updating [Changelog example here](https://keepachangelog.com/en/1.0.0/)
 
 First stable release
 
-[Unreleased]: https://github.com/UpCloudLtd/upcloud-csi/compare/v1.5.1...HEAD
+[Unreleased]: https://github.com/UpCloudLtd/upcloud-csi/compare/v1.5.2...HEAD
+[1.5.2]: https://github.com/UpCloudLtd/upcloud-csi/compare/v1.5.1...v1.5.2
 [1.5.1]: https://github.com/UpCloudLtd/upcloud-csi/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/UpCloudLtd/upcloud-csi/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/UpCloudLtd/upcloud-csi/compare/v1.3.1...v1.4.0

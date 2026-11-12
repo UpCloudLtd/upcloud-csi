@@ -1,0 +1,39 @@
+{{/* Cluster-scoped. The static manifest sets namespace; kubectl drops it and Helm rejects it. */}}
+{{- if .Values.storageClasses.enabled }}
+{{- $classes := list
+  (dict "name" "upcloud-block-storage-maxiops" "tier" "maxiops")
+  (dict "name" "upcloud-block-storage-hdd" "tier" "hdd")
+  (dict "name" "upcloud-block-storage-standard" "tier" "standard")
+  (dict "name" "upcloud-block-storage-maxiops-encrypted" "tier" "maxiops" "encryption" "data-at-rest")
+}}
+{{- $defaultClass := .Values.storageClasses.defaultClass }}
+{{- if not (kindIs "string" $defaultClass) }}
+{{- fail "storageClasses.defaultClass must be a StorageClass name or an empty string" }}
+{{- end }}
+{{- $names := list }}
+{{- range $classes }}
+{{- $names = append $names .name }}
+{{- end }}
+{{- if and $defaultClass (not (has $defaultClass $names)) }}
+{{- fail (printf "storageClasses.defaultClass %q is not a chart-managed StorageClass; choose one of: %s, or use an empty string" $defaultClass (join ", " $names)) }}
+{{- end }}
+{{- range $classes }}
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ .name }}
+  labels:
+    {{- include "upcloud-csi-driver.labels" $ | nindent 4 }}
+  annotations:
+    storageclass.kubernetes.io/is-default-class: {{ eq $defaultClass .name | quote }}
+parameters:
+  tier: {{ .tier }}
+  {{- with .encryption }}
+  encryption: {{ . }}
+  {{- end }}
+provisioner: storage.csi.upcloud.com
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+{{- end }}
+{{- end }}

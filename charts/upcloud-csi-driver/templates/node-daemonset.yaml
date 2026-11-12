@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: csi-upcloud-node
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "upcloud-csi-driver.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app: csi-upcloud-node
+  template:
+    metadata:
+      labels:
+        app: csi-upcloud-node
+        role: csi-upcloud
+        {{- include "upcloud-csi-driver.labels" . | nindent 8 }}
+    spec:
+      priorityClassName: system-node-critical
+      serviceAccount: csi-upcloud-node-sa
+      hostNetwork: true
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: csi-upcloud-node
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: csi-node-driver-registrar
+          image: {{ include "upcloud-csi-driver.image" .Values.sidecars.nodeDriverRegistrar }}
+          args:
+            - "--v=5"
+            - "--csi-address=$(ADDRESS)"
+            - "--kubelet-registration-path=$(DRIVER_REG_SOCK_PATH)"
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+            - name: DRIVER_REG_SOCK_PATH
+              value: /var/lib/kubelet/plugins/storage.csi.upcloud.com/csi.sock
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          {{- with .Values.resources.node.registrar }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: plugin-dir
+              mountPath: /csi/
+            - name: registration-dir
+              mountPath: /registration/
+        - name: csi-upcloud-plugin
+          image: {{ include "upcloud-csi-driver.image" .Values.image }}
+          args:
+            - "--endpoint=$(CSI_ENDPOINT)"
+            - "--nodehost=$(NODE_ID)"
+            - "--mode=node"
+            - {{ printf "--zone=%s" (include "upcloud-csi-driver.zone" .) | quote }}
+          env:
+            - name: CSI_ENDPOINT
+              value: unix:///csi/csi.sock
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          imagePullPolicy: Always
+          securityContext:
+            privileged: true
+            capabilities:
+              add: ["SYS_ADMIN"]
+            allowPrivilegeEscalation: true
+          {{- with .Values.resources.node.plugin }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: plugin-dir
+              mountPath: /csi
+            - name: pods-mount-dir
+              mountPath: /var/lib/kubelet
+              # Mounts made in this container propagate back to the host.
+              mountPropagation: Bidirectional
+            - name: device-dir
+              mountPath: /dev
+      volumes:
+        - name: registration-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins_registry/
+            type: DirectoryOrCreate
+        - name: plugin-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins/storage.csi.upcloud.com
+            type: DirectoryOrCreate
+        - name: pods-mount-dir
+          hostPath:
+            path: /var/lib/kubelet
+            type: Directory
+        - name: device-dir
+          hostPath:
+            path: /dev
