@@ -85,7 +85,8 @@ From the repository root:
 
 ```bash
 helm install upcloud-csi charts/upcloud-csi-driver --namespace kube-system \
-  --set controller.zone=fi-hel1
+  --set zone=fi-hel1 \
+  --set credentials.secretName=upcloud-csi-credentials
 ```
 
 The chart does not create the credentials Secret. The controller requires that Secret; the node DaemonSet runs without API credentials.
@@ -112,6 +113,7 @@ snapshot functionality.
 
 | Value | Default | Purpose |
 | --- | --- | --- |
+| `zone` | `""` | Required UpCloud zone for both controller and node pods; no zone is selected by default |
 | `image.repository` | `ghcr.io/upcloudltd/upcloud-csi` | Driver image repository |
 | `image.tag` | `v1.5.1` | Pinned driver image tag |
 | `sidecars.provisioner.repository` / `tag` | `registry.k8s.io/sig-storage/csi-provisioner` / `v3.1.0` | external-provisioner |
@@ -121,7 +123,6 @@ snapshot functionality.
 | `sidecars.snapshotController.repository` / `tag` | `registry.k8s.io/sig-storage/snapshot-controller` / `v4.2.1` | snapshot-controller |
 | `sidecars.nodeDriverRegistrar.repository` / `tag` | `registry.k8s.io/sig-storage/csi-node-driver-registrar` / `v2.5.0` | node-driver-registrar |
 | `controller.replicas` | `1` | Controller Deployment replicas; keep at 1 |
-| `controller.zone` | `""` | Required UpCloud zone for both controller and node pods |
 | `controller.tolerations` | `[]` | Tolerations for the controller pod |
 | `snapshotController.enabled` | `false` | Opt into the historical shared snapshot controller only if the cluster has none |
 | `snapshotController.replicas` | `2` | Optional shared snapshot-controller Deployment replicas |
@@ -129,16 +130,16 @@ snapshot functionality.
 | `resources.controller.*` | `{}` | Requests and limits for provisioner, attacher, resizer, snapshotter, and plugin |
 | `resources.snapshotController` | `{}` | Requests and limits for snapshot-controller |
 | `resources.node.registrar` / `resources.node.plugin` | `{}` | Requests and limits for the node pods |
-| `storageClasses.enabled` | `true` | Create the three UpCloud StorageClasses |
-| `storageClasses.isDefault` | `true` | Mark the maxiops StorageClass as default; set to `false` if another class is the default |
+| `storageClasses.enabled` | `true` | Create the four UpCloud StorageClasses |
+| `storageClasses.defaultClass` | `upcloud-block-storage-maxiops` | Chart-managed StorageClass to mark as default; set to `""` for none |
 | `volumeSnapshotClass.enabled` | `true` | Create `upcloud-csi-snapshotclass` |
 
 Empty resource values omit the `resources` block, which is what the static manifests do.
 
 Keep `controller.replicas` at 1: the controller sidecars do not use leader election (the csi-snapshotter explicitly disables it), and `Recreate` does not prevent concurrent replicas if the replica count is greater than 1. The optional shared snapshot-controller Deployment enables leader election and defaults to 2 replicas. Use `snapshotController.enabled=true` only when intentionally letting this release manage the cluster-wide controller instead of installing one separately. It still requires the administrator to install the CRDs.
-Set `controller.zone` to the UpCloud zone where the driver runs. Both node and controller modes require it; the same zone is passed to every node pod, so this chart assumes all nodes use that zone.
+Set the required `zone` to the UpCloud zone where the driver runs. Both node and controller modes require it; the same zone is passed to every node pod, so this chart assumes all nodes use that zone.
 
-To leave another StorageClass as default, set `storageClasses.isDefault=false` with `--set` or in a values file. The maxiops class is then annotated as non-default.
+To leave another StorageClass as default, set `--set storageClasses.defaultClass=""` or set `storageClasses.defaultClass: ""` in a values file. All chart-managed classes are then annotated as non-default. To select the encrypted maxiops class instead, set `--set storageClasses.defaultClass=upcloud-block-storage-maxiops-encrypted`. Other valid choices are `upcloud-block-storage-maxiops`, `upcloud-block-storage-hdd`, and `upcloud-block-storage-standard`. The chart does not change StorageClasses it does not manage; check for existing defaults before selecting one. Encrypted snapshots are not supported as volume sources.
 
 Example resource override:
 
@@ -166,7 +167,7 @@ controller:
 ```bash
 helm install upcloud-csi charts/upcloud-csi-driver \
   --namespace kube-system \
-  --set controller.zone=fi-hel1 \
+  --set zone=fi-hel1 \
   --values my-values.yaml
 ```
 
@@ -175,7 +176,8 @@ Override `image.repository` and `image.tag`, or any `sidecars.*.repository` and 
 ## Upgrade
 
 ```bash
-helm upgrade upcloud-csi charts/upcloud-csi-driver --namespace kube-system
+helm upgrade upcloud-csi charts/upcloud-csi-driver --namespace kube-system \
+  --set zone=fi-hel1
 ```
 
 Changing the driver or sidecar image updates the controller Deployment and node DaemonSet pod templates and rolls those pods. The controller Deployment uses `Recreate`: old controller pods are terminated before replacements start, so controller operations can be briefly unavailable. Existing mounted volumes continue to be served by node pods.
@@ -213,7 +215,7 @@ Adopt them with Helm 3.17 or newer:
 ```bash
 helm upgrade --install upcloud-csi charts/upcloud-csi-driver \
   --namespace kube-system \
-  --set controller.zone=fi-hel1 \
+  --set zone=fi-hel1 \
   --set credentials.secretName=upcloud \
   --set snapshotController.enabled=true \
   --take-ownership
@@ -251,7 +253,7 @@ the ServiceAccount used by that Deployment.
 
 ## Validate
 
-`charts/upcloud-csi-driver/scripts/verify.py` runs `helm lint`, renders the chart with default and custom values, and checks it against the static manifests with documented chart-specific differences. It needs Helm and PyYAML.
+`charts/upcloud-csi-driver/scripts/verify.py` runs `helm lint`, renders the chart with a zone and other default or custom values, and checks it against the static manifests with documented chart-specific differences. It needs Helm and PyYAML.
 
 ```bash
 pip install pyyaml

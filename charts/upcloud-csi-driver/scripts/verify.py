@@ -25,6 +25,8 @@ SHARED_SNAPSHOT_RESOURCES = {
     ("Role", "csi-upcloud-snapshot-controller-leaderelection-role"),
     ("RoleBinding", "snapshot-controller-leaderelection-binding"),
 }
+ENCRYPTED_CLASS = ("StorageClass", "upcloud-block-storage-maxiops-encrypted")
+ZONE = "fi-hel1"
 
 HELM_LABELS = {
     "helm.sh/chart",
@@ -138,17 +140,52 @@ def diff(rendered, manifest, path="$"):
     return mismatches
 
 
-def helm_template(namespace, sets=None):
+def helm_command(namespace, sets=None):
     cmd = [
         "helm", "template", "upcloud-csi", str(CHART),
         "--namespace", namespace, "--include-crds",
     ]
     for item in sets or []:
         cmd.extend(["--set", item])
-    docs = load_docs(run(cmd, echo_stdout=False))
-    if any(doc.get("kind") == "CustomResourceDefinition" for doc in docs):
-        raise SystemExit("chart unexpectedly bundles CRDs")
-    return docs
+    return cmd
+
+
+def helm_template(namespace, sets=None):
+    docs = load_docs(run(helm_command(namespace, [f"zone={ZONE}"] + (sets or [])), echo_stdout=False))
+    crds = {doc["metadata"]["name"] for doc in docs if doc.get("kind") == "CustomResourceDefinition"}
+    expected = {
+        "volumesnapshotclasses.snapshot.storage.k8s.io",
+        "volumesnapshotcontents.snapshot.storage.k8s.io",
+        "volumesnapshots.snapshot.storage.k8s.io",
+    }
+    if crds != expected:
+        raise SystemExit(f"unexpected bundled CRDs: {crds!r}")
+    return [doc for doc in docs if doc.get("kind") != "CustomResourceDefinition"]
+
+
+def check_render_failure(sets, message):
+    cmd = helm_command("kube-system", sets)
+    print("+", " ".join(cmd), "(expect failure)", flush=True)
+    result = subprocess.run(cmd, cwd=ROOT, text=True, capture_output=True)
+    if result.returncode == 0 or message not in result.stderr:
+        print(f"expected rendering to fail with {message!r}: {result.stderr}")
+        return False
+    return True
+
+
+def check_default_class(docs, expected):
+    defaults = {
+        doc["metadata"]["name"]
+        for doc in docs if doc.get("kind") == "StorageClass"
+        and doc["metadata"].get("annotations", {}).get(
+            "storageclass.kubernetes.io/is-default-class"
+        ) == "true"
+    }
+    wanted = {expected} if expected else set()
+    if defaults != wanted:
+        print(f"incorrect default StorageClasses: expected {wanted!r}, got {defaults!r}")
+        return False
+    return True
 
 
 def find(docs, kind, name):
@@ -171,6 +208,7 @@ def set_expected_chart_workload_changes(docs):
         "--endpoint=$(CSI_ENDPOINT)",
         "--nodehost=$(NODE_ID)",
         "--mode=node",
+        f"--zone={ZONE}",
     ]
     node_plugin["env"] = [
         env for env in node_plugin["env"]
@@ -184,6 +222,7 @@ def set_expected_chart_workload_changes(docs):
     controller_plugin["args"] = [
         "--endpoint=$(CSI_ENDPOINT)",
         "--mode=controller",
+        f"--zone={ZONE}",
     ]
     controller_plugin["env"] = [
         env for env in controller_plugin["env"] if env["name"] != "NODE_ID"
@@ -269,23 +308,34 @@ def check_credentials(plugin, secret_name):
 
 
 def main():
-    run(["helm", "lint", str(CHART)])
+    run(["helm", "lint", str(CHART), "--set", f"zone={ZONE}"])
+    ok = check_render_failure([], "zone is required:")
+    ok = check_render_failure(["zone="], "zone is required:") and ok
+    ok = check_render_failure(["zone=   "], "zone is required:") and ok
+    ok = check_render_failure(["zone=false"], "zone must be a string") and ok
+    ok = check_render_failure(
+        [f"zone={ZONE}", "storageClasses.defaultClass=unknown"],
+        "is not a chart-managed StorageClass",
+    ) and ok
+    ok = check_render_failure(
+        [f"zone={ZONE}", "storageClasses.defaultClass=false"],
+        "storageClasses.defaultClass must be a StorageClass name or an empty string",
+    ) and ok
     rendered = helm_template("kube-system")
     manifest = []
     for path in STATIC:
         manifest.extend(load_file(path))
     set_expected_chart_workload_changes(manifest)
     print(f"comparing {len(rendered)} rendered resources with the static manifests")
-    ok = True
     for doc in rendered:
         metadata = doc.get("metadata") or {}
         if doc.get("kind") in CLUSTER_SCOPED and "namespace" in metadata:
             print(f"{doc['kind']}/{metadata.get('name')} sets metadata.namespace")
             ok = False
-    if SHARED_SNAPSHOT_RESOURCES & set(index(rendered)):
-        print("shared snapshot controller resources must be absent by default")
+    if not SHARED_SNAPSHOT_RESOURCES <= set(index(rendered)):
+        print("shared snapshot controller resources must be present by default")
         ok = False
-    ok = compare(rendered, manifest, skip=SHARED_SNAPSHOT_RESOURCES) and ok
+    ok = compare(rendered, manifest, skip={ENCRYPTED_CLASS}) and ok
 
     snapshot_class = find(rendered, "VolumeSnapshotClass", "upcloud-csi-snapshotclass")
     if (snapshot_class.get("apiVersion"), snapshot_class.get("driver"),
@@ -304,9 +354,23 @@ def main():
     }:
         print("default controller must have one replica and use Recreate")
         ok = False
-    if default_class["metadata"]["annotations"]["storageclass.kubernetes.io/is-default-class"] != "true":
-        print("maxiops StorageClass must be default by default")
+    ok = check_default_class(rendered, "upcloud-block-storage-maxiops") and ok
+    encrypted_class = find(rendered, *ENCRYPTED_CLASS)
+    expected_encrypted = normalize(default_class)
+    expected_encrypted["metadata"]["name"] = ENCRYPTED_CLASS[1]
+    expected_encrypted["metadata"]["annotations"]["storageclass.kubernetes.io/is-default-class"] = "false"
+    expected_encrypted["parameters"]["encryption"] = "data-at-rest"
+    if normalize(encrypted_class) != expected_encrypted:
+        print("encrypted StorageClass must match maxiops with data-at-rest encryption and a non-default annotation")
         ok = False
+    for workload in (default_controller, default_node):
+        plugin = next(
+            c for c in workload["spec"]["template"]["spec"]["containers"]
+            if c["name"] == "csi-upcloud-plugin"
+        )
+        if [arg for arg in plugin["args"] if arg.startswith("--zone=")] != [f"--zone={ZONE}"]:
+            print(f"{workload['kind']} has an incorrect zone")
+            ok = False
     ok = check_credentials(default_plugin, "upcloud-csi-credentials") and ok
 
     pod = default_controller["spec"]["template"]["spec"]
@@ -356,7 +420,13 @@ def main():
                 print(f"unexpected default image for {container['name']}: {image}")
                 ok = False
 
-    without_classes = helm_template("kube-system", ["storageClasses.enabled=false"])
+    for selected in ("", "upcloud-block-storage-hdd", ENCRYPTED_CLASS[1]):
+        classes = helm_template("kube-system", [f"storageClasses.defaultClass={selected}"])
+        ok = check_default_class(classes, selected) and ok
+
+    without_classes = helm_template("kube-system", [
+        "storageClasses.enabled=false", "storageClasses.defaultClass=unknown",
+    ])
     if any(doc.get("kind") == "StorageClass" for doc in without_classes):
         print("storageClasses.enabled=false still rendered a StorageClass")
         ok = False
@@ -364,7 +434,7 @@ def main():
         ok = compare(
             without_classes,
             manifest,
-            skip=SHARED_SNAPSHOT_RESOURCES | {
+            skip={
                 ("StorageClass", "upcloud-block-storage-maxiops"),
                 ("StorageClass", "upcloud-block-storage-hdd"),
                 ("StorageClass", "upcloud-block-storage-standard"),
@@ -379,11 +449,16 @@ def main():
         ok = compare(
             without_snap,
             manifest,
-            skip=SHARED_SNAPSHOT_RESOURCES | {("VolumeSnapshotClass", "upcloud-csi-snapshotclass")},
+            skip={ENCRYPTED_CLASS, ("VolumeSnapshotClass", "upcloud-csi-snapshotclass")},
         ) and ok
 
+    without_shared = helm_template("kube-system", ["snapshotController.enabled=false"])
+    if SHARED_SNAPSHOT_RESOURCES & set(index(without_shared)):
+        print("snapshotController.enabled=false still rendered shared snapshot controller resources")
+        ok = False
+    ok = compare(without_shared, manifest, skip=SHARED_SNAPSHOT_RESOURCES | {ENCRYPTED_CLASS}) and ok
     shared = helm_template("kube-system", ["snapshotController.enabled=true"])
-    ok = compare(shared, manifest) and ok
+    ok = compare(shared, manifest, skip={ENCRYPTED_CLASS}) and ok
     shared_without_class = helm_template("kube-system", [
         "snapshotController.enabled=true", "volumeSnapshotClass.enabled=false",
     ])
@@ -394,7 +469,7 @@ def main():
         ok = False
     ok = compare(
         shared_without_class, manifest,
-        skip={("VolumeSnapshotClass", "upcloud-csi-snapshotclass")},
+        skip={ENCRYPTED_CLASS, ("VolumeSnapshotClass", "upcloud-csi-snapshotclass")},
     ) and ok
 
     custom = helm_template(
@@ -404,12 +479,12 @@ def main():
             "snapshotController.enabled=true",
             "snapshotController.replicas=4",
             "credentials.secretName=my-secret",
-            "controller.zone=fi-hel1",
+            "zone=de-fra1",
             "image.repository=example.com/csi",
             "image.tag=v9.9.9",
             "sidecars.provisioner.tag=v9.9.9",
             "sidecars.provisioner.repository=example.com/provisioner",
-            "storageClasses.isDefault=false",
+            "storageClasses.defaultClass=",
             "resources.node.plugin.requests.cpu=100m",
             "resources.node.plugin.requests.memory=128Mi",
             "resources.node.plugin.limits.memory=256Mi",
@@ -460,12 +535,12 @@ def main():
             node_plugin["image"] == "example.com/csi:v9.9.9",
             provisioner["image"] == "example.com/provisioner:v9.9.9",
             "--mode=controller" in plugin["args"],
-            "--zone=fi-hel1" in plugin["args"],
+            "--zone=de-fra1" in plugin["args"],
             "NODE_ID" not in controller_plugin_env,
             controller_plugin_env["UPCLOUD_USERNAME"]["valueFrom"]["secretKeyRef"]["name"] == "my-secret",
             controller_plugin_env["UPCLOUD_PASSWORD"]["valueFrom"]["secretKeyRef"]["name"] == "my-secret",
             "--mode=node" in node_plugin["args"],
-            "--zone=fi-hel1" in node_plugin["args"],
+            "--zone=de-fra1" in node_plugin["args"],
             "--nodehost=$(NODE_ID)" in node_plugin["args"],
             "NODE_ID" in node_plugin_env,
             node_plugin_env["NODE_ID"]["valueFrom"]["fieldRef"]["fieldPath"] == "spec.nodeName",

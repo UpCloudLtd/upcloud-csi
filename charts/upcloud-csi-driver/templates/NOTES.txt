@@ -2,14 +2,15 @@ The UpCloud CSI driver is installed in namespace {{ .Release.Namespace }}.
 
 Create Secret {{ .Values.credentials.secretName }} in that namespace with keys
 "username" and "password", or "token". A non-empty token takes precedence.
-Set controller.zone to the UpCloud zone for both controller and node pods.
+The controller and node pods use zone {{ .Values.zone }}.
 
 {{- if .Values.storageClasses.enabled }}
 
 StorageClasses:
-  upcloud-block-storage-maxiops{{ if .Values.storageClasses.isDefault }} (default){{ end }}
-  upcloud-block-storage-hdd
-  upcloud-block-storage-standard
+  upcloud-block-storage-maxiops{{ if eq .Values.storageClasses.defaultClass "upcloud-block-storage-maxiops" }} (default){{ end }}
+  upcloud-block-storage-hdd{{ if eq .Values.storageClasses.defaultClass "upcloud-block-storage-hdd" }} (default){{ end }}
+  upcloud-block-storage-standard{{ if eq .Values.storageClasses.defaultClass "upcloud-block-storage-standard" }} (default){{ end }}
+  upcloud-block-storage-maxiops-encrypted{{ if eq .Values.storageClasses.defaultClass "upcloud-block-storage-maxiops-encrypted" }} (default){{ end }}
 {{- else }}
 
 StorageClasses were left for you to manage (storageClasses.enabled=false).
