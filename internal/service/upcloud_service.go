@@ -177,7 +177,7 @@ func (u *UpCloudService) DetachStorage(ctx context.Context, storageUUID, serverU
 	if err != nil {
 		return err
 	}
-	if sd.State != upcloud.ServerStateStarted {
+	if sd.State == upcloud.ServerStateMaintenance {
 		if err := u.waitForServerOnline(ctx, serverUUID); err != nil {
 			return fmt.Errorf("failed to detach storage, pre-condition failed: %w", err)
 		}
@@ -194,7 +194,10 @@ func (u *UpCloudService) DetachStorage(ctx context.Context, storageUUID, serverU
 				}
 			}
 			// wait until server is no longer in maintenance state
-			return u.waitForServerOnline(ctx, serverUUID)
+			if details.State == upcloud.ServerStateMaintenance {
+				return u.waitForServerOnline(ctx, serverUUID)
+			}
+			return nil
 		}
 	}
 	return ErrServerStorageNotFound

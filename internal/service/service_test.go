@@ -187,7 +187,7 @@ func TestUpCloudService_AttachDetachStorage_Concurrency(t *testing.T) {
 	c := 10
 
 	var wg sync.WaitGroup
-	for i := 0; i < c; i++ {
+	for i := range c {
 		wg.Add(1)
 		// populate backend with two nodes and add 5 storages per node
 		serverUUID := fmt.Sprintf("test-node-%d", i%2)
