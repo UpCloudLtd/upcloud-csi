@@ -186,19 +186,23 @@ func TestUpCloudService_AttachDetachStorage_Concurrency(t *testing.T) {
 	s := service.NewUpCloudService(client)
 	c := 10
 
+	serverState := upcloud.ServerStateStarted
 	var wg sync.WaitGroup
 	for i := range c {
 		wg.Add(1)
-		// populate backend with two nodes and add 5 storages per node
 		serverUUID := fmt.Sprintf("test-node-%d", i%2)
 		volUUID := fmt.Sprintf("test-vol-%d", i)
-		client.StoreServer(&upcloud.ServerDetails{
-			Server: upcloud.Server{
-				UUID:  serverUUID,
-				State: upcloud.ServerStateStarted,
-			},
-			StorageDevices: make([]upcloud.ServerStorageDevice, 0),
-		})
+		// populate backend with two nodes and add 5 storages per node
+		if i%2 == i {
+			client.StoreServer(&upcloud.ServerDetails{
+				Server: upcloud.Server{
+					UUID:  serverUUID,
+					State: serverState,
+				},
+				StorageDevices: make([]upcloud.ServerStorageDevice, 0),
+			})
+			serverState = upcloud.ServerStateStopped
+		}
 		go func(volUUID, serverUUID string) {
 			defer wg.Done()
 			t1 := time.Now()
@@ -211,10 +215,14 @@ func TestUpCloudService_AttachDetachStorage_Concurrency(t *testing.T) {
 	servers, err := client.GetServers(ctx)
 	require.NoError(t, err)
 	require.Len(t, servers.Servers, 2)
+	stoppedServerFound := false
 	for _, srv := range servers.Servers {
 		d, err := client.GetServerDetails(ctx, &request.GetServerDetailsRequest{UUID: srv.UUID})
 		if !assert.NoError(t, err) {
 			continue
+		}
+		if d.State == upcloud.ServerStateStopped {
+			stoppedServerFound = true
 		}
 		for _, storage := range d.StorageDevices {
 			wg.Add(1)
@@ -228,6 +236,9 @@ func TestUpCloudService_AttachDetachStorage_Concurrency(t *testing.T) {
 		}
 	}
 	wg.Wait()
+
+	// Ensure that we tested at least one stopped server.
+	require.True(t, stoppedServerFound)
 }
 
 func TestUpCloudService_NewUpCloudServiceFromCredentials(t *testing.T) {
