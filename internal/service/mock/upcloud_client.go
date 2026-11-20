@@ -60,13 +60,14 @@ func (u *UpCloudClient) AttachStorage(ctx context.Context, r *request.AttachStor
 	if server == nil {
 		return server, errors.New("server not found")
 	}
-	if server.State != upcloud.ServerStateStarted {
+	if server.State == upcloud.ServerStateMaintenance {
 		return nil, fmt.Errorf("server %s state is %s", r.ServerUUID, server.State)
 	}
+	serverState := server.State
 	server.State = upcloud.ServerStateMaintenance
 	u.StoreServer(server)
 	time.Sleep(time.Duration(rand.Intn(200)+100) * time.Millisecond) //nolint:gosec // using weak random number doesn't affect the result.
-	server.State = upcloud.ServerStateStarted
+	server.State = serverState
 	if server.StorageDevices == nil {
 		server.StorageDevices = make(upcloud.ServerStorageDeviceSlice, 0)
 	}
@@ -85,7 +86,7 @@ func (u *UpCloudClient) DetachStorage(ctx context.Context, r *request.DetachStor
 	if server == nil {
 		return server, fmt.Errorf("server %s not found", r.ServerUUID)
 	}
-	if server.State != upcloud.ServerStateStarted {
+	if server.State == upcloud.ServerStateMaintenance {
 		return nil, fmt.Errorf("server %s state is %s", r.ServerUUID, server.State)
 	}
 	server.State = upcloud.ServerStateMaintenance
