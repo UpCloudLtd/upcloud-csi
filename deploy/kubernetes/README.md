@@ -42,6 +42,8 @@ Deploy the CSI driver with the related Kubernetes volume attachment, driver regi
 $ kubectl apply -f https://github.com/UpCloudLtd/upcloud-csi/releases/latest/download/setup-upcloud-csi.yaml
 ```
 
+The same RBAC, controller, node DaemonSet, and sidecars are available as a Helm chart in [`charts/upcloud-csi-driver`](../../charts/upcloud-csi-driver/README.md). That README covers install, upgrades, and moving an existing `kubectl` installation to Helm.
+
 #### Deploy snapshot validation webhook
 The snapshot validating webhook is **optional** service that provides tightened validation on snapshot objects. 
 Service is optional but recommended if volume snapshots are used in cluster.  

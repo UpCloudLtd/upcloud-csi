@@ -1,0 +1,10 @@
+{{- if .Values.volumeSnapshotClass.enabled }}
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: upcloud-csi-snapshotclass
+  labels:
+    {{- include "upcloud-csi-driver.labels" . | nindent 4 }}
+driver: storage.csi.upcloud.com
+deletionPolicy: Delete
+{{- end }}
